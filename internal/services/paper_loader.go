@@ -2,6 +2,7 @@ package services
 
 import (
 	"archive/tar"
+	"bytes"
 	"compress/gzip"
 	"fmt"
 	"io"
@@ -40,8 +41,13 @@ func (pl *PaperLoader) ProcessPaper(arxivID string) (map[string]interface{}, err
 		return nil, fmt.Errorf("failed to parse bib files for paper with ID: %s: %v", arxivID, err)
 	}
 
-	formattedReferences := pl.formatReferences(references)
+	// Convert []bibtex.BibEntry to []*bibtex.BibEntry
+	var refPointers []*bibtex.BibEntry
+	for i := range references {
+		refPointers = append(refPointers, &references[i])
+	}
 
+	formattedReferences := pl.formatReferences(refPointers)
 	metadata, err := pl.getPaperMetadata(arxivID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch metadata for paper with ID: %s: %v", arxivID, err)
@@ -49,7 +55,7 @@ func (pl *PaperLoader) ProcessPaper(arxivID string) (map[string]interface{}, err
 
 	result := map[string]interface{}{
 		"title":      metadata["title"],
-		"authors":    metadata["authors"],
+		"authors":    strings.Split(metadata["authors"], ", "),
 		"abstract":   metadata["abstract"],
 		"pdf_url":    metadata["pdf_url"],
 		"references": formattedReferences,
@@ -59,20 +65,29 @@ func (pl *PaperLoader) ProcessPaper(arxivID string) (map[string]interface{}, err
 	return result, nil
 }
 
-func (pl *PaperLoader) downloadPaper(arxivID string) (io.Reader, error) {
+func (pl *PaperLoader) downloadPaper(arxivID string) ([]byte, error) {
 	resp, err := http.Get(fmt.Sprintf("https://arxiv.org/e-print/%s", arxivID))
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	return resp.Body, nil
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to download paper: status code %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %v", err)
+	}
+
+	return body, nil
 }
 
-func (pl *PaperLoader) extractBibFiles(reader io.Reader) ([]string, error) {
-	gzr, err := gzip.NewReader(reader)
+func (pl *PaperLoader) extractBibFiles(content []byte) ([]string, error) {
+	gzr, err := gzip.NewReader(bytes.NewReader(content))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create gzip reader: %v", err)
 	}
 	defer gzr.Close()
 
@@ -85,16 +100,19 @@ func (pl *PaperLoader) extractBibFiles(reader io.Reader) ([]string, error) {
 			break
 		}
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error reading tar: %v", err)
 		}
 
 		if strings.HasSuffix(header.Name, ".bib") {
 			content, err := io.ReadAll(tr)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("error reading .bib file: %v", err)
 			}
 			bibFiles = append(bibFiles, string(content))
 		}
+	}
+	if len(bibFiles) == 0 {
+		return nil, fmt.Errorf("no .bib files found in the archive")
 	}
 
 	return bibFiles, nil
@@ -114,7 +132,7 @@ func (pl *PaperLoader) parseBibFiles(bibFiles []string) ([]bibtex.BibEntry, erro
 	return allReferences, nil
 }
 
-func (pl *PaperLoader) formatReferences(references []bibtex.BibEntry) []map[string]interface{} {
+func (pl *PaperLoader) formatReferences(references []*bibtex.BibEntry) []map[string]interface{} {
 	var formattedReferences []map[string]interface{}
 	for _, ref := range references {
 		formattedRef := pl.formatReference(ref)
@@ -128,15 +146,21 @@ func (pl *PaperLoader) formatReferences(references []bibtex.BibEntry) []map[stri
 	return formattedReferences
 }
 
-func (pl *PaperLoader) formatReference(entry bibtex.BibEntry) string {
-	authors := entry.Fields["author"]
-	title := entry.Fields["title"]
-	year := entry.Fields["year"]
-	journalField := entry.Fields["journal"]
-	if journalField == nil {
-		journalField = entry.Fields["booktitle"]
+func (pl *PaperLoader) formatReference(entry *bibtex.BibEntry) string {
+	getField := func(key string, defaultValue string) string {
+		if field, ok := entry.Fields[key]; ok && field != nil {
+			return field.String()
+		}
+		return defaultValue
 	}
-	journal := journalField.String()
+
+	authors := getField("author", "Unknown Author")
+	title := getField("title", "Untitled")
+	year := getField("year", "n.d.")
+	journal := getField("journal", "")
+	if journal == "" {
+		journal = getField("booktitle", "")
+	}
 
 	return fmt.Sprintf("%s. (%s). %s. %s", authors, year, title, journal)
 }

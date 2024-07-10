@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"nexus_scholar_go_backend/internal/services"
 	"os"
 	"strings"
 
@@ -43,13 +44,32 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		c.Set("user", claims)
+		// Extract user info from claims
+		auth0ID, _ := claims["sub"].(string)
+		email, _ := claims["email"].(string)
+		name, _ := claims["name"].(string)
+		nickname, _ := claims["nickname"].(string)
+
+		// Create or update user in database
+		user, err := services.CreateOrUpdateUser(auth0ID, email, name, nickname)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process user information"})
+			c.Abort()
+			return
+		}
+
+		// Set the user in the context
+		c.Set("user", user)
 		c.Next()
 	}
 }
 
 func getUser(c *gin.Context) {
-	user, _ := c.Get("user")
+	user, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found in context"})
+		return
+	}
 	c.JSON(http.StatusOK, user)
 }
 
