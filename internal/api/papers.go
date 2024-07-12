@@ -13,8 +13,8 @@ import (
 func SetupRoutes(r *gin.Engine) {
 	api := r.Group("/api")
 	{
-		api.GET("/papers/:arxiv_id", getPaper)
-		api.GET("/papers/:arxiv_id/title", getPaperTitle)
+		api.GET("/papers/:arxiv_id", auth.AuthMiddleware(), getPaper)
+		api.GET("/papers/:arxiv_id/title", auth.AuthMiddleware(), getPaperTitle)
 		api.GET("/private", auth.AuthMiddleware(), privateRoute)
 	}
 }
