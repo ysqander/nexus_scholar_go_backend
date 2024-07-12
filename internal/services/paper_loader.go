@@ -48,7 +48,7 @@ func (pl *PaperLoader) ProcessPaper(arxivID string) (map[string]interface{}, err
 	}
 
 	formattedReferences := pl.formatReferences(refPointers)
-	metadata, err := pl.getPaperMetadata(arxivID)
+	metadata, err := pl.GetPaperMetadata(arxivID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch metadata for paper with ID: %s: %v", arxivID, err)
 	}
@@ -196,7 +196,7 @@ type ArxivFeed struct {
 	Entry ArxivEntry `xml:"entry"`
 }
 
-func (pl *PaperLoader) getPaperMetadata(arxivID string) (map[string]string, error) {
+func (pl *PaperLoader) GetPaperMetadata(arxivID string) (map[string]string, error) {
 	url := fmt.Sprintf("http://export.arxiv.org/api/query?id_list=%s", arxivID)
 
 	resp, err := http.Get(url)
