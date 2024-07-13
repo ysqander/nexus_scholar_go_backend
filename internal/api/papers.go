@@ -7,6 +7,8 @@ import (
 	"nexus_scholar_go_backend/internal/auth"
 	"nexus_scholar_go_backend/internal/services"
 
+	"cloud.google.com/go/storage"
+	"cloud.google.com/go/vertexai/genai"
 	"github.com/gin-gonic/gin"
 )
 
@@ -16,6 +18,9 @@ func SetupRoutes(r *gin.Engine) {
 		api.GET("/papers/:arxiv_id", auth.AuthMiddleware(), getPaper)
 		api.GET("/papers/:arxiv_id/title", auth.AuthMiddleware(), getPaperTitle)
 		api.GET("/private", auth.AuthMiddleware(), privateRoute)
+		api.POST("/create-cache", auth.AuthMiddleware(), createCache)
+		api.POST("/chat", auth.AuthMiddleware(), chat)
+		api.DELETE("/cache/:cacheId", auth.AuthMiddleware(), deleteCache)
 	}
 }
 
@@ -56,4 +61,52 @@ func privateRoute(c *gin.Context) {
 		"message": "This is a private route",
 		"user":    user,
 	})
+}
+
+func createCache(c *gin.Context) {
+	var request struct {
+		ArxivIDs []string `json:"arxiv_ids" binding:"required"`
+		UserPDFs []string `json:"user_pdfs"`
+	}
+
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Initialize GenAI client
+	genaiClient, err := genai.NewClient(c.Request.Context(), "nexus-scholar", "us-central1")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create GenAI client"})
+		return
+	}
+	defer genaiClient.Close()
+
+	// Initialize Storage client
+	storageClient, err := storage.NewClient(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create Storage client"})
+		return
+	}
+	defer storageClient.Close()
+
+	cacheService := services.NewCacheService(genaiClient, storageClient)
+
+	cachedContentName, err := cacheService.CreateContentCache(c.Request.Context(), request.ArxivIDs, request.UserPDFs)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"cached_content_name": cachedContentName})
+}
+
+func chat(c *gin.Context) {
+	// TODO: Implement chat functionality
+	c.JSON(http.StatusNotImplemented, gin.H{"error": "Chat functionality not implemented yet"})
+}
+
+func deleteCache(c *gin.Context) {
+	// TODO: Implement cache deletion
+	c.JSON(http.StatusNotImplemented, gin.H{"error": "Cache deletion not implemented yet"})
 }
