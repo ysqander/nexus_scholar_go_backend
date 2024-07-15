@@ -13,15 +13,29 @@ import (
 	"github.com/ledongthuc/pdf"
 )
 
-type CacheService struct {
-	genaiClient   *genai.Client
-	storageClient *storage.Client
+// GenAIClientInterface defines the methods we use from genai.Client
+type GenAIClientInterface interface {
+	CreateCachedContent(ctx context.Context, cc *genai.CachedContent) (*genai.CachedContent, error)
+	Close() error
 }
 
-func NewCacheService(genaiClient *genai.Client, storageClient *storage.Client) *CacheService {
+// StorageClientInterface defines the methods we use from storage.Client
+type StorageClientInterface interface {
+	Bucket(name string) *storage.BucketHandle
+	Close() error
+}
+
+type CacheService struct {
+	genaiClient   GenAIClientInterface
+	storageClient StorageClientInterface
+	arxivBaseURL  string
+}
+
+func NewCacheService(genaiClient GenAIClientInterface, storageClient StorageClientInterface) *CacheService {
 	return &CacheService{
 		genaiClient:   genaiClient,
 		storageClient: storageClient,
+		arxivBaseURL:  "https://arxiv.org/pdf/",
 	}
 }
 
@@ -73,7 +87,7 @@ func (s *CacheService) processDocuments(ctx context.Context, arxivIDs []string, 
 
 func (s *CacheService) processArXivPaper(ctx context.Context, arxivID string) (string, error) {
 	// Download the PDF from arXiv
-	pdfURL := fmt.Sprintf("https://arxiv.org/pdf/%s.pdf", arxivID)
+	pdfURL := fmt.Sprintf("%s%s.pdf", s.arxivBaseURL, arxivID)
 	resp, err := http.Get(pdfURL)
 	if err != nil {
 		return "", fmt.Errorf("failed to download arXiv paper: %v", err)
@@ -135,7 +149,7 @@ func (s *CacheService) extractTextFromPDF(pdfPath string) (string, error) {
 
 func (s *CacheService) uploadToGCS(ctx context.Context, contents []string) ([]string, error) {
 	var gcsURIs []string
-	bucketName := "your-bucket-name" // Replace with your actual bucket name
+	bucketName := "nexus-scholar-pdftexts" // Replace with your actual bucket name
 
 	for i, content := range contents {
 		filename := fmt.Sprintf("content_%d_%s.txt", i, uuid.New().String())

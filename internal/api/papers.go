@@ -75,7 +75,7 @@ func createCache(c *gin.Context) {
 	}
 
 	// Initialize GenAI client
-	genaiClient, err := genai.NewClient(c.Request.Context(), "nexus-scholar", "us-central1")
+	genaiClient, err := genai.NewClient(c.Request.Context(), "nexus-scholar", "europe-west3")
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create GenAI client"})
 		return
