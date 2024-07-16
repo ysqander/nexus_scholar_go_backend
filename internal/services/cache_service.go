@@ -6,12 +6,17 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"time"
 
 	"cloud.google.com/go/storage"
 	"cloud.google.com/go/vertexai/genai"
 	"github.com/google/uuid"
 	"github.com/ledongthuc/pdf"
 )
+
+type BucketHandle interface {
+	Object(name string) *storage.ObjectHandle
+}
 
 // GenAIClientInterface defines the methods we use from genai.Client
 type GenAIClientInterface interface {
@@ -21,7 +26,7 @@ type GenAIClientInterface interface {
 
 // StorageClientInterface defines the methods we use from storage.Client
 type StorageClientInterface interface {
-	Bucket(name string) *storage.BucketHandle
+	Bucket(name string) BucketHandle
 	Close() error
 }
 
@@ -29,13 +34,15 @@ type CacheService struct {
 	genaiClient   GenAIClientInterface
 	storageClient StorageClientInterface
 	arxivBaseURL  string
+	bucketName    string
 }
 
-func NewCacheService(genaiClient GenAIClientInterface, storageClient StorageClientInterface) *CacheService {
+func NewCacheService(genaiClient GenAIClientInterface, storageClient StorageClientInterface, bucketName string) *CacheService {
 	return &CacheService{
 		genaiClient:   genaiClient,
 		storageClient: storageClient,
 		arxivBaseURL:  "https://arxiv.org/pdf/",
+		bucketName:    bucketName,
 	}
 }
 
@@ -147,27 +154,27 @@ func (s *CacheService) extractTextFromPDF(pdfPath string) (string, error) {
 	return content, nil
 }
 
+// generateUniqueFilename creates a unique filename using timestamp and UUID
+func generateUniqueFilename() string {
+	timestamp := time.Now().UnixNano()
+	uniqueID := uuid.New().String()
+	return fmt.Sprintf("%d-%s.txt", timestamp, uniqueID)
+}
+
 func (s *CacheService) uploadToGCS(ctx context.Context, contents []string) ([]string, error) {
 	var gcsURIs []string
-	bucketName := "nexus-scholar-pdftexts" // Replace with your actual bucket name
-
-	for i, content := range contents {
-		filename := fmt.Sprintf("content_%d_%s.txt", i, uuid.New().String())
-		obj := s.storageClient.Bucket(bucketName).Object(filename)
-		writer := obj.NewWriter(ctx)
-
-		_, err := io.WriteString(writer, content)
-		if err != nil {
-			return nil, fmt.Errorf("failed to write content to GCS: %v", err)
+	for _, content := range contents {
+		obj := s.storageClient.Bucket(s.bucketName).Object(generateUniqueFilename())
+		writer := newWriter(ctx, obj)
+		// Write content to GCS
+		if _, err := writer.Write([]byte(content)); err != nil {
+			return nil, fmt.Errorf("failed to write to GCS: %v", err)
 		}
-
 		if err := writer.Close(); err != nil {
 			return nil, fmt.Errorf("failed to close GCS writer: %v", err)
 		}
-
-		gcsURIs = append(gcsURIs, fmt.Sprintf("gs://%s/%s", bucketName, filename))
+		gcsURIs = append(gcsURIs, fmt.Sprintf("gs://%s/%s", s.bucketName, obj.ObjectName()))
 	}
-
 	return gcsURIs, nil
 }
 
@@ -191,4 +198,9 @@ func (s *CacheService) createCachedContent(ctx context.Context, gcsURIs []string
 	cc.Contents = []*genai.Content{content}
 
 	return s.genaiClient.CreateCachedContent(ctx, cc)
+}
+
+// Define a variable to hold the NewWriter function
+var newWriter = func(ctx context.Context, obj *storage.ObjectHandle) *storage.Writer {
+	return obj.NewWriter(ctx)
 }

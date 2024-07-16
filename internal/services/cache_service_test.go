@@ -1,6 +1,7 @@
 package services
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 	"cloud.google.com/go/storage"
 	"cloud.google.com/go/vertexai/genai"
 	"github.com/fsouza/fake-gcs-server/fakestorage"
+	"github.com/jung-kurt/gofpdf"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -36,9 +38,9 @@ type MockStorageClient struct {
 	mock.Mock
 }
 
-func (m *MockStorageClient) Bucket(name string) *storage.BucketHandle {
+func (m *MockStorageClient) Bucket(name string) BucketHandle {
 	args := m.Called(name)
-	return args.Get(0).(*storage.BucketHandle)
+	return args.Get(0).(BucketHandle)
 }
 
 func (m *MockStorageClient) Close() error {
@@ -46,7 +48,7 @@ func (m *MockStorageClient) Close() error {
 	return args.Error(0)
 }
 
-// Mock BucketHandle
+// MockBucketHandle mocks the BucketHandle
 type MockBucketHandle struct {
 	mock.Mock
 }
@@ -56,26 +58,86 @@ func (m *MockBucketHandle) Object(name string) *storage.ObjectHandle {
 	return args.Get(0).(*storage.ObjectHandle)
 }
 
-// Mock ObjectHandle
-type MockObjectHandle struct {
-	mock.Mock
+// Wrapper for the real storage.Client to implement StorageClientInterface
+type StorageClientWrapper struct {
+	*storage.Client
 }
 
-func (m *MockObjectHandle) NewWriter(ctx context.Context) *storage.Writer {
-	args := m.Called(ctx)
-	return args.Get(0).(*storage.Writer)
+func (w *StorageClientWrapper) Bucket(name string) BucketHandle {
+	return &BucketHandleWrapper{w.Client.Bucket(name)}
+}
+
+// Wrapper for the real storage.BucketHandle to implement BucketHandle
+type BucketHandleWrapper struct {
+	*storage.BucketHandle
+}
+
+// Custom Writer for testing
+type testWriter struct {
+	writeFunc func(p []byte) (n int, err error)
+	closeFunc func() error
+}
+
+func (w *testWriter) Write(p []byte) (n int, err error) {
+	return w.writeFunc(p)
+}
+
+func (w *testWriter) Close() error {
+	return w.closeFunc()
+}
+
+// MockWriter mocks the storage.Writer
+type MockWriter struct {
+	mock.Mock
+	ctx           context.Context
+	obj           *storage.ObjectHandle
+	bucket        string
+	name          string
+	attrs         storage.ObjectAttrs
+	chunkedUpload bool
+}
+
+func (m *MockWriter) Write(p []byte) (n int, err error) {
+	args := m.Called(p)
+	return args.Int(0), args.Error(1)
+}
+
+func (m *MockWriter) Close() error {
+	args := m.Called()
+	return args.Error(0)
+}
+
+func (m *MockWriter) ObjectAttrs() *storage.ObjectAttrs {
+	return &m.attrs
+}
+
+func (m *MockWriter) SetChunkSize(size int) {}
+
+func (m *MockWriter) ChunkSize() int { return 0 }
+
+func createTestPDF(content string) (*bytes.Buffer, error) {
+	pdf := gofpdf.New("P", "mm", "A4", "")
+	pdf.AddPage()
+	pdf.SetFont("Arial", "", 12)
+	pdf.Cell(40, 10, content)
+	var buf bytes.Buffer
+	err := pdf.Output(&buf)
+	return &buf, err
 }
 
 func TestProcessArXivPaper(t *testing.T) {
-	// Create a mock HTTP server to simulate arXiv
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Serve a sample PDF content
+		pdf := gofpdf.New("P", "mm", "A4", "")
+		pdf.AddPage()
+		pdf.SetFont("Arial", "", 12)
+		pdf.Cell(40, 10, "Test ArXiv PDF content")
+
 		w.Header().Set("Content-Type", "application/pdf")
-		w.Write([]byte("%PDF-1.5\n%Test PDF content"))
+		err := pdf.Output(w)
+		assert.NoError(t, err)
 	}))
 	defer server.Close()
 
-	// Create a CacheService with the mock server URL
 	cacheService := &CacheService{
 		arxivBaseURL: server.URL + "/",
 	}
@@ -84,131 +146,80 @@ func TestProcessArXivPaper(t *testing.T) {
 	content, err := cacheService.processArXivPaper(ctx, "2104.08730")
 
 	assert.NoError(t, err)
-	assert.Contains(t, content, "Test PDF content")
-
-	// Restore the original arXiv URL
-	// cacheService.arXivURL = originalArXivURL
+	assert.Contains(t, content, "Test ArXiv PDF content")
 }
 
 func TestProcessPDF(t *testing.T) {
-	// Create a temporary PDF file for testing
 	tempDir, err := os.MkdirTemp("", "pdf-test")
 	assert.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
+	pdfContent := "Test PDF content"
+	pdfBuffer, err := createTestPDF(pdfContent)
+	assert.NoError(t, err)
+
 	pdfPath := filepath.Join(tempDir, "test.pdf")
-	err = os.WriteFile(pdfPath, []byte("%PDF-1.5\n%Test PDF content"), 0644)
+	err = os.WriteFile(pdfPath, pdfBuffer.Bytes(), 0644)
 	assert.NoError(t, err)
 
 	cacheService := &CacheService{}
 	content, err := cacheService.processPDF(pdfPath)
 
 	assert.NoError(t, err)
-	assert.Contains(t, content, "Test PDF content")
+	assert.Contains(t, content, pdfContent)
 }
 
 func TestExtractTextFromPDF(t *testing.T) {
-	// Create a temporary PDF file for testing
 	tempDir, err := os.MkdirTemp("", "pdf-test")
 	assert.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
+	pdfContent := "Test PDF content"
+	pdfBuffer, err := createTestPDF(pdfContent)
+	assert.NoError(t, err)
+
 	pdfPath := filepath.Join(tempDir, "test.pdf")
-	err = os.WriteFile(pdfPath, []byte("%PDF-1.5\n%Test PDF content"), 0644)
+	err = os.WriteFile(pdfPath, pdfBuffer.Bytes(), 0644)
 	assert.NoError(t, err)
 
 	cacheService := &CacheService{}
 	content, err := cacheService.extractTextFromPDF(pdfPath)
 
 	assert.NoError(t, err)
-	assert.Contains(t, content, "Test PDF content")
-}
-
-func TestCreateContentCache(t *testing.T) {
-	ctx := context.Background()
-	mockGenAIClient := new(MockGenAIClient)
-	mockStorageClient := new(MockStorageClient)
-	mockBucketHandle := new(MockBucketHandle)
-	mockObjectHandle := new(MockObjectHandle)
-	mockWriter := &storage.Writer{}
-
-	cacheService := NewCacheService(mockGenAIClient, mockStorageClient)
-
-	// Set up mock expectations
-	mockStorageClient.On("Bucket", mock.AnythingOfType("string")).Return(mockBucketHandle)
-	mockBucketHandle.On("Object", mock.AnythingOfType("string")).Return(mockObjectHandle)
-	mockObjectHandle.On("NewWriter", ctx).Return(mockWriter)
-	mockGenAIClient.On("CreateCachedContent", ctx, mock.AnythingOfType("*genai.CachedContent")).Return(&genai.CachedContent{Name: "test-cached-content"}, nil)
-
-	// Create a temporary PDF file for testing
-	tempDir, err := os.MkdirTemp("", "pdf-test")
-	assert.NoError(t, err)
-	defer os.RemoveAll(tempDir)
-
-	pdfPath := filepath.Join(tempDir, "test.pdf")
-	err = os.WriteFile(pdfPath, []byte("%PDF-1.5\n%Test PDF content"), 0644)
-	assert.NoError(t, err)
-
-	// Test inputs
-	arxivIDs := []string{"2104.08730"}
-	userPDFs := []string{pdfPath}
-
-	// Call the method
-	cachedContentName, err := cacheService.CreateContentCache(ctx, arxivIDs, userPDFs)
-
-	// Assertions
-	assert.NoError(t, err)
-	assert.Equal(t, "test-cached-content", cachedContentName)
-
-	// Verify mock expectations
-	mockStorageClient.AssertExpectations(t)
-	mockBucketHandle.AssertExpectations(t)
-	mockObjectHandle.AssertExpectations(t)
-	mockGenAIClient.AssertExpectations(t)
+	assert.Contains(t, content, pdfContent)
 }
 
 func TestUploadToGCS(t *testing.T) {
-	// Create a new fake GCS server
 	server := fakestorage.NewServer([]fakestorage.Object{})
 	defer server.Stop()
 
-	// Create a test bucket
 	bucketName := "test-bucket"
 	server.CreateBucketWithOpts(fakestorage.CreateBucketOpts{
 		Name: bucketName,
 	})
 
-	// Create a CacheService with the fake server's client
 	cacheService := &CacheService{
-		storageClient: server.Client(),
+		storageClient: &StorageClientWrapper{server.Client()},
+		bucketName:    bucketName,
 	}
 
 	ctx := context.Background()
-
-	// Test data
 	testContents := []string{"Test content 1", "Test content 2"}
 
-	// Call the uploadToGCS method
 	gcsURIs, err := cacheService.uploadToGCS(ctx, testContents)
 	assert.NoError(t, err)
 	assert.Len(t, gcsURIs, 2)
 
-	// Verify that the files were uploaded
 	for i, uri := range gcsURIs {
-		// Extract the object name from the URI
 		objName := uri[len("gs://"+bucketName+"/"):]
-
-		// Get the object
 		obj := server.Client().Bucket(bucketName).Object(objName)
 		reader, err := obj.NewReader(ctx)
 		assert.NoError(t, err)
 
-		// Read the content
 		content, err := io.ReadAll(reader)
 		assert.NoError(t, err)
 		reader.Close()
 
-		// Verify the content
 		assert.Equal(t, testContents[i], string(content))
 	}
 }

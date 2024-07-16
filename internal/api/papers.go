@@ -90,7 +90,7 @@ func createCache(c *gin.Context) {
 	}
 	defer storageClient.Close()
 
-	cacheService := services.NewCacheService(genaiClient, storageClient)
+	cacheService := services.NewCacheService(genaiClient, storageClient, "nexus-scholar_cached_PDFs")
 
 	cachedContentName, err := cacheService.CreateContentCache(c.Request.Context(), request.ArxivIDs, request.UserPDFs)
 	if err != nil {
