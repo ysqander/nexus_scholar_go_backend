@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"cloud.google.com/go/storage"
@@ -14,39 +16,34 @@ import (
 	"github.com/ledongthuc/pdf"
 )
 
-type BucketHandle interface {
-	Object(name string) *storage.ObjectHandle
-}
-
-// GenAIClientInterface defines the methods we use from genai.Client
-type GenAIClientInterface interface {
-	CreateCachedContent(ctx context.Context, cc *genai.CachedContent) (*genai.CachedContent, error)
-	Close() error
-}
-
-// StorageClientInterface defines the methods we use from storage.Client
-type StorageClientInterface interface {
-	Bucket(name string) BucketHandle
-	Close() error
+type ChatSessionInfo struct {
+	Session           *genai.ChatSession
+	LastAccessed      time.Time
+	CachedContentName string
 }
 
 type CacheService struct {
-	genaiClient   GenAIClientInterface
-	storageClient StorageClientInterface
-	arxivBaseURL  string
-	bucketName    string
+	genaiClient    *genai.Client
+	storageClient  *storage.Client
+	arxivBaseURL   string
+	bucketName     string
+	sessions       sync.Map
+	expirationTime time.Duration
 }
 
-func NewCacheService(genaiClient GenAIClientInterface, storageClient StorageClientInterface, bucketName string) *CacheService {
-	return &CacheService{
-		genaiClient:   genaiClient,
-		storageClient: storageClient,
-		arxivBaseURL:  "https://arxiv.org/pdf/",
-		bucketName:    bucketName,
+func NewCacheService(genaiClient *genai.Client, storageClient *storage.Client, bucketName string) *CacheService {
+	cs := &CacheService{
+		genaiClient:    genaiClient,
+		storageClient:  storageClient,
+		arxivBaseURL:   "https://arxiv.org/pdf/",
+		bucketName:     bucketName,
+		expirationTime: 300 * time.Minute,
 	}
+	go cs.periodicCleanup()
+	return cs
 }
 
-func (s *CacheService) CreateContentCache(ctx context.Context, arxivIDs []string, userPDFs []string) (string, error) {
+func (s *CacheService) CreateContentCache(ctx context.Context, arxivIDs []string, userPDFs []string, cacheExpirationTTL time.Duration) (string, error) {
 	// 1. Process PDFs and extract text content
 	contents, err := s.processDocuments(ctx, arxivIDs, userPDFs)
 	if err != nil {
@@ -60,7 +57,7 @@ func (s *CacheService) CreateContentCache(ctx context.Context, arxivIDs []string
 	}
 
 	// 3. Create cached content
-	cachedContent, err := s.createCachedContent(ctx, gcsURIs)
+	cachedContent, err := s.createCachedContent(ctx, gcsURIs, cacheExpirationTTL)
 	if err != nil {
 		return "", fmt.Errorf("failed to create cached content: %v", err)
 	}
@@ -165,7 +162,7 @@ func (s *CacheService) uploadToGCS(ctx context.Context, contents []string) ([]st
 	var gcsURIs []string
 	for _, content := range contents {
 		obj := s.storageClient.Bucket(s.bucketName).Object(generateUniqueFilename())
-		writer := newWriter(ctx, obj)
+		writer := obj.NewWriter(ctx)
 		// Write content to GCS
 		if _, err := writer.Write([]byte(content)); err != nil {
 			return nil, fmt.Errorf("failed to write to GCS: %v", err)
@@ -178,9 +175,12 @@ func (s *CacheService) uploadToGCS(ctx context.Context, contents []string) ([]st
 	return gcsURIs, nil
 }
 
-func (s *CacheService) createCachedContent(ctx context.Context, gcsURIs []string) (*genai.CachedContent, error) {
+func (s *CacheService) createCachedContent(ctx context.Context, gcsURIs []string, expirationTTL time.Duration) (*genai.CachedContent, error) {
 	cc := &genai.CachedContent{
 		Model: "gemini-1.5-pro-001", // Specify the Gemini model you want to use
+		Expiration: genai.ExpireTimeOrTTL{
+			TTL: expirationTTL, // Set TTL to 10 minutes
+		},
 	}
 
 	// Create a single Content object with all GCS URIs
@@ -200,7 +200,94 @@ func (s *CacheService) createCachedContent(ctx context.Context, gcsURIs []string
 	return s.genaiClient.CreateCachedContent(ctx, cc)
 }
 
-// Define a variable to hold the NewWriter function
-var newWriter = func(ctx context.Context, obj *storage.ObjectHandle) *storage.Writer {
-	return obj.NewWriter(ctx)
+// DeleteCache deletes the cached content with the given cache name
+func (s *CacheService) DeleteCache(ctx context.Context, cacheName string) error {
+	err := s.genaiClient.DeleteCachedContent(ctx, cacheName)
+	if err != nil {
+		return fmt.Errorf("failed to delete cached content: %v", err)
+	}
+	return nil
+}
+
+// StartChatSession creates a new chat session using the cached content
+func (s *CacheService) StartChatSession(ctx context.Context, cachedContentName string) (string, error) {
+	model := s.genaiClient.GenerativeModelFromCachedContent(&genai.CachedContent{Name: cachedContentName})
+	session := model.StartChat()
+	sessionID := uuid.New().String()
+
+	s.sessions.Store(sessionID, ChatSessionInfo{
+		Session:           session,
+		LastAccessed:      time.Now(),
+		CachedContentName: cachedContentName,
+	})
+
+	return sessionID, nil
+}
+
+// SendChatMessage sends a message to the chat session and returns the response
+func (s *CacheService) SendChatMessage(ctx context.Context, sessionID string, message string) (*genai.GenerateContentResponse, error) {
+	sessionInfo, exists := s.getAndUpdateSession(sessionID)
+	if !exists {
+		return nil, fmt.Errorf("chat session not found")
+	}
+
+	return sessionInfo.Session.SendMessage(ctx, genai.Text(message))
+}
+
+// StreamChatMessage sends a message to the chat session and streams the response
+func (s *CacheService) StreamChatMessage(ctx context.Context, sessionID string, message string) (*genai.GenerateContentResponseIterator, error) {
+	sessionInfo, exists := s.getAndUpdateSession(sessionID)
+	if !exists {
+		return nil, fmt.Errorf("chat session not found")
+	}
+
+	return sessionInfo.Session.SendMessageStream(ctx, genai.Text(message)), nil
+}
+
+func (s *CacheService) getAndUpdateSession(sessionID string) (ChatSessionInfo, bool) {
+	if sessionInterface, ok := s.sessions.Load(sessionID); ok {
+		sessionInfo := sessionInterface.(ChatSessionInfo)
+		sessionInfo.LastAccessed = time.Now()
+		s.sessions.Store(sessionID, sessionInfo)
+		return sessionInfo, true
+	}
+	return ChatSessionInfo{}, false
+}
+
+func (s *CacheService) periodicCleanup() {
+	ticker := time.NewTicker(15 * time.Minute)
+	for range ticker.C {
+		s.cleanupExpiredSessions()
+	}
+}
+
+func (s *CacheService) cleanupExpiredSessions() {
+	now := time.Now()
+	s.sessions.Range(func(key, value interface{}) bool {
+		sessionInfo := value.(ChatSessionInfo)
+		if now.Sub(sessionInfo.LastAccessed) > s.expirationTime {
+			s.sessions.Delete(key)
+		}
+		return true
+	})
+}
+
+// TerminateSession ends the chat session and cleans up resources
+func (s *CacheService) TerminateSession(ctx context.Context, sessionID string) error {
+	value, exists := s.sessions.LoadAndDelete(sessionID)
+	if !exists {
+		// Session doesn't exist, but we don't consider this an error
+		return nil
+	}
+
+	sessionInfo := value.(ChatSessionInfo)
+
+	// Delete the cached content
+	err := s.genaiClient.DeleteCachedContent(ctx, sessionInfo.CachedContentName)
+	if err != nil {
+		// Log the error but don't return it
+		log.Printf("Failed to delete cached content for session %s: %v", sessionID, err)
+	}
+
+	return nil
 }

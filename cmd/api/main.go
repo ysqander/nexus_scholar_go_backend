@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"strings"
@@ -9,7 +10,10 @@ import (
 	"nexus_scholar_go_backend/internal/api"
 	"nexus_scholar_go_backend/internal/auth"
 	"nexus_scholar_go_backend/internal/database"
+	"nexus_scholar_go_backend/internal/services"
 
+	"cloud.google.com/go/storage"
+	"cloud.google.com/go/vertexai/genai"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -21,6 +25,22 @@ func main() {
 	}
 
 	database.InitDB()
+	ctx := context.Background()
+	// Initialize GenAI client
+	genaiClient, err := genai.NewClient(ctx, "nexus-scholar", "europe-west3")
+	if err != nil {
+		log.Fatalf("Failed to create GenAI client: %v", err)
+	}
+	defer genaiClient.Close()
+
+	// Initialize Storage client
+	storageClient, err := storage.NewClient(ctx)
+	if err != nil {
+		log.Fatalf("Failed to create Storage client: %v", err)
+	}
+	defer storageClient.Close()
+
+	cacheService := services.NewCacheService(genaiClient, storageClient, "nexus-scholar_cached_PDFs")
 
 	r := gin.Default()
 
@@ -39,7 +59,7 @@ func main() {
 		MaxAge:           12 * time.Hour,
 	}))
 
-	api.SetupRoutes(r)
+	api.SetupRoutes(r, cacheService)
 	auth.SetupRoutes(r)
 
 	port := os.Getenv("PORT")
