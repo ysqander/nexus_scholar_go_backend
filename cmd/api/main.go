@@ -26,8 +26,14 @@ func main() {
 
 	database.InitDB()
 	ctx := context.Background()
+
+	projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
+	if projectID == "" {
+		log.Fatal("GOOGLE_CLOUD_PROJECT environment variable is not set")
+	}
+
 	// Initialize GenAI client
-	genaiClient, err := genai.NewClient(ctx, "nexus-scholar", "europe-west3")
+	genaiClient, err := genai.NewClient(ctx, projectID, "us-central1")
 	if err != nil {
 		log.Fatalf("Failed to create GenAI client: %v", err)
 	}
@@ -40,7 +46,10 @@ func main() {
 	}
 	defer storageClient.Close()
 
-	cacheService := services.NewCacheService(genaiClient, storageClient, "nexus-scholar_cached_PDFs")
+	cacheService, err := services.NewCacheService(ctx, genaiClient, storageClient, projectID)
+	if err != nil {
+		log.Fatalf("Failed to create CacheService: %v", err)
+	}
 
 	r := gin.Default()
 

@@ -1,9 +1,13 @@
 package api
 
 import (
+	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"time"
 
 	"nexus_scholar_go_backend/internal/auth"
@@ -69,18 +73,45 @@ func privateRoute(c *gin.Context) {
 
 func createCacheHandler(cacheService *services.CacheService) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var request struct {
-			ArxivIDs []string `json:"arxiv_ids" binding:"required"`
-			UserPDFs []string `json:"user_pdfs"`
-		}
-
-		if err := c.ShouldBindJSON(&request); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		// Parse multipart form
+		if err := c.Request.ParseMultipartForm(10 << 20); err != nil { // 10 MB max
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse multipart form"})
 			return
 		}
 
+		// Get arXiv IDs
+		arxivIDsJSON := c.Request.FormValue("arxiv_ids")
+		var arxivIDs []string
+		if err := json.Unmarshal([]byte(arxivIDsJSON), &arxivIDs); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid arXiv IDs format"})
+			return
+		}
+
+		// Create a temporary directory to store uploaded files
+		tempDir, err := os.MkdirTemp("", "user_pdfs_")
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create temporary directory"})
+			return
+		}
+		defer os.RemoveAll(tempDir) // Clean up the temporary directory when done
+
+		// Save uploaded files and collect their paths
+		var pdfPaths []string
+		form, _ := c.MultipartForm()
+		files := form.File
+		for _, fileHeaders := range files {
+			for _, fileHeader := range fileHeaders {
+				filename := filepath.Join(tempDir, fileHeader.Filename)
+				if err := c.SaveUploadedFile(fileHeader, filename); err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to save file %s: %v", fileHeader.Filename, err)})
+					return
+				}
+				pdfPaths = append(pdfPaths, filename)
+			}
+		}
+
 		cacheExpirationTTL := 10 * time.Minute
-		cachedContentName, err := cacheService.CreateContentCache(c.Request.Context(), request.ArxivIDs, request.UserPDFs, cacheExpirationTTL)
+		cachedContentName, err := cacheService.CreateContentCache(c.Request.Context(), arxivIDs, pdfPaths, cacheExpirationTTL)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
