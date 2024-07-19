@@ -17,6 +17,7 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	"google.golang.org/api/option"
 )
 
 func main() {
@@ -24,23 +25,28 @@ func main() {
 		log.Println("No .env file found")
 	}
 
-	database.InitDB()
 	ctx := context.Background()
+
+	credentialsFile := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
+	if credentialsFile == "" {
+		log.Fatal("GOOGLE_APPLICATION_CREDENTIALS environment variable is not set")
+	}
 
 	projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
 	if projectID == "" {
 		log.Fatal("GOOGLE_CLOUD_PROJECT environment variable is not set")
 	}
 
-	// Initialize GenAI client
-	genaiClient, err := genai.NewClient(ctx, projectID, "us-central1")
+	database.InitDB()
+
+	genaiClient, err := genai.NewClient(ctx, projectID, "us-central1", option.WithCredentialsFile(credentialsFile))
 	if err != nil {
 		log.Fatalf("Failed to create GenAI client: %v", err)
 	}
 	defer genaiClient.Close()
 
 	// Initialize Storage client
-	storageClient, err := storage.NewClient(ctx)
+	storageClient, err := storage.NewClient(ctx, option.WithCredentialsFile(credentialsFile))
 	if err != nil {
 		log.Fatalf("Failed to create Storage client: %v", err)
 	}
@@ -76,5 +82,8 @@ func main() {
 		port = "3000"
 	}
 
-	r.Run(":" + port)
+	log.Printf("Server starting on port %s", port)
+	if err := r.Run(":" + port); err != nil {
+		log.Fatalf("Failed to start server: %v", err)
+	}
 }

@@ -1,7 +1,9 @@
 package services
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -14,6 +16,7 @@ import (
 	"cloud.google.com/go/vertexai/genai"
 	"github.com/google/uuid"
 	"github.com/ledongthuc/pdf"
+	"golang.org/x/oauth2/google"
 )
 
 type ChatSessionInfo struct {
@@ -102,7 +105,8 @@ func (s *CacheService) CreateContentCache(ctx context.Context, arxivIDs []string
 
 	// 3. Create cached content
 	log.Println("Creating cached content")
-	cachedContent, err := s.createCachedContent(ctx, gcsURIs, cacheExpirationTTL)
+	cachedContent, err := s.CreateCachedContentREST(ctx, gcsURIs, cacheExpirationTTL)
+	// cachedContent, err := s.createCachedContent(ctx, gcsURIs, cacheExpirationTTL)
 	if err != nil {
 		log.Printf("Error creating cached content: %v", err)
 		return "", fmt.Errorf("failed to create cached content: %v", err)
@@ -379,4 +383,132 @@ func (s *CacheService) TerminateSession(ctx context.Context, sessionID string) e
 	}
 
 	return nil
+}
+
+func (s *CacheService) CreateCachedContentREST(ctx context.Context, gcsURIs []string, cacheExpirationTTL time.Duration) (*genai.CachedContent, error) {
+	log.Printf("Creating cached content using REST API with %d GCS URIs", len(gcsURIs))
+
+	accessToken, err := s.getAccessToken(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get access token: %v", err)
+	}
+
+	requestBody := map[string]interface{}{
+		"model": fmt.Sprintf("projects/%s/locations/%s/publishers/google/models/gemini-1.5-pro-001", s.projectID, s.location),
+		"contents": []map[string]interface{}{
+			{
+				"role":  "user",
+				"parts": make([]map[string]interface{}, len(gcsURIs)),
+			},
+		},
+		"ttl": map[string]interface{}{
+			"seconds": fmt.Sprintf("%d", int64(cacheExpirationTTL.Seconds())),
+			"nanos":   "0",
+		},
+	}
+
+	for i, uri := range gcsURIs {
+		requestBody["contents"].([]map[string]interface{})[0]["parts"].([]map[string]interface{})[i] = map[string]interface{}{
+			"fileData": map[string]string{
+				"mimeType": "text/plain",
+				"fileUri":  uri,
+			},
+		}
+	}
+
+	jsonBody, err := json.Marshal(requestBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request body: %v", err)
+	}
+
+	url := fmt.Sprintf("https://%s-aiplatform.googleapis.com/v1beta1/projects/%s/locations/%s/cachedContents", s.location, s.projectID, s.location)
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonBody))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %v", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %v", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %v", err)
+	}
+
+	// Parse the response into a genai.CachedContent struct
+	cachedContent := &genai.CachedContent{
+		Name:  result["name"].(string),
+		Model: result["model"].(string),
+		Expiration: genai.ExpireTimeOrTTL{
+			ExpireTime: parseExpireTime(result["expireTime"].(string)),
+		},
+	}
+
+	// Parse contents if available
+	if contentsRaw, ok := result["contents"].([]interface{}); ok {
+		cachedContent.Contents = make([]*genai.Content, len(contentsRaw))
+		for i, contentRaw := range contentsRaw {
+			content := contentRaw.(map[string]interface{})
+			cachedContent.Contents[i] = &genai.Content{
+				Role: content["role"].(string),
+			}
+			// Parse parts if available
+			if partsRaw, ok := content["parts"].([]interface{}); ok {
+				cachedContent.Contents[i].Parts = make([]genai.Part, len(partsRaw))
+				for j, partRaw := range partsRaw {
+					part := partRaw.(map[string]interface{})
+					if fileData, ok := part["fileData"].(map[string]interface{}); ok {
+						cachedContent.Contents[i].Parts[j] = genai.FileData{
+							MIMEType: fileData["mimeType"].(string),
+							FileURI:  fileData["fileUri"].(string),
+						}
+					} else if text, ok := part["text"].(string); ok {
+						cachedContent.Contents[i].Parts[j] = genai.Text(text)
+					}
+				}
+			}
+		}
+	}
+
+	log.Printf("Cached content created successfully using REST API with name: %s", cachedContent.Name)
+	return cachedContent, nil
+}
+
+func parseExpireTime(expireTimeStr string) time.Time {
+	expireTime, err := time.Parse(time.RFC3339, expireTimeStr)
+	if err != nil {
+		log.Printf("Failed to parse expireTime: %v", err)
+		return time.Time{}
+	}
+	return expireTime
+}
+
+func (s *CacheService) getAccessToken(ctx context.Context) (string, error) {
+	tokenSource, err := google.DefaultTokenSource(ctx, "https://www.googleapis.com/auth/cloud-platform")
+	if err != nil {
+		return "", fmt.Errorf("failed to create token source: %v", err)
+	}
+
+	token, err := tokenSource.Token()
+	if err != nil {
+		return "", fmt.Errorf("failed to get token: %v", err)
+	}
+
+	return token.AccessToken, nil
 }
