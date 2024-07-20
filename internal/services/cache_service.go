@@ -1,22 +1,21 @@
 package services
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
 	"cloud.google.com/go/storage"
-	"cloud.google.com/go/vertexai/genai"
+	"github.com/google/generative-ai-go/genai"
 	"github.com/google/uuid"
 	"github.com/ledongthuc/pdf"
-	"golang.org/x/oauth2/google"
+	"google.golang.org/api/googleapi"
 )
 
 type ChatSessionInfo struct {
@@ -34,6 +33,7 @@ type CacheService struct {
 	bucketName     string
 	sessions       sync.Map
 	expirationTime time.Duration
+	sessionsMutex  sync.RWMutex
 }
 
 func NewCacheService(ctx context.Context, genaiClient *genai.Client, storageClient *storage.Client, projectID string) (*CacheService, error) {
@@ -47,7 +47,7 @@ func NewCacheService(ctx context.Context, genaiClient *genai.Client, storageClie
 		projectID:      projectID,
 		location:       location,
 		bucketName:     bucketName,
-		expirationTime: 300 * time.Minute,
+		expirationTime: 10 * time.Minute,
 	}
 
 	// Check if bucket exists, create if it doesn't
@@ -85,68 +85,56 @@ func (s *CacheService) ensureBucketExists(ctx context.Context) error {
 func (s *CacheService) CreateContentCache(ctx context.Context, arxivIDs []string, userPDFs []string, cacheExpirationTTL time.Duration) (string, error) {
 	log.Println("Starting CreateContentCache")
 
-	// 1. Process PDFs and extract text content
-	log.Println("Processing documents")
-	contents, err := s.processDocuments(ctx, arxivIDs, userPDFs)
+	// 1. Process documents and aggregate content
+	aggregatedContent, err := s.aggregateDocuments(ctx, arxivIDs, userPDFs)
 	if err != nil {
-		log.Printf("Error processing documents: %v", err)
-		return "", fmt.Errorf("failed to process documents: %v", err)
+		return "", fmt.Errorf("failed to aggregate documents: %v", err)
 	}
-	log.Println("Documents processed successfully")
 
-	// 2. Upload content to Google Cloud Storage
-	log.Println("Uploading content to Google Cloud Storage")
-	gcsURIs, err := s.uploadToGCS(ctx, contents)
-	if err != nil {
-		log.Printf("Error uploading to GCS: %v", err)
-		return "", fmt.Errorf("failed to upload to GCS: %v", err)
+	// 2. Create cached content using the Go SDK
+	model := "gemini-1.5-pro-001"
+	cc := &genai.CachedContent{
+		Model: model,
+		Expiration: genai.ExpireTimeOrTTL{
+			TTL: cacheExpirationTTL,
+		},
+		Contents: []*genai.Content{
+			genai.NewUserContent(genai.Text(aggregatedContent)),
+		},
 	}
-	log.Println("Content uploaded to Google Cloud Storage successfully")
 
-	// 3. Create cached content
-	log.Println("Creating cached content")
-	// cachedContent, err := s.CreateCachedContentREST(ctx, gcsURIs, cacheExpirationTTL)
-	cachedContent, err := s.createCachedContent(ctx, gcsURIs, cacheExpirationTTL)
+	log.Println("Creating cached content using GEMINI API")
+	cachedContent, err := s.genaiClient.CreateCachedContent(ctx, cc)
 	if err != nil {
-		log.Printf("Error creating cached content: %v", err)
 		return "", fmt.Errorf("failed to create cached content: %v", err)
 	}
-	log.Println("Cached content created successfully")
 
-	log.Println("CreateContentCache completed successfully")
+	log.Printf("Cached content created successfully with name: %s", cachedContent.Name)
 	return cachedContent.Name, nil
 }
 
-func (s *CacheService) processDocuments(ctx context.Context, arxivIDs []string, userPDFs []string) ([]string, error) {
-	log.Println("Starting processDocuments")
-	var contents []string
+func (s *CacheService) aggregateDocuments(ctx context.Context, arxivIDs []string, userPDFs []string) (string, error) {
+	var aggregatedContent strings.Builder
 
 	// Process arXiv papers
 	for _, id := range arxivIDs {
-		log.Printf("Processing arXiv paper: %s", id)
 		content, err := s.processArXivPaper(ctx, id)
 		if err != nil {
-			log.Printf("Error processing arXiv paper %s: %v", id, err)
-			return nil, fmt.Errorf("failed to process arXiv paper %s: %v", id, err)
+			return "", fmt.Errorf("failed to process arXiv paper %s: %v", id, err)
 		}
-		contents = append(contents, content)
-		log.Printf("arXiv paper %s processed successfully", id)
+		aggregatedContent.WriteString(fmt.Sprintf("<Document>\n<title>arXiv:%s</title>\n%s\n</Document>\n", id, content))
 	}
 
 	// Process user-provided PDFs
-	for _, pdfPath := range userPDFs {
-		log.Printf("Processing user-provided PDF: %s", pdfPath)
+	for i, pdfPath := range userPDFs {
 		content, err := s.processPDF(pdfPath)
 		if err != nil {
-			log.Printf("Error processing PDF %s: %v", pdfPath, err)
-			return nil, fmt.Errorf("failed to process PDF %s: %v", pdfPath, err)
+			return "", fmt.Errorf("failed to process PDF %s: %v", pdfPath, err)
 		}
-		contents = append(contents, content)
-		log.Printf("PDF %s processed successfully", pdfPath)
+		aggregatedContent.WriteString(fmt.Sprintf("<Document>\n<title>User PDF %d</title>\n%s\n</Document>\n", i+1, content))
 	}
 
-	log.Println("processDocuments completed successfully")
-	return contents, nil
+	return aggregatedContent.String(), nil
 }
 
 func (s *CacheService) processArXivPaper(ctx context.Context, arxivID string) (string, error) {
@@ -232,81 +220,35 @@ func (s *CacheService) extractTextFromPDF(pdfPath string) (string, error) {
 	return content, nil
 }
 
-// generateUniqueFilename creates a unique filename using timestamp and UUID
-func generateUniqueFilename() string {
-	timestamp := time.Now().UnixNano()
-	uniqueID := uuid.New().String()
-	return fmt.Sprintf("%d-%s.txt", timestamp, uniqueID)
-}
-
-func (s *CacheService) uploadToGCS(ctx context.Context, contents []string) ([]string, error) {
-	var gcsURIs []string
-	for _, content := range contents {
-		obj := s.storageClient.Bucket(s.bucketName).Object(generateUniqueFilename())
-		writer := obj.NewWriter(ctx)
-		// Write content to GCS
-		if _, err := writer.Write([]byte(content)); err != nil {
-			return nil, fmt.Errorf("failed to write to GCS: %v", err)
-		}
-		if err := writer.Close(); err != nil {
-			return nil, fmt.Errorf("failed to close GCS writer: %v", err)
-		}
-		gcsURIs = append(gcsURIs, fmt.Sprintf("gs://%s/%s", s.bucketName, obj.ObjectName()))
-	}
-	return gcsURIs, nil
-}
-
-func (s *CacheService) createCachedContent(ctx context.Context, gcsURIs []string, expirationTTL time.Duration) (*genai.CachedContent, error) {
-	log.Printf("Creating cached content with %d GCS URIs", len(gcsURIs))
-
-	modelName := fmt.Sprintf("projects/%s/locations/%s/publishers/google/models/gemini-1.5-pro-001", s.projectID, s.location)
-
-	cc := &genai.CachedContent{
-		Model: modelName,
-		Expiration: genai.ExpireTimeOrTTL{
-			TTL: expirationTTL,
-		},
-	}
-
-	content := &genai.Content{
-		Parts: make([]genai.Part, len(gcsURIs)),
-	}
-
-	for i, uri := range gcsURIs {
-		log.Printf("Adding GCS URI to content: %s", uri)
-		content.Parts[i] = genai.FileData{
-			MIMEType: "text/plain",
-			FileURI:  uri,
-		}
-	}
-
-	cc.Contents = []*genai.Content{content}
-
-	log.Println("Calling Vertex AI to create cached content")
-	cachedContent, err := s.genaiClient.CreateCachedContent(ctx, cc)
-	if err != nil {
-		log.Printf("Error from Vertex AI while creating cached content: %v", err)
-		return nil, fmt.Errorf("Vertex AI error: %v", err)
-	}
-
-	log.Printf("Cached content created successfully with name: %s", cachedContent.Name)
-	return cachedContent, nil
-}
-
 // DeleteCache deletes the cached content with the given cache name
 func (s *CacheService) DeleteCache(ctx context.Context, cacheName string) error {
+	log.Printf("Attempting to delete cached content: %s", cacheName)
 	err := s.genaiClient.DeleteCachedContent(ctx, cacheName)
 	if err != nil {
+		log.Printf("Error deleting cached content %s: %v", cacheName, err)
 		return fmt.Errorf("failed to delete cached content: %v", err)
 	}
+	log.Printf("Successfully deleted cached content: %s", cacheName)
 	return nil
 }
 
 // StartChatSession creates a new chat session using the cached content
 func (s *CacheService) StartChatSession(ctx context.Context, cachedContentName string) (string, error) {
+	log.Printf("Starting chat session with cached content name: %s", cachedContentName)
 	model := s.genaiClient.GenerativeModelFromCachedContent(&genai.CachedContent{Name: cachedContentName})
+
+	//Test model receives message
+	response, err := model.GenerateContent(ctx, genai.Text("Tell me one sentence about the papers"))
+	if err != nil {
+		return "", fmt.Errorf("failed to test Gemini API connection: %v", err)
+	}
+	log.Printf("Response from model: %v", response)
+
 	session := model.StartChat()
 	sessionID := uuid.New().String()
+
+	s.sessionsMutex.Lock()
+	defer s.sessionsMutex.Unlock()
 
 	s.sessions.Store(sessionID, ChatSessionInfo{
 		Session:           session,
@@ -319,12 +261,25 @@ func (s *CacheService) StartChatSession(ctx context.Context, cachedContentName s
 
 // SendChatMessage sends a message to the chat session and returns the response
 func (s *CacheService) SendChatMessage(ctx context.Context, sessionID string, message string) (*genai.GenerateContentResponse, error) {
+	log.Printf("SendChatMessage called with sessionID: %s and message: %s", sessionID, message)
+
 	sessionInfo, exists := s.getAndUpdateSession(sessionID)
 	if !exists {
+		log.Printf("Chat session not found for sessionID: %s", sessionID)
 		return nil, fmt.Errorf("chat session not found")
 	}
 
-	return sessionInfo.Session.SendMessage(ctx, genai.Text(message))
+	response, err := sessionInfo.Session.SendMessage(ctx, genai.Text(message))
+	if err != nil {
+		log.Printf("Error sending message in sessionID: %s, error: %v", sessionID, err)
+		if gerr, ok := err.(*googleapi.Error); ok {
+			log.Printf("Google API Error - Code: %d, Message: %s, Details: %v", gerr.Code, gerr.Message, gerr.Details)
+		}
+		return nil, err
+	}
+
+	log.Printf("Message sent successfully in sessionID: %s", sessionID)
+	return response, nil
 }
 
 // StreamChatMessage sends a message to the chat session and streams the response
@@ -338,13 +293,18 @@ func (s *CacheService) StreamChatMessage(ctx context.Context, sessionID string, 
 }
 
 func (s *CacheService) getAndUpdateSession(sessionID string) (ChatSessionInfo, bool) {
-	if sessionInterface, ok := s.sessions.Load(sessionID); ok {
-		sessionInfo := sessionInterface.(ChatSessionInfo)
-		sessionInfo.LastAccessed = time.Now()
-		s.sessions.Store(sessionID, sessionInfo)
-		return sessionInfo, true
+	s.sessionsMutex.Lock()
+	defer s.sessionsMutex.Unlock()
+	sessionInterface, ok := s.sessions.Load(sessionID)
+	if !ok {
+		log.Printf("Session not found for ID: %s", sessionID)
+		return ChatSessionInfo{}, false
 	}
-	return ChatSessionInfo{}, false
+	sessionInfo := sessionInterface.(ChatSessionInfo)
+	log.Printf("Found session for ID: %s, last accessed: %v", sessionID, sessionInfo.LastAccessed)
+	sessionInfo.LastAccessed = time.Now()
+	s.sessions.Store(sessionID, sessionInfo)
+	return sessionInfo, true
 }
 
 func (s *CacheService) periodicCleanup() {
@@ -359,10 +319,20 @@ func (s *CacheService) cleanupExpiredSessions() {
 	s.sessions.Range(func(key, value interface{}) bool {
 		sessionInfo := value.(ChatSessionInfo)
 		if now.Sub(sessionInfo.LastAccessed) > s.expirationTime {
+			log.Printf("Removing expired session: %v", key)
 			s.sessions.Delete(key)
 		}
 		return true
 	})
+}
+
+func (s *CacheService) TestGeminiAPIConnection(ctx context.Context) error {
+	model := s.genaiClient.GenerativeModel("gemini-1.5-pro-001")
+	_, err := model.GenerateContent(ctx, genai.Text("Hello, World!"))
+	if err != nil {
+		return fmt.Errorf("failed to test Gemini API connection: %v", err)
+	}
+	return nil
 }
 
 // TerminateSession ends the chat session and cleans up resources
@@ -376,6 +346,7 @@ func (s *CacheService) TerminateSession(ctx context.Context, sessionID string) e
 	sessionInfo := value.(ChatSessionInfo)
 
 	// Delete the cached content
+	log.Printf("Deleting cached content for session %s: %s", sessionID, sessionInfo.CachedContentName)
 	err := s.genaiClient.DeleteCachedContent(ctx, sessionInfo.CachedContentName)
 	if err != nil {
 		// Log the error but don't return it
@@ -383,132 +354,4 @@ func (s *CacheService) TerminateSession(ctx context.Context, sessionID string) e
 	}
 
 	return nil
-}
-
-func (s *CacheService) CreateCachedContentREST(ctx context.Context, gcsURIs []string, cacheExpirationTTL time.Duration) (*genai.CachedContent, error) {
-	log.Printf("Creating cached content using REST API with %d GCS URIs", len(gcsURIs))
-
-	accessToken, err := s.getAccessToken(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get access token: %v", err)
-	}
-
-	requestBody := map[string]interface{}{
-		"model": fmt.Sprintf("projects/%s/locations/%s/publishers/google/models/gemini-1.5-pro-001", s.projectID, s.location),
-		"contents": []map[string]interface{}{
-			{
-				"role":  "user",
-				"parts": make([]map[string]interface{}, len(gcsURIs)),
-			},
-		},
-		"ttl": map[string]interface{}{
-			"seconds": fmt.Sprintf("%d", int64(cacheExpirationTTL.Seconds())),
-			"nanos":   "0",
-		},
-	}
-
-	for i, uri := range gcsURIs {
-		requestBody["contents"].([]map[string]interface{})[0]["parts"].([]map[string]interface{})[i] = map[string]interface{}{
-			"fileData": map[string]string{
-				"mimeType": "text/plain",
-				"fileUri":  uri,
-			},
-		}
-	}
-
-	jsonBody, err := json.Marshal(requestBody)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request body: %v", err)
-	}
-
-	url := fmt.Sprintf("https://%s-aiplatform.googleapis.com/v1beta1/projects/%s/locations/%s/cachedContents", s.location, s.projectID, s.location)
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+accessToken)
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %v", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %v", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	var result map[string]interface{}
-	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal response: %v", err)
-	}
-
-	// Parse the response into a genai.CachedContent struct
-	cachedContent := &genai.CachedContent{
-		Name:  result["name"].(string),
-		Model: result["model"].(string),
-		Expiration: genai.ExpireTimeOrTTL{
-			ExpireTime: parseExpireTime(result["expireTime"].(string)),
-		},
-	}
-
-	// Parse contents if available
-	if contentsRaw, ok := result["contents"].([]interface{}); ok {
-		cachedContent.Contents = make([]*genai.Content, len(contentsRaw))
-		for i, contentRaw := range contentsRaw {
-			content := contentRaw.(map[string]interface{})
-			cachedContent.Contents[i] = &genai.Content{
-				Role: content["role"].(string),
-			}
-			// Parse parts if available
-			if partsRaw, ok := content["parts"].([]interface{}); ok {
-				cachedContent.Contents[i].Parts = make([]genai.Part, len(partsRaw))
-				for j, partRaw := range partsRaw {
-					part := partRaw.(map[string]interface{})
-					if fileData, ok := part["fileData"].(map[string]interface{}); ok {
-						cachedContent.Contents[i].Parts[j] = genai.FileData{
-							MIMEType: fileData["mimeType"].(string),
-							FileURI:  fileData["fileUri"].(string),
-						}
-					} else if text, ok := part["text"].(string); ok {
-						cachedContent.Contents[i].Parts[j] = genai.Text(text)
-					}
-				}
-			}
-		}
-	}
-
-	log.Printf("Cached content created successfully using REST API with name: %s", cachedContent.Name)
-	return cachedContent, nil
-}
-
-func parseExpireTime(expireTimeStr string) time.Time {
-	expireTime, err := time.Parse(time.RFC3339, expireTimeStr)
-	if err != nil {
-		log.Printf("Failed to parse expireTime: %v", err)
-		return time.Time{}
-	}
-	return expireTime
-}
-
-func (s *CacheService) getAccessToken(ctx context.Context) (string, error) {
-	tokenSource, err := google.DefaultTokenSource(ctx, "https://www.googleapis.com/auth/cloud-platform")
-	if err != nil {
-		return "", fmt.Errorf("failed to create token source: %v", err)
-	}
-
-	token, err := tokenSource.Token()
-	if err != nil {
-		return "", fmt.Errorf("failed to get token: %v", err)
-	}
-
-	return token.AccessToken, nil
 }

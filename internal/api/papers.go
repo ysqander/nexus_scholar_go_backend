@@ -117,7 +117,31 @@ func createCacheHandler(cacheService *services.CacheService) gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{"cached_content_name": cachedContentName})
+		// Wrap the rest of the process in a defer function to ensure cache cleanup on error
+		var processingErr error
+		defer func() {
+			if processingErr != nil {
+				// An error occurred, attempt to delete the cache
+				if delErr := cacheService.DeleteCache(c.Request.Context(), cachedContentName); delErr != nil {
+					log.Printf("Failed to delete cache %s after error: %v", cachedContentName, delErr)
+				} else {
+					log.Printf("Successfully deleted cache %s after error", cachedContentName)
+				}
+				c.JSON(http.StatusInternalServerError, gin.H{"error": processingErr.Error()})
+			}
+		}()
+
+		// Start chat session
+		sessionID, err := cacheService.StartChatSession(c.Request.Context(), cachedContentName)
+		if err != nil {
+			processingErr = fmt.Errorf("failed to start chat session: %v", err)
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"cached_content_name": cachedContentName,
+			"session_id":          sessionID,
+		})
 	}
 }
 
@@ -164,16 +188,20 @@ func sendChatMessageHandler(cacheService *services.CacheService) gin.HandlerFunc
 		}
 
 		if err := c.ShouldBindJSON(&request); err != nil {
+			log.Printf("Error binding JSON: %v", err)
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 
+		log.Printf("Received request to send chat message: sessionID=%s, message=%s", request.SessionID, request.Message)
 		response, err := cacheService.SendChatMessage(c.Request.Context(), request.SessionID, request.Message)
 		if err != nil {
+			log.Printf("Error sending chat message: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 
+		log.Printf("Chat message sent successfully, response: %s", response.Candidates[0].Content.Parts[0])
 		// Assuming the response structure is the same as before
 		c.JSON(http.StatusOK, gin.H{"response": response.Candidates[0].Content.Parts[0]})
 	}

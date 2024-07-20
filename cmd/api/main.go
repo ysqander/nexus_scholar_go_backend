@@ -13,9 +13,9 @@ import (
 	"nexus_scholar_go_backend/internal/services"
 
 	"cloud.google.com/go/storage"
-	"cloud.google.com/go/vertexai/genai"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/google/generative-ai-go/genai"
 	"github.com/joho/godotenv"
 	"google.golang.org/api/option"
 )
@@ -23,6 +23,11 @@ import (
 func main() {
 	if err := godotenv.Load(); err != nil {
 		log.Println("No .env file found")
+	}
+
+	genai_apiKey := os.Getenv("GOOGLE_AI_STUDIO_API_KEY")
+	if genai_apiKey == "" {
+		log.Fatal("GOOGLE_AI_STUDIO_API_KEY is not set in the environment")
 	}
 
 	ctx := context.Background()
@@ -39,7 +44,7 @@ func main() {
 
 	database.InitDB()
 
-	genaiClient, err := genai.NewClient(ctx, projectID, "us-central1", option.WithCredentialsFile(credentialsFile))
+	genaiClient, err := genai.NewClient(ctx, option.WithAPIKey(genai_apiKey))
 	if err != nil {
 		log.Fatalf("Failed to create GenAI client: %v", err)
 	}
