@@ -37,7 +37,7 @@ type CacheService struct {
 }
 
 func NewCacheService(ctx context.Context, genaiClient *genai.Client, storageClient *storage.Client, projectID string) (*CacheService, error) {
-	const location = "us-central1"
+	const location = "US-CENTRAL1"
 	bucketName := "nexus-scholar-cached-pdfs"
 
 	cs := &CacheService{
@@ -105,8 +105,8 @@ func (s *CacheService) CreateContentCache(ctx context.Context, arxivIDs []string
 
 	// 3. Create cached content
 	log.Println("Creating cached content")
-	cachedContent, err := s.CreateCachedContentREST(ctx, gcsURIs, cacheExpirationTTL)
-	// cachedContent, err := s.createCachedContent(ctx, gcsURIs, cacheExpirationTTL)
+	// cachedContent, err := s.CreateCachedContentREST(ctx, gcsURIs, cacheExpirationTTL)
+	cachedContent, err := s.createCachedContent(ctx, gcsURIs, cacheExpirationTTL)
 	if err != nil {
 		log.Printf("Error creating cached content: %v", err)
 		return "", fmt.Errorf("failed to create cached content: %v", err)
