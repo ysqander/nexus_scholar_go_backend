@@ -235,14 +235,11 @@ func (s *CacheService) DeleteCache(ctx context.Context, cacheName string) error 
 // StartChatSession creates a new chat session using the cached content
 func (s *CacheService) StartChatSession(ctx context.Context, cachedContentName string) (string, error) {
 	log.Printf("Starting chat session with cached content name: %s", cachedContentName)
-	model := s.genaiClient.GenerativeModelFromCachedContent(&genai.CachedContent{Name: cachedContentName})
-
-	//Test model receives message
-	response, err := model.GenerateContent(ctx, genai.Text("Tell me one sentence about the papers"))
+	cachedContent, err := s.genaiClient.GetCachedContent(ctx, cachedContentName)
 	if err != nil {
-		return "", fmt.Errorf("failed to test Gemini API connection: %v", err)
+		return "", fmt.Errorf("failed to get cached content: %v", err)
 	}
-	log.Printf("Response from model: %v", response)
+	model := s.genaiClient.GenerativeModelFromCachedContent(cachedContent)
 
 	session := model.StartChat()
 	sessionID := uuid.New().String()
