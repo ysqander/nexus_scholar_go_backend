@@ -1,0 +1,126 @@
+package wsocket
+
+import (
+	"context"
+	"encoding/json"
+	"log"
+	"net/http"
+	"strings"
+
+	"nexus_scholar_go_backend/internal/services"
+
+	"github.com/google/generative-ai-go/genai"
+	"github.com/gorilla/websocket"
+	"google.golang.org/api/iterator"
+)
+
+type Handler struct {
+	cacheService *services.CacheService
+	upgrader     websocket.Upgrader
+}
+
+type Message struct {
+	Type      string `json:"type"`
+	Content   string `json:"content"`
+	SessionID string `json:"sessionId"`
+}
+
+func NewHandler(cacheService *services.CacheService, upgrader websocket.Upgrader) *Handler {
+	return &Handler{
+		cacheService: cacheService,
+		upgrader:     upgrader,
+	}
+}
+
+func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request, user interface{}) {
+	conn, err := h.upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Println("Failed to upgrade connection:", err)
+		return
+	}
+	defer conn.Close()
+	// You can now use the authenticated user information
+	log.Printf("Authenticated user connected: %v", user)
+
+	for {
+		_, message, err := conn.ReadMessage()
+		if err != nil {
+			log.Println("Error reading message:", err)
+			break
+		}
+
+		var msg Message
+		if err := json.Unmarshal(message, &msg); err != nil {
+			log.Println("Error unmarshalling message:", err)
+			continue
+		}
+
+		switch msg.Type {
+		case "message":
+			h.handleChatMessage(conn, msg, r.Context())
+		default:
+			log.Println("Unknown message type:", msg.Type)
+		}
+	}
+}
+
+func (h *Handler) handleChatMessage(conn *websocket.Conn, msg Message, ctx context.Context) {
+	responseIterator, err := h.cacheService.StreamChatMessage(ctx, msg.SessionID, msg.Content)
+	if err != nil {
+		log.Println("Error getting stream:", err)
+		return
+	}
+
+	for {
+		response, err := responseIterator.Next()
+		if err == iterator.Done {
+			// Send end-of-message signal
+			endMsg := Message{
+				Type:      "ai",
+				Content:   "[END]",
+				SessionID: msg.SessionID,
+			}
+			if err := conn.WriteJSON(endMsg); err != nil {
+				log.Println("Error writing end message:", err)
+			}
+			break
+		}
+		if err != nil {
+			log.Println("Error streaming response:", err)
+			break
+		}
+
+		if len(response.Candidates) > 0 && len(response.Candidates[0].Content.Parts) > 0 {
+			var content string
+			switch part := response.Candidates[0].Content.Parts[0].(type) {
+			case genai.Text:
+				content = string(part)
+			case *genai.Text:
+				content = string(*part)
+			default:
+				log.Printf("Unexpected content type: %T", part)
+				continue
+			}
+
+			// Split content into words and send each word individually
+			const chunkSize = 3 // Adjust this value as needed
+			words := strings.Fields(content)
+			for i := 0; i < len(words); i += chunkSize {
+				end := i + chunkSize
+				if end > len(words) {
+					end = len(words)
+				}
+				chunk := strings.Join(words[i:end], " ")
+				responseMsg := Message{
+					Type:      "ai",
+					Content:   chunk,
+					SessionID: msg.SessionID,
+				}
+				if err := conn.WriteJSON(responseMsg); err != nil {
+					log.Println("Error writing response:", err)
+					return
+				}
+			}
+		}
+	}
+}

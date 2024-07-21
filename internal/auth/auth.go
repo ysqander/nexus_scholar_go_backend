@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt"
+	"github.com/gorilla/websocket"
 )
 
 func SetupRoutes(r *gin.Engine) {
@@ -22,21 +23,29 @@ func SetupRoutes(r *gin.Engine) {
 
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header is required"})
-			c.Abort()
-			return
+		var token string
+
+		// Check if it's a WebSocket upgrade request
+		if websocket.IsWebSocketUpgrade(c.Request) {
+			// For WebSocket, get the token from query parameters
+			token = c.Query("token")
+		} else {
+			// For regular HTTP requests, get the token from the Authorization header
+			authHeader := c.GetHeader("Authorization")
+			if authHeader == "" {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header is required"})
+				c.Abort()
+				return
+			}
+			bearerToken := strings.Split(authHeader, " ")
+			if len(bearerToken) != 2 {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid authorization header"})
+				c.Abort()
+				return
+			}
+			token = bearerToken[1]
 		}
 
-		bearerToken := strings.Split(authHeader, " ")
-		if len(bearerToken) != 2 {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid authorization header"})
-			c.Abort()
-			return
-		}
-
-		token := bearerToken[1]
 		claims, err := verifyToken(token)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})

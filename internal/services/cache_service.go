@@ -92,7 +92,7 @@ func (s *CacheService) CreateContentCache(ctx context.Context, arxivIDs []string
 	}
 
 	// 2. Create cached content using the Go SDK
-	model := "gemini-1.5-pro-001"
+	model := "gemini-1.5-flash-001"
 	cc := &genai.CachedContent{
 		Model: model,
 		Expiration: genai.ExpireTimeOrTTL{

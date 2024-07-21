@@ -14,6 +14,7 @@ import (
 	"nexus_scholar_go_backend/internal/services"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/generative-ai-go/genai"
 	"google.golang.org/api/iterator"
 )
 
@@ -26,8 +27,6 @@ func SetupRoutes(r *gin.Engine, cacheService *services.CacheService) {
 		api.POST("/create-cache", auth.AuthMiddleware(), createCacheHandler(cacheService))
 		api.DELETE("/cache/:cacheId", auth.AuthMiddleware(), deleteCacheHandler(cacheService))
 		api.POST("/chat/start", auth.AuthMiddleware(), startChatHandler(cacheService))
-		api.POST("/chat/message", auth.AuthMiddleware(), sendChatMessageHandler(cacheService))
-		api.POST("/chat/stream", auth.AuthMiddleware(), streamChatMessageHandler(cacheService))
 		api.POST("/chat/terminate", auth.AuthMiddleware(), terminateChatSessionHandler(cacheService))
 	}
 }
@@ -186,44 +185,54 @@ func sendChatMessageHandler(cacheService *services.CacheService) gin.HandlerFunc
 			SessionID string `json:"session_id" binding:"required"`
 			Message   string `json:"message" binding:"required"`
 		}
-
-		if err := c.ShouldBindJSON(&request); err != nil {
-			log.Printf("Error binding JSON: %v", err)
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-
-		log.Printf("Received request to send chat message: sessionID=%s, message=%s", request.SessionID, request.Message)
-		response, err := cacheService.SendChatMessage(c.Request.Context(), request.SessionID, request.Message)
-		if err != nil {
-			log.Printf("Error sending chat message: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-
-		log.Printf("Chat message sent successfully, response: %s", response.Candidates[0].Content.Parts[0])
-		// Assuming the response structure is the same as before
-		c.JSON(http.StatusOK, gin.H{"response": response.Candidates[0].Content.Parts[0]})
-	}
-}
-
-func streamChatMessageHandler(cacheService *services.CacheService) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		var request struct {
-			SessionID string `json:"session_id" binding:"required"`
-			Message   string `json:"message" binding:"required"`
-		}
-
 		if err := c.ShouldBindJSON(&request); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 
+		// Process the message and prepare the response
 		responseIterator, err := cacheService.StreamChatMessage(c.Request.Context(), request.SessionID, request.Message)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+
+		// Store the responseIterator in the session or a temporary cache
+		// You'll need to implement this part based on your application's architecture
+		storeResponseIterator(request.SessionID, responseIterator)
+
+		c.JSON(http.StatusOK, gin.H{"message": "Message received and processing started"})
+	}
+}
+
+func streamChatResponseHandler(cacheService *services.CacheService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		sessionID := c.Query("session_id")
+		token := c.Query("token")
+		if sessionID == "" || token == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "session_id and token are required"})
+			return
+		}
+
+		// Validate the token
+		// This is a placeholder - implement your actual token validation logic
+		if !isValidToken(token) {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+			return
+		}
+
+		// Retrieve the responseIterator from the session or temporary cache
+		// You'll need to implement this part based on your application's architecture
+		responseIterator := getResponseIterator(sessionID)
+		if responseIterator == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "No active response stream found for this session"})
+			return
+		}
+
+		c.Header("Content-Type", "text/event-stream")
+		c.Header("Cache-Control", "no-cache")
+		c.Header("Connection", "keep-alive")
+		c.Header("Transfer-Encoding", "chunked")
 
 		c.Stream(func(w io.Writer) bool {
 			response, err := responseIterator.Next()
@@ -239,6 +248,22 @@ func streamChatMessageHandler(cacheService *services.CacheService) gin.HandlerFu
 			return true
 		})
 	}
+}
+
+// You'll need to implement these functions to store and retrieve response iterators
+func storeResponseIterator(sessionID string, iterator *genai.GenerateContentResponseIterator) {
+	// Implementation depends on your application's architecture
+}
+
+func getResponseIterator(sessionID string) *genai.GenerateContentResponseIterator {
+	// Implementation depends on your application's architecture
+	return nil
+}
+
+// Placeholder function - implement your actual token validation logic
+func isValidToken(token string) bool {
+	// Implement your token validation logic here
+	return true // This is just a placeholder
 }
 
 func terminateChatSessionHandler(cacheService *services.CacheService) gin.HandlerFunc {

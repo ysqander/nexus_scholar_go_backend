@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -11,6 +12,9 @@ import (
 	"nexus_scholar_go_backend/internal/auth"
 	"nexus_scholar_go_backend/internal/database"
 	"nexus_scholar_go_backend/internal/services"
+	"nexus_scholar_go_backend/internal/wsocket"
+
+	"github.com/gorilla/websocket"
 
 	"cloud.google.com/go/storage"
 	"github.com/gin-contrib/cors"
@@ -79,8 +83,26 @@ func main() {
 		MaxAge:           12 * time.Hour,
 	}))
 
+	// WebSocket upgrader
+	upgrader := websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+		CheckOrigin: func(r *http.Request) bool {
+			return true // TODO: Implement a more secure check in production
+		},
+	}
+
+	// Create WebSocket handler
+	wsHandler := wsocket.NewHandler(cacheService, upgrader)
+
 	api.SetupRoutes(r, cacheService)
 	auth.SetupRoutes(r)
+
+	// Add WebSocket route
+	r.GET("/ws", auth.AuthMiddleware(), func(c *gin.Context) {
+		user, _ := c.Get("user")
+		wsHandler.HandleWebSocket(c.Writer, c.Request, user)
+	})
 
 	port := os.Getenv("PORT")
 	if port == "" {
