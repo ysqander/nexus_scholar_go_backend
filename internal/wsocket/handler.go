@@ -20,9 +20,10 @@ type Handler struct {
 }
 
 type Message struct {
-	Type      string `json:"type"`
-	Content   string `json:"content"`
-	SessionID string `json:"sessionId"`
+	Type              string `json:"type"`
+	Content           string `json:"content"`
+	SessionID         string `json:"sessionId"`
+	CachedContentName string `json:"cachedContentName,omitempty"`
 }
 
 func NewHandler(cacheService *services.CacheService, upgrader websocket.Upgrader) *Handler {
@@ -42,6 +43,10 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request, user i
 	// You can now use the authenticated user information
 	log.Printf("Authenticated user connected: %v", user)
 
+	// heartbeat listening mechanism
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
+
 	for {
 		_, message, err := conn.ReadMessage()
 		if err != nil {
@@ -57,7 +62,14 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request, user i
 
 		switch msg.Type {
 		case "message":
-			h.handleChatMessage(conn, msg, r.Context())
+			h.handleChatMessage(conn, msg, ctx)
+		case "heartbeat":
+			log.Printf("Received heartbeat for session: %s", msg.SessionID)
+			h.cacheService.UpdateSessionHeartbeat(msg.SessionID)
+		case "terminate":
+			log.Printf("Terminating session: %s", msg.SessionID)
+			h.cacheService.TerminateSession(ctx, msg.SessionID)
+			return
 		default:
 			log.Println("Unknown message type:", msg.Type)
 		}

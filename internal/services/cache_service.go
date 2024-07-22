@@ -11,82 +11,53 @@ import (
 	"sync"
 	"time"
 
-	"cloud.google.com/go/storage"
 	"github.com/google/generative-ai-go/genai"
 	"github.com/google/uuid"
 	"github.com/ledongthuc/pdf"
-	"google.golang.org/api/googleapi"
 )
 
 type ChatSessionInfo struct {
 	Session           *genai.ChatSession
 	LastAccessed      time.Time
 	CachedContentName string
+	LastHeartbeat     time.Time
+	HeartbeatsMissed  int
 }
 
 type CacheService struct {
-	genaiClient    *genai.Client
-	storageClient  *storage.Client
-	arxivBaseURL   string
-	projectID      string
-	location       string
-	bucketName     string
-	sessions       sync.Map
-	expirationTime time.Duration
-	sessionsMutex  sync.RWMutex
+	genaiClient      *genai.Client
+	arxivBaseURL     string
+	projectID        string
+	location         string
+	sessions         sync.Map
+	expirationTime   time.Duration
+	sessionsMutex    sync.RWMutex
+	heartbeatTimeout time.Duration
+	sessionTimeout   time.Duration
 }
 
-func NewCacheService(ctx context.Context, genaiClient *genai.Client, storageClient *storage.Client, projectID string) (*CacheService, error) {
+func NewCacheService(ctx context.Context, genaiClient *genai.Client, projectID string) (*CacheService, error) {
 	const location = "US-CENTRAL1"
-	bucketName := "nexus-scholar-cached-pdfs"
 
 	cs := &CacheService{
-		genaiClient:    genaiClient,
-		storageClient:  storageClient,
-		arxivBaseURL:   "https://arxiv.org/pdf/",
-		projectID:      projectID,
-		location:       location,
-		bucketName:     bucketName,
-		expirationTime: 10 * time.Minute,
-	}
-
-	// Check if bucket exists, create if it doesn't
-	if err := cs.ensureBucketExists(ctx); err != nil {
-		return nil, fmt.Errorf("failed to ensure bucket exists: %v", err)
+		genaiClient:      genaiClient,
+		arxivBaseURL:     "https://arxiv.org/pdf/",
+		projectID:        projectID,
+		location:         location,
+		expirationTime:   10 * time.Minute,
+		heartbeatTimeout: 1 * time.Minute,  // Adjust as needed
+		sessionTimeout:   10 * time.Minute, // Adjust as needed
 	}
 
 	go cs.periodicCleanup()
 	return cs, nil
 }
 
-func (s *CacheService) ensureBucketExists(ctx context.Context) error {
-	bucket := s.storageClient.Bucket(s.bucketName)
-	attrs, err := bucket.Attrs(ctx)
-	if err == storage.ErrBucketNotExist {
-		log.Printf("Bucket %s does not exist. Creating in %s...", s.bucketName, s.location)
-		bucketAttrs := &storage.BucketAttrs{
-			Location: s.location,
-		}
-		if err := bucket.Create(ctx, s.projectID, bucketAttrs); err != nil {
-			return fmt.Errorf("failed to create bucket: %v", err)
-		}
-		log.Printf("Bucket %s created successfully in %s", s.bucketName, s.location)
-	} else if err != nil {
-		return fmt.Errorf("failed to get bucket attributes: %v", err)
-	} else {
-		log.Printf("Bucket %s already exists in %s", s.bucketName, attrs.Location)
-		if attrs.Location != s.location {
-			log.Printf("Warning: Existing bucket is not in %s. It's in %s", s.location, attrs.Location)
-		}
-	}
-	return nil
-}
-
 func (s *CacheService) CreateContentCache(ctx context.Context, arxivIDs []string, userPDFs []string, cacheExpirationTTL time.Duration) (string, error) {
 	log.Println("Starting CreateContentCache")
 
 	// 1. Process documents and aggregate content
-	aggregatedContent, err := s.aggregateDocuments(ctx, arxivIDs, userPDFs)
+	aggregatedContent, err := s.aggregateDocuments(arxivIDs, userPDFs)
 	if err != nil {
 		return "", fmt.Errorf("failed to aggregate documents: %v", err)
 	}
@@ -113,12 +84,12 @@ func (s *CacheService) CreateContentCache(ctx context.Context, arxivIDs []string
 	return cachedContent.Name, nil
 }
 
-func (s *CacheService) aggregateDocuments(ctx context.Context, arxivIDs []string, userPDFs []string) (string, error) {
+func (s *CacheService) aggregateDocuments(arxivIDs []string, userPDFs []string) (string, error) {
 	var aggregatedContent strings.Builder
 
 	// Process arXiv papers
 	for _, id := range arxivIDs {
-		content, err := s.processArXivPaper(ctx, id)
+		content, err := s.processArXivPaper(id)
 		if err != nil {
 			return "", fmt.Errorf("failed to process arXiv paper %s: %v", id, err)
 		}
@@ -137,7 +108,7 @@ func (s *CacheService) aggregateDocuments(ctx context.Context, arxivIDs []string
 	return aggregatedContent.String(), nil
 }
 
-func (s *CacheService) processArXivPaper(ctx context.Context, arxivID string) (string, error) {
+func (s *CacheService) processArXivPaper(arxivID string) (string, error) {
 	log.Printf("Starting processArXivPaper for arXiv ID: %s", arxivID)
 
 	// Download the PDF from arXiv
@@ -251,37 +222,33 @@ func (s *CacheService) StartChatSession(ctx context.Context, cachedContentName s
 		Session:           session,
 		LastAccessed:      time.Now(),
 		CachedContentName: cachedContentName,
+		LastHeartbeat:     time.Now(),
+		HeartbeatsMissed:  0,
 	})
 
 	return sessionID, nil
 }
 
-// SendChatMessage sends a message to the chat session and returns the response
-func (s *CacheService) SendChatMessage(ctx context.Context, sessionID string, message string) (*genai.GenerateContentResponse, error) {
-	log.Printf("SendChatMessage called with sessionID: %s and message: %s", sessionID, message)
+func (s *CacheService) UpdateSessionHeartbeat(sessionID string) error {
+	s.sessionsMutex.Lock()
+	defer s.sessionsMutex.Unlock()
 
-	sessionInfo, exists := s.getAndUpdateSession(sessionID)
-	if !exists {
-		log.Printf("Chat session not found for sessionID: %s", sessionID)
-		return nil, fmt.Errorf("chat session not found")
+	sessionInterface, ok := s.sessions.Load(sessionID)
+	if !ok {
+		return fmt.Errorf("session not found")
 	}
 
-	response, err := sessionInfo.Session.SendMessage(ctx, genai.Text(message))
-	if err != nil {
-		log.Printf("Error sending message in sessionID: %s, error: %v", sessionID, err)
-		if gerr, ok := err.(*googleapi.Error); ok {
-			log.Printf("Google API Error - Code: %d, Message: %s, Details: %v", gerr.Code, gerr.Message, gerr.Details)
-		}
-		return nil, err
-	}
+	sessionInfo := sessionInterface.(ChatSessionInfo)
+	sessionInfo.LastHeartbeat = time.Now()
+	sessionInfo.HeartbeatsMissed = 0
+	s.sessions.Store(sessionID, sessionInfo)
 
-	log.Printf("Message sent successfully in sessionID: %s", sessionID)
-	return response, nil
+	return nil
 }
 
 // StreamChatMessage sends a message to the chat session and streams the response
 func (s *CacheService) StreamChatMessage(ctx context.Context, sessionID string, message string) (*genai.GenerateContentResponseIterator, error) {
-	sessionInfo, exists := s.getAndUpdateSession(sessionID)
+	sessionInfo, exists := s.getAndUpdateSession(ctx, sessionID)
 	if !exists {
 		return nil, fmt.Errorf("chat session not found")
 	}
@@ -289,7 +256,7 @@ func (s *CacheService) StreamChatMessage(ctx context.Context, sessionID string, 
 	return sessionInfo.Session.SendMessageStream(ctx, genai.Text(message)), nil
 }
 
-func (s *CacheService) getAndUpdateSession(sessionID string) (ChatSessionInfo, bool) {
+func (s *CacheService) getAndUpdateSession(ctx context.Context, sessionID string) (ChatSessionInfo, bool) {
 	s.sessionsMutex.Lock()
 	defer s.sessionsMutex.Unlock()
 	sessionInterface, ok := s.sessions.Load(sessionID)
@@ -305,42 +272,48 @@ func (s *CacheService) getAndUpdateSession(sessionID string) (ChatSessionInfo, b
 }
 
 func (s *CacheService) periodicCleanup() {
-	ticker := time.NewTicker(15 * time.Minute)
+	ticker := time.NewTicker(10 * time.Minute)
 	for range ticker.C {
-		s.cleanupExpiredSessions()
+		s.cleanupExpiredSessions(context.Background())
 	}
 }
 
-func (s *CacheService) cleanupExpiredSessions() {
+func (s *CacheService) cleanupExpiredSessions(ctx context.Context) {
 	now := time.Now()
 	s.sessions.Range(func(key, value interface{}) bool {
+		sessionID := key.(string)
 		sessionInfo := value.(ChatSessionInfo)
-		if now.Sub(sessionInfo.LastAccessed) > s.expirationTime {
-			log.Printf("Removing expired session: %v", key)
-			s.sessions.Delete(key)
+
+		if now.Sub(sessionInfo.LastAccessed) > s.sessionTimeout {
+			s.TerminateSession(ctx, sessionID)
+			return true
 		}
+
+		if now.Sub(sessionInfo.LastHeartbeat) > s.heartbeatTimeout {
+			sessionInfo.HeartbeatsMissed++
+			if sessionInfo.HeartbeatsMissed >= 3 { // Terminate after 3 missed heartbeats
+				s.TerminateSession(ctx, sessionID)
+				return true
+			}
+			s.sessions.Store(sessionID, sessionInfo)
+		}
+
 		return true
 	})
 }
 
-func (s *CacheService) TestGeminiAPIConnection(ctx context.Context) error {
-	model := s.genaiClient.GenerativeModel("gemini-1.5-pro-001")
-	_, err := model.GenerateContent(ctx, genai.Text("Hello, World!"))
-	if err != nil {
-		return fmt.Errorf("failed to test Gemini API connection: %v", err)
-	}
-	return nil
-}
-
 // TerminateSession ends the chat session and cleans up resources
 func (s *CacheService) TerminateSession(ctx context.Context, sessionID string) error {
-	value, exists := s.sessions.LoadAndDelete(sessionID)
-	if !exists {
-		// Session doesn't exist, but we don't consider this an error
+	s.sessionsMutex.Lock()
+	defer s.sessionsMutex.Unlock()
+
+	sessionInterface, ok := s.sessions.Load(sessionID)
+	if !ok {
 		return nil
 	}
 
-	sessionInfo := value.(ChatSessionInfo)
+	sessionInfo := sessionInterface.(ChatSessionInfo)
+	s.sessions.Delete(sessionID)
 
 	// Delete the cached content
 	log.Printf("Deleting cached content for session %s: %s", sessionID, sessionInfo.CachedContentName)

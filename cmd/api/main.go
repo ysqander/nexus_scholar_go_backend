@@ -16,7 +16,6 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"cloud.google.com/go/storage"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/google/generative-ai-go/genai"
@@ -36,11 +35,6 @@ func main() {
 
 	ctx := context.Background()
 
-	credentialsFile := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
-	if credentialsFile == "" {
-		log.Fatal("GOOGLE_APPLICATION_CREDENTIALS environment variable is not set")
-	}
-
 	projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
 	if projectID == "" {
 		log.Fatal("GOOGLE_CLOUD_PROJECT environment variable is not set")
@@ -54,14 +48,7 @@ func main() {
 	}
 	defer genaiClient.Close()
 
-	// Initialize Storage client
-	storageClient, err := storage.NewClient(ctx, option.WithCredentialsFile(credentialsFile))
-	if err != nil {
-		log.Fatalf("Failed to create Storage client: %v", err)
-	}
-	defer storageClient.Close()
-
-	cacheService, err := services.NewCacheService(ctx, genaiClient, storageClient, projectID)
+	cacheService, err := services.NewCacheService(ctx, genaiClient, projectID)
 	if err != nil {
 		log.Fatalf("Failed to create CacheService: %v", err)
 	}
