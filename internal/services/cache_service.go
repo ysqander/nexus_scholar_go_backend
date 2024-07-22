@@ -22,31 +22,34 @@ type ChatSessionInfo struct {
 	CachedContentName string
 	LastHeartbeat     time.Time
 	HeartbeatsMissed  int
+	LastCacheExtend   time.Time
 }
 
 type CacheService struct {
-	genaiClient      *genai.Client
-	arxivBaseURL     string
-	projectID        string
-	location         string
-	sessions         sync.Map
-	expirationTime   time.Duration
-	sessionsMutex    sync.RWMutex
-	heartbeatTimeout time.Duration
-	sessionTimeout   time.Duration
+	genaiClient       *genai.Client
+	arxivBaseURL      string
+	projectID         string
+	location          string
+	sessions          sync.Map
+	expirationTime    time.Duration
+	sessionsMutex     sync.RWMutex
+	heartbeatTimeout  time.Duration
+	sessionTimeout    time.Duration
+	cacheExtendPeriod time.Duration
 }
 
 func NewCacheService(ctx context.Context, genaiClient *genai.Client, projectID string) (*CacheService, error) {
 	const location = "US-CENTRAL1"
 
 	cs := &CacheService{
-		genaiClient:      genaiClient,
-		arxivBaseURL:     "https://arxiv.org/pdf/",
-		projectID:        projectID,
-		location:         location,
-		expirationTime:   10 * time.Minute,
-		heartbeatTimeout: 1 * time.Minute,  // Adjust as needed
-		sessionTimeout:   10 * time.Minute, // Adjust as needed
+		genaiClient:       genaiClient,
+		arxivBaseURL:      "https://arxiv.org/pdf/",
+		projectID:         projectID,
+		location:          location,
+		expirationTime:    10 * time.Minute,
+		heartbeatTimeout:  1 * time.Minute,  // Timeout after 1 minute of no heartbeats
+		sessionTimeout:    10 * time.Minute, // Timeout after 10 minutes of no activity
+		cacheExtendPeriod: 5 * time.Minute,  // Extend cache every 5 minutes of activity
 	}
 
 	go cs.periodicCleanup()
@@ -224,6 +227,7 @@ func (s *CacheService) StartChatSession(ctx context.Context, cachedContentName s
 		CachedContentName: cachedContentName,
 		LastHeartbeat:     time.Now(),
 		HeartbeatsMissed:  0,
+		LastCacheExtend:   time.Now(),
 	})
 
 	return sessionID, nil
@@ -239,9 +243,42 @@ func (s *CacheService) UpdateSessionHeartbeat(sessionID string) error {
 	}
 
 	sessionInfo := sessionInterface.(ChatSessionInfo)
-	sessionInfo.LastHeartbeat = time.Now()
+	now := time.Now()
+	sessionInfo.LastHeartbeat = now
 	sessionInfo.HeartbeatsMissed = 0
+	sessionInfo.LastAccessed = now
+
+	// Check if it's time to extend the cache
+	if now.Sub(sessionInfo.LastCacheExtend) >= s.cacheExtendPeriod {
+		if err := s.extendCacheLifetime(sessionInfo.CachedContentName); err != nil {
+			log.Printf("Failed to extend cache lifetime for session %s: %v", sessionID, err)
+		} else {
+			sessionInfo.LastCacheExtend = now
+		}
+	}
 	s.sessions.Store(sessionID, sessionInfo)
+
+	return nil
+}
+
+func (s *CacheService) extendCacheLifetime(cachedContentName string) error {
+	ctx := context.Background()
+	cachedContent := &genai.CachedContent{
+		Name: cachedContentName,
+	}
+
+	newExpiration := genai.ExpireTimeOrTTL{
+		TTL: s.expirationTime,
+	}
+
+	updateContent := &genai.CachedContentToUpdate{
+		Expiration: &newExpiration,
+	}
+
+	_, err := s.genaiClient.UpdateCachedContent(ctx, cachedContent, updateContent)
+	if err != nil {
+		return fmt.Errorf("failed to update cached content expiration: %v", err)
+	}
 
 	return nil
 }
