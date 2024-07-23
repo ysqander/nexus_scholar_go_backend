@@ -101,7 +101,7 @@ func (s *CacheService) aggregateDocuments(arxivIDs []string, userPDFs []string) 
 
 	// Process user-provided PDFs
 	for i, pdfPath := range userPDFs {
-		content, err := s.processPDF(pdfPath)
+		content, err := s.processUserPDF(pdfPath)
 		if err != nil {
 			return "", fmt.Errorf("failed to process PDF %s: %v", pdfPath, err)
 		}
@@ -159,7 +159,7 @@ func (s *CacheService) processArXivPaper(arxivID string) (string, error) {
 	return content, nil
 }
 
-func (s *CacheService) processPDF(pdfPath string) (string, error) {
+func (s *CacheService) processUserPDF(pdfPath string) (string, error) {
 	return s.extractTextFromPDF(pdfPath)
 }
 
@@ -289,8 +289,12 @@ func (s *CacheService) StreamChatMessage(ctx context.Context, sessionID string, 
 	if !exists {
 		return nil, fmt.Errorf("chat session not found")
 	}
+	// Add formatting instruction to the message
+	formattedMessage := fmt.Sprintf("%s\n\n"+
+		"Format your answer in markdown with easily readable paragraphs. ",
+		message)
 
-	return sessionInfo.Session.SendMessageStream(ctx, genai.Text(message)), nil
+	return sessionInfo.Session.SendMessageStream(ctx, genai.Text(formattedMessage)), nil
 }
 
 func (s *CacheService) getAndUpdateSession(ctx context.Context, sessionID string) (ChatSessionInfo, bool) {
@@ -346,15 +350,25 @@ func (s *CacheService) TerminateSession(ctx context.Context, sessionID string) e
 
 	sessionInterface, ok := s.sessions.Load(sessionID)
 	if !ok {
+		// Session doesn't exist, it might have been already terminated
+		log.Printf("Session %s not found, it may have already been terminated", sessionID)
 		return nil
 	}
 
 	sessionInfo := sessionInterface.(ChatSessionInfo)
 	s.sessions.Delete(sessionID)
 
+	// Check if the cached content still exists before attempting to delete it
+	_, err := s.genaiClient.GetCachedContent(ctx, sessionInfo.CachedContentName)
+	if err != nil {
+		// If the cached content doesn't exist, log it and return
+		log.Printf("Cached content for session %s (%s) not found, it may have already been deleted: %v", sessionID, sessionInfo.CachedContentName, err)
+		return nil
+	}
+
 	// Delete the cached content
 	log.Printf("Deleting cached content for session %s: %s", sessionID, sessionInfo.CachedContentName)
-	err := s.genaiClient.DeleteCachedContent(ctx, sessionInfo.CachedContentName)
+	err = s.genaiClient.DeleteCachedContent(ctx, sessionInfo.CachedContentName)
 	if err != nil {
 		// Log the error but don't return it
 		log.Printf("Failed to delete cached content for session %s: %v", sessionID, err)

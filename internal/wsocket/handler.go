@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"strings"
 
 	"nexus_scholar_go_backend/internal/services"
 
@@ -114,24 +113,15 @@ func (h *Handler) handleChatMessage(conn *websocket.Conn, msg Message, ctx conte
 				continue
 			}
 
-			// Split content into words and send each word individually
-			const chunkSize = 3 // Adjust this value as needed
-			words := strings.Fields(content)
-			for i := 0; i < len(words); i += chunkSize {
-				end := i + chunkSize
-				if end > len(words) {
-					end = len(words)
-				}
-				chunk := strings.Join(words[i:end], " ")
-				responseMsg := Message{
-					Type:      "ai",
-					Content:   chunk,
-					SessionID: msg.SessionID,
-				}
-				if err := conn.WriteJSON(responseMsg); err != nil {
-					log.Println("Error writing response:", err)
-					return
-				}
+			// Send the content as it is returned from the iterator
+			responseMsg := Message{
+				Type:      "ai",
+				Content:   content,
+				SessionID: msg.SessionID,
+			}
+			if err := conn.WriteJSON(responseMsg); err != nil {
+				log.Println("Error writing response:", err)
+				return
 			}
 		}
 	}
