@@ -100,13 +100,28 @@ func (s *CacheService) aggregateDocuments(arxivIDs []string, userPDFs []string) 
 	}
 
 	// Process user-provided PDFs
+	log.Printf("Starting to process %d user-provided PDFs", len(userPDFs))
+	if len(userPDFs) == 0 {
+		log.Println("Warning: No user-provided PDFs to process")
+	}
 	for i, pdfPath := range userPDFs {
+		log.Printf("Processing user PDF %d: %s", i+1, pdfPath)
+		if pdfPath == "" {
+			log.Printf("Warning: Empty PDF path for user PDF %d", i+1)
+			continue
+		}
 		content, err := s.processUserPDF(pdfPath)
 		if err != nil {
+			log.Printf("Error processing PDF %s: %v", pdfPath, err)
 			return "", fmt.Errorf("failed to process PDF %s: %v", pdfPath, err)
 		}
+		if content == "" {
+			log.Printf("Warning: Empty content extracted from PDF %s", pdfPath)
+		}
+		log.Printf("Successfully processed user PDF %d. Content length: %d", i+1, len(content))
 		aggregatedContent.WriteString(fmt.Sprintf("<Document>\n<title>User PDF %d</title>\n%s\n</Document>\n", i+1, content))
 	}
+	log.Printf("Finished processing all user-provided PDFs")
 
 	return aggregatedContent.String(), nil
 }
@@ -164,34 +179,43 @@ func (s *CacheService) processUserPDF(pdfPath string) (string, error) {
 }
 
 func (s *CacheService) extractTextFromPDF(pdfPath string) (string, error) {
+	log.Printf("Starting to extract text from PDF: %s", pdfPath)
 	f, r, err := pdf.Open(pdfPath)
 	if err != nil {
+		log.Printf("Failed to open PDF %s: %v", pdfPath, err)
 		return "", fmt.Errorf("failed to open PDF: %v", err)
 	}
 	defer f.Close()
 
-	var content string
+	var content strings.Builder
 	totalPage := r.NumPage()
+	log.Printf("Total pages in PDF: %d", totalPage)
 
 	for pageIndex := 1; pageIndex <= totalPage; pageIndex++ {
+		log.Printf("Processing page %d of %d", pageIndex, totalPage)
 		p := r.Page(pageIndex)
 		if p.V.IsNull() {
+			log.Printf("Page %d is null, skipping", pageIndex)
 			continue
 		}
 
 		text, err := p.GetPlainText(nil)
 		if err != nil {
-			// Instead of returning immediately, we'll continue to the next page
+			log.Printf("Error extracting text from page %d: %v", pageIndex, err)
 			continue
 		}
-		content += text
+		log.Printf("Extracted %d characters from page %d", len(text), pageIndex)
+		content.WriteString(text)
+		content.WriteString("\n\n") // Add separation between pages
 	}
 
-	if content == "" {
+	if content.Len() == 0 {
+		log.Printf("No text content extracted from PDF %s", pdfPath)
 		return "", fmt.Errorf("no text content extracted from PDF")
 	}
 
-	return content, nil
+	log.Printf("Successfully extracted %d characters from PDF %s", content.Len(), pdfPath)
+	return content.String(), nil
 }
 
 // DeleteCache deletes the cached content with the given cache name

@@ -69,14 +69,9 @@ func privateRoute(c *gin.Context) {
 
 func createCacheHandler(cacheService *services.CacheService) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Parse multipart form
-		if err := c.Request.ParseMultipartForm(10 << 20); err != nil { // 10 MB max
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse multipart form"})
-			return
-		}
 
 		// Get arXiv IDs
-		arxivIDsJSON := c.Request.FormValue("arxiv_ids")
+		arxivIDsJSON := c.PostForm("arxiv_ids")
 		var arxivIDs []string
 		if err := json.Unmarshal([]byte(arxivIDsJSON), &arxivIDs); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid arXiv IDs format"})
@@ -93,18 +88,22 @@ func createCacheHandler(cacheService *services.CacheService) gin.HandlerFunc {
 
 		// Save uploaded files and collect their paths
 		var pdfPaths []string
-		form, _ := c.MultipartForm()
-		files := form.File
-		for _, fileHeaders := range files {
-			for _, fileHeader := range fileHeaders {
-				filename := filepath.Join(tempDir, fileHeader.Filename)
-				if err := c.SaveUploadedFile(fileHeader, filename); err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to save file %s: %v", fileHeader.Filename, err)})
-					return
-				}
-				pdfPaths = append(pdfPaths, filename)
-			}
+		form, err := c.MultipartForm()
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Failed to parse multipart form: %v", err)})
+			return
 		}
+		files := form.File["pdfs"]
+		for _, fileHeader := range files {
+			filename := filepath.Join(tempDir, fileHeader.Filename)
+			if err := c.SaveUploadedFile(fileHeader, filename); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to save file %s: %v", fileHeader.Filename, err)})
+				return
+			}
+			pdfPaths = append(pdfPaths, filename)
+		}
+
+		log.Printf("Received %d arXiv IDs and %d PDF files", len(arxivIDs), len(pdfPaths))
 
 		cacheExpirationTTL := 10 * time.Minute
 		cachedContentName, err := cacheService.CreateContentCache(c.Request.Context(), arxivIDs, pdfPaths, cacheExpirationTTL)
