@@ -1,0 +1,14 @@
+services:
+  db:
+    image: postgres:13
+    environment:
+      POSTGRES_DB: nexus_scholar
+      POSTGRES_USER: SuperDev0l0per
+      POSTGRES_PASSWORD: sch0l4r_De!n
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"nexus_scholar_go_backend/internal/models"
+
 	"github.com/google/generative-ai-go/genai"
 	"github.com/google/uuid"
 	"github.com/ledongthuc/pdf"
@@ -23,6 +25,7 @@ type ChatSessionInfo struct {
 	LastHeartbeat     time.Time
 	HeartbeatsMissed  int
 	LastCacheExtend   time.Time
+	ChatHistory       []models.Chat
 }
 
 type CacheService struct {
@@ -252,6 +255,7 @@ func (s *CacheService) StartChatSession(ctx context.Context, cachedContentName s
 		LastHeartbeat:     time.Now(),
 		HeartbeatsMissed:  0,
 		LastCacheExtend:   time.Now(),
+		ChatHistory:       []models.Chat{},
 	})
 
 	return sessionID, nil
@@ -309,14 +313,29 @@ func (s *CacheService) extendCacheLifetime(cachedContentName string) error {
 
 // StreamChatMessage sends a message to the chat session and streams the response
 func (s *CacheService) StreamChatMessage(ctx context.Context, sessionID string, message string) (*genai.GenerateContentResponseIterator, error) {
+	s.sessionsMutex.Lock()
+	defer s.sessionsMutex.Unlock()
+
 	sessionInfo, exists := s.getAndUpdateSession(ctx, sessionID)
 	if !exists {
 		return nil, fmt.Errorf("chat session not found")
 	}
+
 	// Add formatting instruction to the message
 	formattedMessage := fmt.Sprintf("%s\n\n"+
 		"Format your answer in markdown with easily readable paragraphs. ",
 		message)
+
+	// Append user message to chat history
+	sessionInfo.ChatHistory = append(sessionInfo.ChatHistory, models.Chat{
+		SessionID: sessionID,
+		Type:      "user",
+		Content:   message,
+		Timestamp: time.Now().Unix(),
+	})
+
+	// Update the session info in the map
+	s.sessions.Store(sessionID, sessionInfo)
 
 	return sessionInfo.Session.SendMessageStream(ctx, genai.Text(formattedMessage)), nil
 }
@@ -334,6 +353,22 @@ func (s *CacheService) getAndUpdateSession(ctx context.Context, sessionID string
 	sessionInfo.LastAccessed = time.Now()
 	s.sessions.Store(sessionID, sessionInfo)
 	return sessionInfo, true
+}
+
+func (s *CacheService) UpdateSessionChatHistory(sessionID, chatType, content string) {
+	s.sessionsMutex.Lock()
+	defer s.sessionsMutex.Unlock()
+
+	if sessionInterface, ok := s.sessions.Load(sessionID); ok {
+		sessionInfo := sessionInterface.(ChatSessionInfo)
+		sessionInfo.ChatHistory = append(sessionInfo.ChatHistory, models.Chat{
+			SessionID: sessionID,
+			Type:      chatType,
+			Content:   content,
+			Timestamp: time.Now().Unix(),
+		})
+		s.sessions.Store(sessionID, sessionInfo)
+	}
 }
 
 func (s *CacheService) periodicCleanup() {

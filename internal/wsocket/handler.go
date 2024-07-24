@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 
+	"nexus_scholar_go_backend/internal/models"
 	"nexus_scholar_go_backend/internal/services"
 
 	"github.com/google/generative-ai-go/genai"
@@ -39,8 +41,15 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request, user i
 		return
 	}
 	defer conn.Close()
+
+	userModel, ok := user.(*models.User)
+	if !ok {
+		log.Println("Failed to cast user to *models.User")
+		return
+	}
+
 	// You can now use the authenticated user information
-	log.Printf("Authenticated user connected: %v", user)
+	log.Printf("Authenticated user connected: %v", userModel.ID)
 
 	// heartbeat listening mechanism
 	ctx, cancel := context.WithCancel(r.Context())
@@ -61,7 +70,7 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request, user i
 
 		switch msg.Type {
 		case "message":
-			h.handleChatMessage(conn, msg, ctx)
+			h.handleChatMessage(conn, msg, ctx, userModel.ID)
 		case "heartbeat":
 			log.Printf("Received heartbeat for session: %s", msg.SessionID)
 			h.cacheService.UpdateSessionHeartbeat(msg.SessionID)
@@ -75,16 +84,33 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request, user i
 	}
 }
 
-func (h *Handler) handleChatMessage(conn *websocket.Conn, msg Message, ctx context.Context) {
+func (h *Handler) handleChatMessage(conn *websocket.Conn, msg Message, ctx context.Context, userID uint) {
+	// Persist user message
+	_, err := services.CreateChat(userID, msg.SessionID, "user", msg.Content)
+	if err != nil {
+		log.Println("Error persisting user chat:", err)
+	}
+
 	responseIterator, err := h.cacheService.StreamChatMessage(ctx, msg.SessionID, msg.Content)
 	if err != nil {
 		log.Println("Error getting stream:", err)
 		return
 	}
 
+	var aiResponse strings.Builder
+
 	for {
 		response, err := responseIterator.Next()
 		if err == iterator.Done {
+			// Persist complete AI response
+			_, err := services.CreateChat(userID, msg.SessionID, "ai", aiResponse.String())
+			if err != nil {
+				log.Println("Error persisting AI chat:", err)
+			}
+
+			// Update the session's chat history with the AI response
+			h.cacheService.UpdateSessionChatHistory(msg.SessionID, "ai", aiResponse.String())
+
 			// Send end-of-message signal
 			endMsg := Message{
 				Type:      "ai",
@@ -112,6 +138,8 @@ func (h *Handler) handleChatMessage(conn *websocket.Conn, msg Message, ctx conte
 				log.Printf("Unexpected content type: %T", part)
 				continue
 			}
+			// Aggregating the ai response to later save in DB.
+			aiResponse.WriteString(content)
 
 			// Send the content as it is returned from the iterator
 			responseMsg := Message{

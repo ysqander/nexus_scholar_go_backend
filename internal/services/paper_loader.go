@@ -7,7 +7,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"nexus_scholar_go_backend/internal/database"
+	"nexus_scholar_go_backend/internal/models"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"encoding/xml"
@@ -22,6 +25,29 @@ func NewPaperLoader() *PaperLoader {
 }
 
 func (pl *PaperLoader) ProcessPaper(arxivID string) (map[string]interface{}, error) {
+	// Check if the paper is already in the database
+	existingPaper, err := GetPaperByArxivID(arxivID)
+	if err == nil && existingPaper != nil {
+		// Paper exists, retrieve its references
+		references, err := GetReferencesByPaperID(pl.stringToUint(arxivID))
+		if err != nil {
+			return nil, fmt.Errorf("failed to retrieve references for existing paper with ArxivID: %s: %v", arxivID, err)
+		}
+
+		// Format the existing references
+		formattedReferences := pl.formatExistingReferences(references)
+
+		// Return the existing paper data
+		return map[string]interface{}{
+			"title":      existingPaper.Title,
+			"authors":    strings.Split(existingPaper.Authors, ", "),
+			"abstract":   existingPaper.Abstract,
+			"pdf_url":    existingPaper.URL,
+			"references": formattedReferences,
+			"arxiv_id":   arxivID,
+		}, nil
+	}
+
 	sourceContent, err := pl.downloadPaper(arxivID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to download source for paper with ID: %s: %v", arxivID, err)
@@ -41,6 +67,32 @@ func (pl *PaperLoader) ProcessPaper(arxivID string) (map[string]interface{}, err
 		return nil, fmt.Errorf("failed to parse bib files for paper with ID: %s: %v", arxivID, err)
 	}
 
+	// Convert bibtex.BibEntry to models.Reference and save to database
+	for _, ref := range references {
+		dbRef := models.Reference{
+			ArxivID:            pl.stringToUint(arxivID),
+			Type:               ref.Type,
+			Key:                ref.CiteName,
+			Title:              pl.getField(ref, "title"),
+			Author:             pl.getField(ref, "author"),
+			Year:               pl.getField(ref, "year"),
+			Journal:            pl.getField(ref, "journal"),
+			Volume:             pl.getField(ref, "volume"),
+			Number:             pl.getField(ref, "number"),
+			Pages:              pl.getField(ref, "pages"),
+			Publisher:          pl.getField(ref, "publisher"),
+			DOI:                pl.getField(ref, "doi"),
+			URL:                pl.getField(ref, "url"),
+			RawBibEntry:        ref.String(),
+			FormattedText:      pl.formatReference(&ref),
+			IsAvailableOnArxiv: pl.detectArxivID(pl.formatReference(&ref)) != "",
+		}
+
+		if err := CreateReference(&dbRef); err != nil {
+			return nil, fmt.Errorf("failed to save reference to database: %v", err)
+		}
+	}
+
 	// Convert []bibtex.BibEntry to []*bibtex.BibEntry
 	var refPointers []*bibtex.BibEntry
 	for i := range references {
@@ -48,21 +100,45 @@ func (pl *PaperLoader) ProcessPaper(arxivID string) (map[string]interface{}, err
 	}
 
 	formattedReferences := pl.formatReferences(refPointers)
+
 	metadata, err := pl.GetPaperMetadata(arxivID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch metadata for paper with ID: %s: %v", arxivID, err)
 	}
+	// Create or update the paper in the database
+	paper, err := CreateOrUpdatePaper(map[string]interface{}{
+		"title":    metadata["title"],
+		"authors":  strings.Split(metadata["authors"], ", "),
+		"abstract": metadata["abstract"],
+		"pdf_url":  metadata["pdf_url"],
+		"arxiv_id": arxivID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create or update paper: %v", err)
+	}
 
 	result := map[string]interface{}{
-		"title":      metadata["title"],
-		"authors":    strings.Split(metadata["authors"], ", "),
-		"abstract":   metadata["abstract"],
-		"pdf_url":    metadata["pdf_url"],
+		"title":      paper.Title,
+		"authors":    strings.Split(paper.Authors, ", "),
+		"abstract":   paper.Abstract,
+		"pdf_url":    paper.URL,
 		"references": formattedReferences,
-		"arxiv_id":   arxivID,
+		"arxiv_id":   paper.ArxivID,
 	}
 
 	return result, nil
+}
+
+func (pl *PaperLoader) getField(entry bibtex.BibEntry, key string) string {
+	if field, ok := entry.Fields[key]; ok && field != nil {
+		return field.String()
+	}
+	return ""
+}
+
+func (pl *PaperLoader) stringToUint(s string) uint {
+	u, _ := strconv.ParseUint(s, 10, 64)
+	return uint(u)
 }
 
 func (pl *PaperLoader) downloadPaper(arxivID string) ([]byte, error) {
@@ -141,6 +217,19 @@ func (pl *PaperLoader) formatReferences(references []*bibtex.BibEntry) []map[str
 			"text":                  formattedRef,
 			"arxiv_id":              detectedArxivID,
 			"is_available_on_arxiv": detectedArxivID != "",
+		})
+	}
+	return formattedReferences
+}
+
+// New helper method to format existing references
+func (pl *PaperLoader) formatExistingReferences(references []models.Reference) []map[string]interface{} {
+	var formattedReferences []map[string]interface{}
+	for _, ref := range references {
+		formattedReferences = append(formattedReferences, map[string]interface{}{
+			"text":                  ref.FormattedText,
+			"arxiv_id":              ref.ArxivID,
+			"is_available_on_arxiv": ref.IsAvailableOnArxiv,
 		})
 	}
 	return formattedReferences
@@ -243,4 +332,14 @@ func (pl *PaperLoader) GetPaperMetadata(arxivID string) (map[string]string, erro
 	}
 
 	return metadata, nil
+}
+
+// GetPaperByArxivID retrieves a paper from the database by its ArxivID
+func GetPaperByArxivID(arxivID string) (*models.Paper, error) {
+	var paper models.Paper
+	result := database.DB.Where("arxiv_id = ?", arxivID).First(&paper)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return &paper, nil
 }

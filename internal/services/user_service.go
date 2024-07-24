@@ -6,12 +6,13 @@ import (
 )
 
 func CreateOrUpdateUser(auth0ID, email, name, nickname string) (*models.User, error) {
-	var user models.User
-	result := database.DB.Where(models.User{Auth0ID: auth0ID}).Assign(models.User{
+	user := models.User{
+		Auth0ID:  auth0ID,
 		Email:    email,
 		Name:     name,
 		Nickname: nickname,
-	}).FirstOrCreate(&user)
+	}
+	result := database.DB.Where(models.User{Auth0ID: auth0ID}).FirstOrCreate(&user)
 
 	if result.Error != nil {
 		return nil, result.Error
