@@ -11,6 +11,7 @@ import (
 	"nexus_scholar_go_backend/internal/services"
 
 	"github.com/google/generative-ai-go/genai"
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"google.golang.org/api/iterator"
 )
@@ -106,7 +107,8 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request, user i
 	}
 }
 
-func (h *Handler) handleChatMessage(conn *websocket.Conn, msg Message, ctx context.Context, userID uint) {
+func (h *Handler) handleChatMessage(conn *websocket.Conn, msg Message, ctx context.Context, userID uuid.UUID) {
+	log.Printf("Handling chat message for session: %s, user: %d", msg.SessionID, userID)
 
 	responseIterator, err := h.cacheService.StreamChatMessage(ctx, msg.SessionID, msg.Content)
 	if err != nil {
@@ -119,9 +121,11 @@ func (h *Handler) handleChatMessage(conn *websocket.Conn, msg Message, ctx conte
 	for {
 		response, err := responseIterator.Next()
 		if err == iterator.Done {
+			log.Println("Stream iterator done")
 
 			// Update the session's chat history with the AI response
 			h.cacheService.UpdateSessionChatHistory(msg.SessionID, "ai", aiResponse.String())
+			log.Printf("Updated session chat history for session: %s with AI response", msg.SessionID)
 
 			// Send end-of-message signal
 			endMsg := Message{
@@ -131,6 +135,8 @@ func (h *Handler) handleChatMessage(conn *websocket.Conn, msg Message, ctx conte
 			}
 			if err := conn.WriteJSON(endMsg); err != nil {
 				log.Println("Error writing end message:", err)
+			} else {
+				log.Printf("Sent end-of-message signal for session: %s", msg.SessionID)
 			}
 			break
 		}
@@ -152,6 +158,7 @@ func (h *Handler) handleChatMessage(conn *websocket.Conn, msg Message, ctx conte
 			}
 			// Aggregating the ai response to later save in DB.
 			aiResponse.WriteString(content)
+			log.Printf("Aggregated AI response content for session: %s", msg.SessionID)
 
 			// Send the content as it is returned from the iterator
 			responseMsg := Message{
@@ -162,6 +169,8 @@ func (h *Handler) handleChatMessage(conn *websocket.Conn, msg Message, ctx conte
 			if err := conn.WriteJSON(responseMsg); err != nil {
 				log.Println("Error writing response:", err)
 				return
+			} else {
+				log.Printf("Sent AI response content for session: %s", msg.SessionID)
 			}
 		}
 	}

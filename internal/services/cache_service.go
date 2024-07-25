@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -19,7 +18,6 @@ import (
 	"github.com/google/generative-ai-go/genai"
 	"github.com/google/uuid"
 	"github.com/ledongthuc/pdf"
-	"gorm.io/gorm"
 )
 
 type ChatSessionInfo struct {
@@ -323,11 +321,11 @@ func (s *CacheService) extendCacheLifetime(cachedContentName string) error {
 
 // StreamChatMessage sends a message to the chat session and streams the response
 func (s *CacheService) StreamChatMessage(ctx context.Context, sessionID string, message string) (*genai.GenerateContentResponseIterator, error) {
-	s.sessionsMutex.Lock()
-	defer s.sessionsMutex.Unlock()
+	log.Printf("StreamChatMessage called with sessionID: %s, message: %s", sessionID, message)
 
 	sessionInfo, exists := s.getAndUpdateSession(ctx, sessionID)
 	if !exists {
+		log.Printf("Chat session not found for sessionID: %s", sessionID)
 		return nil, fmt.Errorf("chat session not found")
 	}
 
@@ -336,27 +334,43 @@ func (s *CacheService) StreamChatMessage(ctx context.Context, sessionID string, 
 		"Format your answer in markdown with easily readable paragraphs. ",
 		message)
 
+	log.Printf("Formatted message: %s", formattedMessage)
+
 	// Append user message to chat history
 	s.UpdateSessionChatHistory(sessionID, "user", message)
 
 	// Update the session info in the map
 	s.sessions.Store(sessionID, sessionInfo)
 
-	return sessionInfo.Session.SendMessageStream(ctx, genai.Text(formattedMessage)), nil
+	responseIterator := sessionInfo.Session.SendMessageStream(ctx, genai.Text(formattedMessage))
+
+	log.Printf("Created response iterator for sessionID: %s", sessionID)
+
+	return responseIterator, nil
 }
 
 func (s *CacheService) getAndUpdateSession(ctx context.Context, sessionID string) (ChatSessionInfo, bool) {
+	log.Printf("Attempting to lock sessionsMutex for sessionID: %s", sessionID)
 	s.sessionsMutex.Lock()
 	defer s.sessionsMutex.Unlock()
+	log.Printf("Locked sessionsMutex for sessionID: %s", sessionID)
+
 	sessionInterface, ok := s.sessions.Load(sessionID)
 	if !ok {
 		log.Printf("Session not found for ID: %s", sessionID)
 		return ChatSessionInfo{}, false
 	}
+	log.Printf("Session found for ID: %s", sessionID)
+
 	sessionInfo := sessionInterface.(ChatSessionInfo)
 	log.Printf("Found session for ID: %s, last accessed: %v", sessionID, sessionInfo.LastAccessed)
+
 	sessionInfo.LastAccessed = time.Now()
+	log.Printf("Updated last accessed time for session ID: %s to %v", sessionID, sessionInfo.LastAccessed)
+
 	s.sessions.Store(sessionID, sessionInfo)
+	log.Printf("Stored updated session info for session ID: %s", sessionID)
+
 	return sessionInfo, true
 }
 
@@ -375,47 +389,29 @@ func (s *CacheService) UpdateSessionChatHistory(sessionID, chatType, content str
 	}
 }
 
-func (s *CacheService) SaveChatHistoryToDB(sessionID string, userID uint) error {
-	s.sessionsMutex.Lock()
-	defer s.sessionsMutex.Unlock()
-
-	sessionInterface, ok := s.sessions.Load(sessionID)
-	if !ok {
-		return fmt.Errorf("session not found")
-	}
-
-	sessionInfo := sessionInterface.(ChatSessionInfo)
-	historyJSON, err := json.Marshal(sessionInfo.ChatHistory)
+func (s *CacheService) SaveChatHistoryToDB(sessionID string, userID uuid.UUID) error {
+	// Retrieve chat history from cache
+	history, err := s.GetSessionChatHistory(sessionID)
 	if err != nil {
-		return fmt.Errorf("failed to marshal chat history: %v", err)
+		return err
 	}
 
-	// Check if a chat entry already exists for this session
-	var existingChat models.Chat
-	result := database.DB.Where("session_id = ?", sessionID).First(&existingChat)
-
-	if result.Error == nil {
-		// Update existing chat entry
-		existingChat.History = historyJSON
-		result = database.DB.Save(&existingChat)
-	} else if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-		// Create new chat entry
-		newChat := models.Chat{
-			UserID:    userID,
-			SessionID: sessionID,
-			History:   historyJSON,
-		}
-		result = database.DB.Create(&newChat)
-	} else {
-		// Unexpected error
-		return fmt.Errorf("error checking for existing chat: %v", result.Error)
+	// Convert history to JSON
+	historyJSON, err := json.Marshal(history)
+	if err != nil {
+		return err
 	}
 
-	if result.Error != nil {
-		return fmt.Errorf("failed to save chat history to database: %v", result.Error)
+	// Create or update Chat record
+	chat := models.Chat{
+		UserID:    userID,
+		SessionID: sessionID,
+		History:   historyJSON,
 	}
 
-	return nil
+	// Use GORM's Upsert functionality
+	result := database.DB.Where(models.Chat{SessionID: sessionID}).Assign(chat).FirstOrCreate(&chat)
+	return result.Error
 }
 
 func (s *CacheService) periodicCleanup() {
@@ -481,4 +477,17 @@ func (s *CacheService) TerminateSession(ctx context.Context, sessionID string) e
 	}
 
 	return nil
+}
+
+func (s *CacheService) GetSessionChatHistory(sessionID string) ([]ChatMessage, error) {
+	s.sessionsMutex.RLock()
+	defer s.sessionsMutex.RUnlock()
+
+	sessionInterface, ok := s.sessions.Load(sessionID)
+	if !ok {
+		return nil, fmt.Errorf("session not found")
+	}
+
+	sessionInfo := sessionInterface.(ChatSessionInfo)
+	return sessionInfo.ChatHistory, nil
 }

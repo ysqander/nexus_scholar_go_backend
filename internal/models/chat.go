@@ -1,12 +1,13 @@
 package models
 
 import (
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 type Chat struct {
 	gorm.Model
-	UserID    uint   `gorm:"index"`
-	SessionID string `gorm:"index;unique"`
-	History   []byte // JSON-encoded chat history
+	UserID    uuid.UUID `gorm:"type:uuid;index"`
+	SessionID string    `gorm:"index;unique"`
+	History   []byte    // JSON-encoded chat history
 }

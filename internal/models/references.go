@@ -7,6 +7,7 @@ import (
 type PaperReference struct {
 	gorm.Model
 	ArxivID            string `gorm:"type:varchar(20);index"`
+	ParentArxivID      string
 	Type               string
 	Key                string
 	Title              string

@@ -14,7 +14,7 @@ func CreateReference(reference *models.PaperReference) error {
 // Retrieves all references for a given Arxiv paper ID
 func GetReferencesByArxivID(arxivID string) ([]models.PaperReference, error) {
 	var references []models.PaperReference
-	result := database.DB.Where("arxiv_id = ?", arxivID).Find(&references)
+	result := database.DB.Where("parent_arxiv_id = ?", arxivID).Find(&references)
 	if result.Error != nil {
 		return nil, result.Error
 	}

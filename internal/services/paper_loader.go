@@ -37,6 +37,8 @@ func (pl *PaperLoader) ProcessPaper(arxivID string) (map[string]interface{}, err
 		// Format the existing references
 		formattedReferences := pl.formatExistingReferences(references)
 
+		fmt.Printf("Formatted %d references for paper %s\n", len(formattedReferences), arxivID)
+
 		// Return the existing paper data
 		return map[string]interface{}{
 			"title":      existingPaper.Title,
@@ -67,32 +69,6 @@ func (pl *PaperLoader) ProcessPaper(arxivID string) (map[string]interface{}, err
 		return nil, fmt.Errorf("failed to parse bib files for paper with ID: %s: %v", arxivID, err)
 	}
 
-	// Convert bibtex.BibEntry to models.Reference and save to database
-	for _, ref := range references {
-		dbRef := models.PaperReference{
-			ArxivID:            arxivID,
-			Type:               ref.Type,
-			Key:                ref.CiteName,
-			Title:              pl.getField(ref, "title"),
-			Author:             pl.getField(ref, "author"),
-			Year:               pl.getField(ref, "year"),
-			Journal:            pl.getField(ref, "journal"),
-			Volume:             pl.getField(ref, "volume"),
-			Number:             pl.getField(ref, "number"),
-			Pages:              pl.getField(ref, "pages"),
-			Publisher:          pl.getField(ref, "publisher"),
-			DOI:                pl.getField(ref, "doi"),
-			URL:                pl.getField(ref, "url"),
-			RawBibEntry:        ref.String(),
-			FormattedText:      pl.formatReference(&ref),
-			IsAvailableOnArxiv: pl.detectArxivID(pl.formatReference(&ref)) != "",
-		}
-
-		if err := CreateReference(&dbRef); err != nil {
-			return nil, fmt.Errorf("failed to save reference to database: %v", err)
-		}
-	}
-
 	// Convert []bibtex.BibEntry to []*bibtex.BibEntry
 	var refPointers []*bibtex.BibEntry
 	for i := range references {
@@ -101,10 +77,37 @@ func (pl *PaperLoader) ProcessPaper(arxivID string) (map[string]interface{}, err
 
 	formattedReferences := pl.formatReferences(refPointers)
 
+	// Now create and save references to the database
+	for i, formattedRef := range formattedReferences {
+		dbRef := models.PaperReference{
+			ArxivID:            formattedRef["arxiv_id"].(string),
+			ParentArxivID:      arxivID,
+			Type:               references[i].Type,
+			Key:                references[i].CiteName,
+			Title:              pl.getField(references[i], "title"),
+			Author:             pl.getField(references[i], "author"),
+			Year:               pl.getField(references[i], "year"),
+			Journal:            pl.getField(references[i], "journal"),
+			Volume:             pl.getField(references[i], "volume"),
+			Number:             pl.getField(references[i], "number"),
+			Pages:              pl.getField(references[i], "pages"),
+			Publisher:          pl.getField(references[i], "publisher"),
+			DOI:                pl.getField(references[i], "doi"),
+			URL:                pl.getField(references[i], "url"),
+			RawBibEntry:        references[i].String(),
+			FormattedText:      formattedRef["text"].(string),
+			IsAvailableOnArxiv: formattedRef["is_available_on_arxiv"].(bool),
+		}
+		if err := CreateReference(&dbRef); err != nil {
+			return nil, fmt.Errorf("failed to save reference to database: %v", err)
+		}
+	}
+
 	metadata, err := pl.GetPaperMetadata(arxivID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch metadata for paper with ID: %s: %v", arxivID, err)
 	}
+
 	// Create or update the paper in the database
 	paper, err := CreateOrUpdatePaper(map[string]interface{}{
 		"title":    metadata["title"],

@@ -3,9 +3,11 @@ package services
 import (
 	"nexus_scholar_go_backend/internal/database"
 	"nexus_scholar_go_backend/internal/models"
+
+	"github.com/google/uuid"
 )
 
-func SaveChatHistory(userID uint, sessionID string, history []byte) error {
+func SaveChatHistory(userID uuid.UUID, sessionID string, history []byte) error {
 	chat := &models.Chat{
 		UserID:    userID,
 		SessionID: sessionID,
@@ -25,7 +27,7 @@ func GetChatBySessionID(sessionID string) (*models.Chat, error) {
 	return &chat, nil
 }
 
-func GetChatsByUserID(userID uint) ([]models.Chat, error) {
+func GetChatsByUserID(userID uuid.UUID) ([]models.Chat, error) {
 	var chats []models.Chat
 	result := database.DB.Where("user_id = ?", userID).Find(&chats)
 	if result.Error != nil {

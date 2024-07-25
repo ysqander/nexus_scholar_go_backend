@@ -201,20 +201,26 @@ func terminateChatSessionHandler(cacheService *services.CacheService) gin.Handle
 
 func getChatHistoryHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		log.Println("getChatHistoryHandler called")
+
 		user, exists := c.Get("user")
 		if !exists {
+			log.Println("User not found in context")
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found in context"})
 			return
 		}
 
 		userModel, ok := user.(*models.User)
 		if !ok {
+			log.Println("Failed to cast user to *models.User")
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to cast user to *models.User"})
 			return
 		}
 
+		log.Printf("Retrieving chat history for user ID: %d", userModel.ID.String())
 		chats, err := services.GetChatsByUserID(userModel.ID)
 		if err != nil {
+			log.Printf("Failed to retrieve chat history for user ID %d: %v", userModel.ID, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to retrieve chat history: %v", err)})
 			return
 		}
@@ -236,6 +242,7 @@ func getChatHistoryHandler() gin.HandlerFunc {
 			})
 		}
 
+		log.Printf("Successfully retrieved chat history for user ID: %d", userModel.ID)
 		c.JSON(http.StatusOK, gin.H{"chat_history": chatHistory})
 	}
 }

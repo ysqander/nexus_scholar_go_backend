@@ -12,10 +12,22 @@ func CreateOrUpdateUser(auth0ID, email, name, nickname string) (*models.User, er
 		Name:     name,
 		Nickname: nickname,
 	}
-	result := database.DB.Where(models.User{Auth0ID: auth0ID}).FirstOrCreate(&user)
 
+	result := database.DB.Where(models.User{Auth0ID: auth0ID}).Attrs(user).FirstOrCreate(&user)
 	if result.Error != nil {
 		return nil, result.Error
+	}
+
+	// Update the user if it already existed and any fields have changed
+	if result.RowsAffected == 0 {
+		result = database.DB.Model(&user).Updates(map[string]interface{}{
+			"email":    email,
+			"name":     name,
+			"nickname": nickname,
+		})
+		if result.Error != nil {
+			return nil, result.Error
+		}
 	}
 
 	return &user, nil
