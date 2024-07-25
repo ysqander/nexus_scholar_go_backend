@@ -7,8 +7,6 @@ import (
 type Chat struct {
 	gorm.Model
 	UserID    uint   `gorm:"index"`
-	SessionID string `gorm:"index"`
-	Type      string
-	Content   string
-	Timestamp int64
+	SessionID string `gorm:"index;unique"`
+	History   []byte // JSON-encoded chat history
 }

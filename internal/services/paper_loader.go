@@ -29,7 +29,7 @@ func (pl *PaperLoader) ProcessPaper(arxivID string) (map[string]interface{}, err
 	existingPaper, err := GetPaperByArxivID(arxivID)
 	if err == nil && existingPaper != nil {
 		// Paper exists, retrieve its references
-		references, err := GetReferencesByPaperID(pl.stringToUint(arxivID))
+		references, err := GetReferencesByArxivID(arxivID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to retrieve references for existing paper with ArxivID: %s: %v", arxivID, err)
 		}
@@ -69,8 +69,8 @@ func (pl *PaperLoader) ProcessPaper(arxivID string) (map[string]interface{}, err
 
 	// Convert bibtex.BibEntry to models.Reference and save to database
 	for _, ref := range references {
-		dbRef := models.Reference{
-			ArxivID:            pl.stringToUint(arxivID),
+		dbRef := models.PaperReference{
+			ArxivID:            arxivID,
 			Type:               ref.Type,
 			Key:                ref.CiteName,
 			Title:              pl.getField(ref, "title"),
@@ -223,7 +223,7 @@ func (pl *PaperLoader) formatReferences(references []*bibtex.BibEntry) []map[str
 }
 
 // New helper method to format existing references
-func (pl *PaperLoader) formatExistingReferences(references []models.Reference) []map[string]interface{} {
+func (pl *PaperLoader) formatExistingReferences(references []models.PaperReference) []map[string]interface{} {
 	var formattedReferences []map[string]interface{}
 	for _, ref := range references {
 		formattedReferences = append(formattedReferences, map[string]interface{}{

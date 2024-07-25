@@ -6,25 +6,15 @@ import (
 )
 
 // CreateReference creates a new reference in the database
-func CreateReference(reference *models.Reference) error {
+func CreateReference(reference *models.PaperReference) error {
 	result := database.DB.Create(reference)
 	return result.Error
 }
 
-// GetReferenceByID retrieves a reference from the database by its ID
-func GetReferenceByID(id uint) (*models.Reference, error) {
-	var reference models.Reference
-	result := database.DB.First(&reference, id)
-	if result.Error != nil {
-		return nil, result.Error
-	}
-	return &reference, nil
-}
-
-// GetReferencesByPaperID retrieves all references for a given paper ID
-func GetReferencesByPaperID(paperID uint) ([]models.Reference, error) {
-	var references []models.Reference
-	result := database.DB.Where("paper_id = ?", paperID).Find(&references)
+// Retrieves all references for a given Arxiv paper ID
+func GetReferencesByArxivID(arxivID string) ([]models.PaperReference, error) {
+	var references []models.PaperReference
+	result := database.DB.Where("arxiv_id = ?", arxivID).Find(&references)
 	if result.Error != nil {
 		return nil, result.Error
 	}
@@ -32,19 +22,19 @@ func GetReferencesByPaperID(paperID uint) ([]models.Reference, error) {
 }
 
 // UpdateReference updates an existing reference in the database
-func UpdateReference(reference *models.Reference) error {
+func UpdateReference(reference *models.PaperReference) error {
 	result := database.DB.Save(reference)
 	return result.Error
 }
 
 // DeleteReference deletes a reference from the database
 func DeleteReference(id uint) error {
-	result := database.DB.Delete(&models.Reference{}, id)
+	result := database.DB.Delete(&models.PaperReference{}, id)
 	return result.Error
 }
 
-// DeleteReferencesByPaperID deletes all references associated with a paper
-func DeleteReferencesByPaperID(paperID uint) error {
-	result := database.DB.Where("paper_id = ?", paperID).Delete(&models.Reference{})
+// DeleteReferencesByArxivID deletes all references associated with a paper
+func DeleteReferencesByArxivID(arxivID string) error {
+	result := database.DB.Where("arxiv_id = ?", arxivID).Delete(&models.PaperReference{})
 	return result.Error
 }

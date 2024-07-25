@@ -2,6 +2,8 @@ package services
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -11,11 +13,13 @@ import (
 	"sync"
 	"time"
 
+	"nexus_scholar_go_backend/internal/database"
 	"nexus_scholar_go_backend/internal/models"
 
 	"github.com/google/generative-ai-go/genai"
 	"github.com/google/uuid"
 	"github.com/ledongthuc/pdf"
+	"gorm.io/gorm"
 )
 
 type ChatSessionInfo struct {
@@ -25,7 +29,13 @@ type ChatSessionInfo struct {
 	LastHeartbeat     time.Time
 	HeartbeatsMissed  int
 	LastCacheExtend   time.Time
-	ChatHistory       []models.Chat
+	ChatHistory       []ChatMessage
+}
+
+type ChatMessage struct {
+	Type      string    `json:"type"`
+	Content   string    `json:"content"`
+	Timestamp time.Time `json:"timestamp"`
 }
 
 type CacheService struct {
@@ -255,7 +265,7 @@ func (s *CacheService) StartChatSession(ctx context.Context, cachedContentName s
 		LastHeartbeat:     time.Now(),
 		HeartbeatsMissed:  0,
 		LastCacheExtend:   time.Now(),
-		ChatHistory:       []models.Chat{},
+		ChatHistory:       []ChatMessage{},
 	})
 
 	return sessionID, nil
@@ -327,12 +337,7 @@ func (s *CacheService) StreamChatMessage(ctx context.Context, sessionID string, 
 		message)
 
 	// Append user message to chat history
-	sessionInfo.ChatHistory = append(sessionInfo.ChatHistory, models.Chat{
-		SessionID: sessionID,
-		Type:      "user",
-		Content:   message,
-		Timestamp: time.Now().Unix(),
-	})
+	s.UpdateSessionChatHistory(sessionID, "user", message)
 
 	// Update the session info in the map
 	s.sessions.Store(sessionID, sessionInfo)
@@ -361,14 +366,56 @@ func (s *CacheService) UpdateSessionChatHistory(sessionID, chatType, content str
 
 	if sessionInterface, ok := s.sessions.Load(sessionID); ok {
 		sessionInfo := sessionInterface.(ChatSessionInfo)
-		sessionInfo.ChatHistory = append(sessionInfo.ChatHistory, models.Chat{
-			SessionID: sessionID,
+		sessionInfo.ChatHistory = append(sessionInfo.ChatHistory, ChatMessage{
 			Type:      chatType,
 			Content:   content,
-			Timestamp: time.Now().Unix(),
+			Timestamp: time.Now(),
 		})
 		s.sessions.Store(sessionID, sessionInfo)
 	}
+}
+
+func (s *CacheService) SaveChatHistoryToDB(sessionID string, userID uint) error {
+	s.sessionsMutex.Lock()
+	defer s.sessionsMutex.Unlock()
+
+	sessionInterface, ok := s.sessions.Load(sessionID)
+	if !ok {
+		return fmt.Errorf("session not found")
+	}
+
+	sessionInfo := sessionInterface.(ChatSessionInfo)
+	historyJSON, err := json.Marshal(sessionInfo.ChatHistory)
+	if err != nil {
+		return fmt.Errorf("failed to marshal chat history: %v", err)
+	}
+
+	// Check if a chat entry already exists for this session
+	var existingChat models.Chat
+	result := database.DB.Where("session_id = ?", sessionID).First(&existingChat)
+
+	if result.Error == nil {
+		// Update existing chat entry
+		existingChat.History = historyJSON
+		result = database.DB.Save(&existingChat)
+	} else if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+		// Create new chat entry
+		newChat := models.Chat{
+			UserID:    userID,
+			SessionID: sessionID,
+			History:   historyJSON,
+		}
+		result = database.DB.Create(&newChat)
+	} else {
+		// Unexpected error
+		return fmt.Errorf("error checking for existing chat: %v", result.Error)
+	}
+
+	if result.Error != nil {
+		return fmt.Errorf("failed to save chat history to database: %v", result.Error)
+	}
+
+	return nil
 }
 
 func (s *CacheService) periodicCleanup() {

@@ -4,9 +4,9 @@ import (
 	"gorm.io/gorm"
 )
 
-type Reference struct {
+type PaperReference struct {
 	gorm.Model
-	ArxivID            uint `gorm:"index"`
+	ArxivID            string `gorm:"type:varchar(20);index"`
 	Type               string
 	Key                string
 	Title              string

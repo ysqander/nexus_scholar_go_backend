@@ -76,6 +76,28 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request, user i
 			h.cacheService.UpdateSessionHeartbeat(msg.SessionID)
 		case "terminate":
 			log.Printf("Terminating session: %s", msg.SessionID)
+			if err := h.cacheService.SaveChatHistoryToDB(msg.SessionID, userModel.ID); err != nil {
+				log.Printf("Error saving chat history: %v", err)
+				// Send an error message to the client
+				errorMsg := Message{
+					Type:      "error",
+					Content:   "Failed to save chat history",
+					SessionID: msg.SessionID,
+				}
+				if err := conn.WriteJSON(errorMsg); err != nil {
+					log.Printf("Error sending error message: %v", err)
+				}
+			} else {
+				// Send a success message to the client
+				successMsg := Message{
+					Type:      "info",
+					Content:   "Chat history saved successfully",
+					SessionID: msg.SessionID,
+				}
+				if err := conn.WriteJSON(successMsg); err != nil {
+					log.Printf("Error sending success message: %v", err)
+				}
+			}
 			h.cacheService.TerminateSession(ctx, msg.SessionID)
 			return
 		default:
@@ -85,11 +107,6 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request, user i
 }
 
 func (h *Handler) handleChatMessage(conn *websocket.Conn, msg Message, ctx context.Context, userID uint) {
-	// Persist user message
-	_, err := services.CreateChat(userID, msg.SessionID, "user", msg.Content)
-	if err != nil {
-		log.Println("Error persisting user chat:", err)
-	}
 
 	responseIterator, err := h.cacheService.StreamChatMessage(ctx, msg.SessionID, msg.Content)
 	if err != nil {
@@ -102,11 +119,6 @@ func (h *Handler) handleChatMessage(conn *websocket.Conn, msg Message, ctx conte
 	for {
 		response, err := responseIterator.Next()
 		if err == iterator.Done {
-			// Persist complete AI response
-			_, err := services.CreateChat(userID, msg.SessionID, "ai", aiResponse.String())
-			if err != nil {
-				log.Println("Error persisting AI chat:", err)
-			}
 
 			// Update the session's chat history with the AI response
 			h.cacheService.UpdateSessionChatHistory(msg.SessionID, "ai", aiResponse.String())

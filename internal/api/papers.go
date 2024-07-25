@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"nexus_scholar_go_backend/internal/auth"
+	"nexus_scholar_go_backend/internal/models"
 	"nexus_scholar_go_backend/internal/services"
 
 	"github.com/gin-gonic/gin"
@@ -25,6 +26,7 @@ func SetupRoutes(r *gin.Engine, cacheService *services.CacheService) {
 		api.DELETE("/cache/:cacheId", auth.AuthMiddleware(), deleteCacheHandler(cacheService))
 		api.POST("/chat/start", auth.AuthMiddleware(), startChatSessionHandler(cacheService))
 		api.POST("/chat/terminate", auth.AuthMiddleware(), terminateChatSessionHandler(cacheService))
+		api.GET("/chat/history", auth.AuthMiddleware(), getChatHistoryHandler())
 	}
 }
 
@@ -194,5 +196,46 @@ func terminateChatSessionHandler(cacheService *services.CacheService) gin.Handle
 		}
 
 		c.JSON(http.StatusOK, gin.H{"message": "Chat session terminated successfully"})
+	}
+}
+
+func getChatHistoryHandler() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user, exists := c.Get("user")
+		if !exists {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found in context"})
+			return
+		}
+
+		userModel, ok := user.(*models.User)
+		if !ok {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to cast user to *models.User"})
+			return
+		}
+
+		chats, err := services.GetChatsByUserID(userModel.ID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to retrieve chat history: %v", err)})
+			return
+		}
+
+		// Process chats to return a more user-friendly format
+		var chatHistory []gin.H
+		for _, chat := range chats {
+			var messages []map[string]interface{}
+			err := json.Unmarshal(chat.History, &messages)
+			if err != nil {
+				log.Printf("Error unmarshaling chat history for session %s: %v", chat.SessionID, err)
+				continue
+			}
+
+			chatHistory = append(chatHistory, gin.H{
+				"session_id": chat.SessionID,
+				"messages":   messages,
+				"created_at": chat.CreatedAt,
+			})
+		}
+
+		c.JSON(http.StatusOK, gin.H{"chat_history": chatHistory})
 	}
 }

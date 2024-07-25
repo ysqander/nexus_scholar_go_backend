@@ -7,7 +7,7 @@ type Paper struct {
 	Title      string
 	Authors    string
 	Abstract   string
-	ArxivID    string `gorm:"unique"`
+	ArxivID    string `gorm:"type:varchar(20);unique"`
 	URL        string
-	References []Reference
+	References []PaperReference
 }
