@@ -2,10 +2,8 @@ package services
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -15,9 +13,11 @@ import (
 	"nexus_scholar_go_backend/internal/database"
 	"nexus_scholar_go_backend/internal/models"
 
+	"github.com/gin-gonic/gin"
 	"github.com/google/generative-ai-go/genai"
 	"github.com/google/uuid"
 	"github.com/ledongthuc/pdf"
+	"gorm.io/gorm"
 )
 
 type ChatSessionInfo struct {
@@ -38,6 +38,7 @@ type ChatMessage struct {
 
 type CacheService struct {
 	genaiClient       *genai.Client
+	db                *gorm.DB
 	arxivBaseURL      string
 	projectID         string
 	location          string
@@ -49,11 +50,12 @@ type CacheService struct {
 	cacheExtendPeriod time.Duration
 }
 
-func NewCacheService(ctx context.Context, genaiClient *genai.Client, projectID string) (*CacheService, error) {
+func NewCacheService(ctx context.Context, genaiClient *genai.Client, projectID string, db *gorm.DB) (*CacheService, error) {
 	const location = "US-CENTRAL1"
 
 	cs := &CacheService{
 		genaiClient:       genaiClient,
+		db:                db,
 		arxivBaseURL:      "https://arxiv.org/pdf/",
 		projectID:         projectID,
 		location:          location,
@@ -68,7 +70,6 @@ func NewCacheService(ctx context.Context, genaiClient *genai.Client, projectID s
 }
 
 func (s *CacheService) CreateContentCache(ctx context.Context, arxivIDs []string, userPDFs []string, cacheExpirationTTL time.Duration) (string, error) {
-	log.Println("Starting CreateContentCache")
 
 	// 1. Process documents and aggregate content
 	aggregatedContent, err := s.aggregateDocuments(arxivIDs, userPDFs)
@@ -88,13 +89,11 @@ func (s *CacheService) CreateContentCache(ctx context.Context, arxivIDs []string
 		},
 	}
 
-	log.Println("Creating cached content using GEMINI API")
 	cachedContent, err := s.genaiClient.CreateCachedContent(ctx, cc)
 	if err != nil {
 		return "", fmt.Errorf("failed to create cached content: %v", err)
 	}
 
-	log.Printf("Cached content created successfully with name: %s", cachedContent.Name)
 	return cachedContent.Name, nil
 }
 
@@ -111,77 +110,54 @@ func (s *CacheService) aggregateDocuments(arxivIDs []string, userPDFs []string) 
 	}
 
 	// Process user-provided PDFs
-	log.Printf("Starting to process %d user-provided PDFs", len(userPDFs))
-	if len(userPDFs) == 0 {
-		log.Println("Warning: No user-provided PDFs to process")
-	}
 	for i, pdfPath := range userPDFs {
-		log.Printf("Processing user PDF %d: %s", i+1, pdfPath)
 		if pdfPath == "" {
-			log.Printf("Warning: Empty PDF path for user PDF %d", i+1)
 			continue
 		}
 		content, err := s.processUserPDF(pdfPath)
 		if err != nil {
-			log.Printf("Error processing PDF %s: %v", pdfPath, err)
 			return "", fmt.Errorf("failed to process PDF %s: %v", pdfPath, err)
 		}
-		if content == "" {
-			log.Printf("Warning: Empty content extracted from PDF %s", pdfPath)
-		}
-		log.Printf("Successfully processed user PDF %d. Content length: %d", i+1, len(content))
 		aggregatedContent.WriteString(fmt.Sprintf("<Document>\n<title>User PDF %d</title>\n%s\n</Document>\n", i+1, content))
 	}
-	log.Printf("Finished processing all user-provided PDFs")
 
 	return aggregatedContent.String(), nil
 }
 
 func (s *CacheService) processArXivPaper(arxivID string) (string, error) {
-	log.Printf("Starting processArXivPaper for arXiv ID: %s", arxivID)
 
 	// Download the PDF from arXiv
 	pdfURL := fmt.Sprintf("%s%s.pdf", s.arxivBaseURL, arxivID)
-	log.Printf("Downloading PDF from URL: %s", pdfURL)
 	resp, err := http.Get(pdfURL)
 	if err != nil {
-		log.Printf("Error downloading arXiv paper: %v", err)
 		return "", fmt.Errorf("failed to download arXiv paper: %v", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("Unexpected status code when downloading arXiv paper: %d", resp.StatusCode)
 		return "", fmt.Errorf("unexpected status code when downloading arXiv paper: %d", resp.StatusCode)
 	}
 
 	// Create a temporary file to store the PDF
-	log.Println("Creating temporary file for PDF")
 	tempFile, err := os.CreateTemp("", "arxiv-*.pdf")
 	if err != nil {
-		log.Printf("Error creating temporary file: %v", err)
 		return "", fmt.Errorf("failed to create temporary file: %v", err)
 	}
 	defer os.Remove(tempFile.Name())
 	defer tempFile.Close()
 
 	// Save the PDF content to the temporary file
-	log.Println("Saving PDF content to temporary file")
 	_, err = io.Copy(tempFile, resp.Body)
 	if err != nil {
-		log.Printf("Error saving PDF content: %v", err)
 		return "", fmt.Errorf("failed to save PDF content: %v", err)
 	}
 
 	// Process the PDF file
-	log.Println("Extracting text from PDF")
 	content, err := s.extractTextFromPDF(tempFile.Name())
 	if err != nil {
-		log.Printf("Error extracting text from PDF: %v", err)
 		return "", fmt.Errorf("failed to extract text from PDF: %v", err)
 	}
 
-	log.Printf("processArXivPaper for arXiv ID %s completed successfully", arxivID)
 	return content, nil
 }
 
@@ -190,61 +166,48 @@ func (s *CacheService) processUserPDF(pdfPath string) (string, error) {
 }
 
 func (s *CacheService) extractTextFromPDF(pdfPath string) (string, error) {
-	log.Printf("Starting to extract text from PDF: %s", pdfPath)
 	f, r, err := pdf.Open(pdfPath)
 	if err != nil {
-		log.Printf("Failed to open PDF %s: %v", pdfPath, err)
 		return "", fmt.Errorf("failed to open PDF: %v", err)
 	}
 	defer f.Close()
 
 	var content strings.Builder
 	totalPage := r.NumPage()
-	log.Printf("Total pages in PDF: %d", totalPage)
 
 	for pageIndex := 1; pageIndex <= totalPage; pageIndex++ {
-		log.Printf("Processing page %d of %d", pageIndex, totalPage)
 		p := r.Page(pageIndex)
 		if p.V.IsNull() {
-			log.Printf("Page %d is null, skipping", pageIndex)
 			continue
 		}
 
 		text, err := p.GetPlainText(nil)
 		if err != nil {
-			log.Printf("Error extracting text from page %d: %v", pageIndex, err)
 			continue
 		}
-		log.Printf("Extracted %d characters from page %d", len(text), pageIndex)
 		content.WriteString(text)
 		content.WriteString("\n\n") // Add separation between pages
 	}
 
 	if content.Len() == 0 {
-		log.Printf("No text content extracted from PDF %s", pdfPath)
 		return "", fmt.Errorf("no text content extracted from PDF")
 	}
 
-	log.Printf("Successfully extracted %d characters from PDF %s", content.Len(), pdfPath)
 	return content.String(), nil
 }
 
 // DeleteCache deletes the cached content with the given cache name
 func (s *CacheService) DeleteCache(ctx context.Context, cacheName string) error {
-	log.Printf("Attempting to delete cached content: %s", cacheName)
 	err := s.genaiClient.DeleteCachedContent(ctx, cacheName)
 	if err != nil {
-		log.Printf("Error deleting cached content %s: %v", cacheName, err)
 		return fmt.Errorf("failed to delete cached content: %v", err)
 	}
-	log.Printf("Successfully deleted cached content: %s", cacheName)
 	return nil
 }
 
 // StartChatSession creates a new chat session using the cached content
-func (s *CacheService) StartChatSession(ctx context.Context, cachedContentName string) (string, error) {
-	log.Printf("Starting chat session with cached content name: %s", cachedContentName)
-	cachedContent, err := s.genaiClient.GetCachedContent(ctx, cachedContentName)
+func (s *CacheService) StartChatSession(c *gin.Context, cachedContentName string) (string, error) {
+	cachedContent, err := s.genaiClient.GetCachedContent(c.Request.Context(), cachedContentName)
 	if err != nil {
 		return "", fmt.Errorf("failed to get cached content: %v", err)
 	}
@@ -252,6 +215,22 @@ func (s *CacheService) StartChatSession(ctx context.Context, cachedContentName s
 
 	session := model.StartChat()
 	sessionID := uuid.New().String()
+
+	// Get the user from the Gin context
+	user, exists := c.Get("user")
+	if !exists {
+		return "", fmt.Errorf("user not found in context")
+	}
+
+	userModel, ok := user.(*models.User)
+	if !ok {
+		return "", fmt.Errorf("invalid user type in context")
+	}
+
+	// Save the chat to the database
+	if err := SaveChat(s.db, userModel.ID, sessionID); err != nil {
+		return "", fmt.Errorf("failed to save chat: %v", err)
+	}
 
 	s.sessionsMutex.Lock()
 	defer s.sessionsMutex.Unlock()
@@ -287,7 +266,6 @@ func (s *CacheService) UpdateSessionHeartbeat(sessionID string) error {
 	// Check if it's time to extend the cache
 	if now.Sub(sessionInfo.LastCacheExtend) >= s.cacheExtendPeriod {
 		if err := s.extendCacheLifetime(sessionInfo.CachedContentName); err != nil {
-			log.Printf("Failed to extend cache lifetime for session %s: %v", sessionID, err)
 		} else {
 			sessionInfo.LastCacheExtend = now
 		}
@@ -321,11 +299,9 @@ func (s *CacheService) extendCacheLifetime(cachedContentName string) error {
 
 // StreamChatMessage sends a message to the chat session and streams the response
 func (s *CacheService) StreamChatMessage(ctx context.Context, sessionID string, message string) (*genai.GenerateContentResponseIterator, error) {
-	log.Printf("StreamChatMessage called with sessionID: %s, message: %s", sessionID, message)
 
 	sessionInfo, exists := s.getAndUpdateSession(ctx, sessionID)
 	if !exists {
-		log.Printf("Chat session not found for sessionID: %s", sessionID)
 		return nil, fmt.Errorf("chat session not found")
 	}
 
@@ -334,49 +310,37 @@ func (s *CacheService) StreamChatMessage(ctx context.Context, sessionID string, 
 		"Format your answer in markdown with easily readable paragraphs. ",
 		message)
 
-	log.Printf("Formatted message: %s", formattedMessage)
-
-	// Append user message to chat history
-	s.UpdateSessionChatHistory(sessionID, "user", message)
-
-	// Update the session info in the map
-	s.sessions.Store(sessionID, sessionInfo)
-
 	responseIterator := sessionInfo.Session.SendMessageStream(ctx, genai.Text(formattedMessage))
-
-	log.Printf("Created response iterator for sessionID: %s", sessionID)
 
 	return responseIterator, nil
 }
 
 func (s *CacheService) getAndUpdateSession(ctx context.Context, sessionID string) (ChatSessionInfo, bool) {
-	log.Printf("Attempting to lock sessionsMutex for sessionID: %s", sessionID)
 	s.sessionsMutex.Lock()
 	defer s.sessionsMutex.Unlock()
-	log.Printf("Locked sessionsMutex for sessionID: %s", sessionID)
 
 	sessionInterface, ok := s.sessions.Load(sessionID)
 	if !ok {
-		log.Printf("Session not found for ID: %s", sessionID)
 		return ChatSessionInfo{}, false
 	}
-	log.Printf("Session found for ID: %s", sessionID)
 
 	sessionInfo := sessionInterface.(ChatSessionInfo)
-	log.Printf("Found session for ID: %s, last accessed: %v", sessionID, sessionInfo.LastAccessed)
 
 	sessionInfo.LastAccessed = time.Now()
-	log.Printf("Updated last accessed time for session ID: %s to %v", sessionID, sessionInfo.LastAccessed)
 
 	s.sessions.Store(sessionID, sessionInfo)
-	log.Printf("Stored updated session info for session ID: %s", sessionID)
 
 	return sessionInfo, true
 }
 
-func (s *CacheService) UpdateSessionChatHistory(sessionID, chatType, content string) {
+func (s *CacheService) UpdateSessionChatHistory(sessionID, chatType, content string) error {
 	s.sessionsMutex.Lock()
 	defer s.sessionsMutex.Unlock()
+
+	// Save the new message
+	if err := SaveMessage(database.DB, sessionID, chatType, content); err != nil {
+		return fmt.Errorf("failed to save message: %v", err)
+	}
 
 	if sessionInterface, ok := s.sessions.Load(sessionID); ok {
 		sessionInfo := sessionInterface.(ChatSessionInfo)
@@ -387,31 +351,8 @@ func (s *CacheService) UpdateSessionChatHistory(sessionID, chatType, content str
 		})
 		s.sessions.Store(sessionID, sessionInfo)
 	}
-}
 
-func (s *CacheService) SaveChatHistoryToDB(sessionID string, userID uuid.UUID) error {
-	// Retrieve chat history from cache
-	history, err := s.GetSessionChatHistory(sessionID)
-	if err != nil {
-		return err
-	}
-
-	// Convert history to JSON
-	historyJSON, err := json.Marshal(history)
-	if err != nil {
-		return err
-	}
-
-	// Create or update Chat record
-	chat := models.Chat{
-		UserID:    userID,
-		SessionID: sessionID,
-		History:   historyJSON,
-	}
-
-	// Use GORM's Upsert functionality
-	result := database.DB.Where(models.Chat{SessionID: sessionID}).Assign(chat).FirstOrCreate(&chat)
-	return result.Error
+	return nil
 }
 
 func (s *CacheService) periodicCleanup() {
@@ -453,7 +394,6 @@ func (s *CacheService) TerminateSession(ctx context.Context, sessionID string) e
 	sessionInterface, ok := s.sessions.Load(sessionID)
 	if !ok {
 		// Session doesn't exist, it might have been already terminated
-		log.Printf("Session %s not found, it may have already been terminated", sessionID)
 		return nil
 	}
 
@@ -464,30 +404,14 @@ func (s *CacheService) TerminateSession(ctx context.Context, sessionID string) e
 	_, err := s.genaiClient.GetCachedContent(ctx, sessionInfo.CachedContentName)
 	if err != nil {
 		// If the cached content doesn't exist, log it and return
-		log.Printf("Cached content for session %s (%s) not found, it may have already been deleted: %v", sessionID, sessionInfo.CachedContentName, err)
 		return nil
 	}
 
 	// Delete the cached content
-	log.Printf("Deleting cached content for session %s: %s", sessionID, sessionInfo.CachedContentName)
 	err = s.genaiClient.DeleteCachedContent(ctx, sessionInfo.CachedContentName)
 	if err != nil {
 		// Log the error but don't return it
-		log.Printf("Failed to delete cached content for session %s: %v", sessionID, err)
 	}
 
 	return nil
-}
-
-func (s *CacheService) GetSessionChatHistory(sessionID string) ([]ChatMessage, error) {
-	s.sessionsMutex.RLock()
-	defer s.sessionsMutex.RUnlock()
-
-	sessionInterface, ok := s.sessions.Load(sessionID)
-	if !ok {
-		return nil, fmt.Errorf("session not found")
-	}
-
-	sessionInfo := sessionInterface.(ChatSessionInfo)
-	return sessionInfo.ChatHistory, nil
 }

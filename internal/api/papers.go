@@ -3,13 +3,13 @@ package api
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"time"
 
 	"nexus_scholar_go_backend/internal/auth"
+	"nexus_scholar_go_backend/internal/database"
 	"nexus_scholar_go_backend/internal/models"
 	"nexus_scholar_go_backend/internal/services"
 
@@ -32,32 +32,27 @@ func SetupRoutes(r *gin.Engine, cacheService *services.CacheService) {
 
 func getPaper(c *gin.Context) {
 	arxivID := c.Param("arxiv_id")
-	log.Printf("Received request for arXiv ID: %s", arxivID)
 
 	paperLoader := services.NewPaperLoader()
 	result, err := paperLoader.ProcessPaper(arxivID)
 	if err != nil {
-		log.Printf("Error fetching paper for arXiv ID %s: %v", arxivID, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	log.Printf("Successfully fetched paper data for arXiv ID: %s", arxivID)
 	c.JSON(http.StatusOK, result)
 }
+
 func getPaperTitle(c *gin.Context) {
 	arxivID := c.Param("arxiv_id")
-	log.Printf("Received request for arXiv ID title: %s", arxivID)
 
 	paperLoader := services.NewPaperLoader()
 	metadata, err := paperLoader.GetPaperMetadata(arxivID)
 	if err != nil {
-		log.Printf("Error fetching paper metadata for arXiv ID %s: %v", arxivID, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	log.Printf("Successfully fetched paper title for arXiv ID: %s", arxivID)
 	c.JSON(http.StatusOK, gin.H{"title": metadata["title"]})
 }
 
@@ -105,8 +100,6 @@ func createCacheHandler(cacheService *services.CacheService) gin.HandlerFunc {
 			pdfPaths = append(pdfPaths, filename)
 		}
 
-		log.Printf("Received %d arXiv IDs and %d PDF files", len(arxivIDs), len(pdfPaths))
-
 		cacheExpirationTTL := 10 * time.Minute
 		cachedContentName, err := cacheService.CreateContentCache(c.Request.Context(), arxivIDs, pdfPaths, cacheExpirationTTL)
 		if err != nil {
@@ -120,16 +113,14 @@ func createCacheHandler(cacheService *services.CacheService) gin.HandlerFunc {
 			if processingErr != nil {
 				// An error occurred, attempt to delete the cache
 				if delErr := cacheService.DeleteCache(c.Request.Context(), cachedContentName); delErr != nil {
-					log.Printf("Failed to delete cache %s after error: %v", cachedContentName, delErr)
-				} else {
-					log.Printf("Successfully deleted cache %s after error", cachedContentName)
+					fmt.Printf("Failed to delete cache %s after error: %v", cachedContentName, delErr)
 				}
 				c.JSON(http.StatusInternalServerError, gin.H{"error": processingErr.Error()})
 			}
 		}()
 
 		// Start chat session
-		sessionID, err := cacheService.StartChatSession(c.Request.Context(), cachedContentName)
+		sessionID, err := cacheService.StartChatSession(c, cachedContentName)
 		if err != nil {
 			processingErr = fmt.Errorf("failed to start chat session: %v", err)
 			return
@@ -167,7 +158,7 @@ func startChatSessionHandler(cacheService *services.CacheService) gin.HandlerFun
 			return
 		}
 
-		sessionID, err := cacheService.StartChatSession(c.Request.Context(), request.CachedContentName)
+		sessionID, err := cacheService.StartChatSession(c, request.CachedContentName)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -201,26 +192,20 @@ func terminateChatSessionHandler(cacheService *services.CacheService) gin.Handle
 
 func getChatHistoryHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		log.Println("getChatHistoryHandler called")
-
 		user, exists := c.Get("user")
 		if !exists {
-			log.Println("User not found in context")
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found in context"})
 			return
 		}
 
 		userModel, ok := user.(*models.User)
 		if !ok {
-			log.Println("Failed to cast user to *models.User")
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to cast user to *models.User"})
 			return
 		}
 
-		log.Printf("Retrieving chat history for user ID: %d", userModel.ID.String())
-		chats, err := services.GetChatsByUserID(userModel.ID)
+		chats, err := services.GetChatsByUserID(database.DB, userModel.ID)
 		if err != nil {
-			log.Printf("Failed to retrieve chat history for user ID %d: %v", userModel.ID, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to retrieve chat history: %v", err)})
 			return
 		}
@@ -228,21 +213,22 @@ func getChatHistoryHandler() gin.HandlerFunc {
 		// Process chats to return a more user-friendly format
 		var chatHistory []gin.H
 		for _, chat := range chats {
-			var messages []map[string]interface{}
-			err := json.Unmarshal(chat.History, &messages)
-			if err != nil {
-				log.Printf("Error unmarshaling chat history for session %s: %v", chat.SessionID, err)
-				continue
+			messages := make([]gin.H, len(chat.Messages))
+			for i, msg := range chat.Messages {
+				messages[i] = gin.H{
+					"type":      msg.Type,
+					"content":   msg.Content,
+					"timestamp": msg.Timestamp.Format(time.RFC3339),
+				}
 			}
 
 			chatHistory = append(chatHistory, gin.H{
 				"session_id": chat.SessionID,
 				"messages":   messages,
-				"created_at": chat.CreatedAt,
+				"created_at": chat.CreatedAt.Format(time.RFC3339),
 			})
 		}
 
-		log.Printf("Successfully retrieved chat history for user ID: %d", userModel.ID)
 		c.JSON(http.StatusOK, gin.H{"chat_history": chatHistory})
 	}
 }

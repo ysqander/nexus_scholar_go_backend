@@ -3,7 +3,6 @@ package wsocket
 import (
 	"context"
 	"encoding/json"
-	"log"
 	"net/http"
 	"strings"
 
@@ -38,19 +37,14 @@ func NewHandler(cacheService *services.CacheService, upgrader websocket.Upgrader
 func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request, user interface{}) {
 	conn, err := h.upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Println("Failed to upgrade connection:", err)
 		return
 	}
 	defer conn.Close()
 
 	userModel, ok := user.(*models.User)
 	if !ok {
-		log.Println("Failed to cast user to *models.User")
 		return
 	}
-
-	// You can now use the authenticated user information
-	log.Printf("Authenticated user connected: %v", userModel.ID)
 
 	// heartbeat listening mechanism
 	ctx, cancel := context.WithCancel(r.Context())
@@ -59,13 +53,11 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request, user i
 	for {
 		_, message, err := conn.ReadMessage()
 		if err != nil {
-			log.Println("Error reading message:", err)
 			break
 		}
 
 		var msg Message
 		if err := json.Unmarshal(message, &msg); err != nil {
-			log.Println("Error unmarshalling message:", err)
 			continue
 		}
 
@@ -73,47 +65,28 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request, user i
 		case "message":
 			h.handleChatMessage(conn, msg, ctx, userModel.ID)
 		case "heartbeat":
-			log.Printf("Received heartbeat for session: %s", msg.SessionID)
 			h.cacheService.UpdateSessionHeartbeat(msg.SessionID)
 		case "terminate":
-			log.Printf("Terminating session: %s", msg.SessionID)
-			if err := h.cacheService.SaveChatHistoryToDB(msg.SessionID, userModel.ID); err != nil {
-				log.Printf("Error saving chat history: %v", err)
-				// Send an error message to the client
-				errorMsg := Message{
-					Type:      "error",
-					Content:   "Failed to save chat history",
-					SessionID: msg.SessionID,
-				}
-				if err := conn.WriteJSON(errorMsg); err != nil {
-					log.Printf("Error sending error message: %v", err)
-				}
-			} else {
-				// Send a success message to the client
-				successMsg := Message{
+			if err := h.cacheService.TerminateSession(ctx, msg.SessionID); err == nil {
+				conn.WriteJSON(Message{
 					Type:      "info",
-					Content:   "Chat history saved successfully",
+					Content:   "Session terminated successfully",
 					SessionID: msg.SessionID,
-				}
-				if err := conn.WriteJSON(successMsg); err != nil {
-					log.Printf("Error sending success message: %v", err)
-				}
+				})
 			}
-			h.cacheService.TerminateSession(ctx, msg.SessionID)
-			return
 		default:
-			log.Println("Unknown message type:", msg.Type)
 		}
 	}
 }
 
 func (h *Handler) handleChatMessage(conn *websocket.Conn, msg Message, ctx context.Context, userID uuid.UUID) {
-	log.Printf("Handling chat message for session: %s, user: %d", msg.SessionID, userID)
-
 	responseIterator, err := h.cacheService.StreamChatMessage(ctx, msg.SessionID, msg.Content)
 	if err != nil {
-		log.Println("Error getting stream:", err)
 		return
+	}
+
+	// Save user message
+	if err := h.cacheService.UpdateSessionChatHistory(msg.SessionID, "user", msg.Content); err != nil {
 	}
 
 	var aiResponse strings.Builder
@@ -121,11 +94,8 @@ func (h *Handler) handleChatMessage(conn *websocket.Conn, msg Message, ctx conte
 	for {
 		response, err := responseIterator.Next()
 		if err == iterator.Done {
-			log.Println("Stream iterator done")
-
 			// Update the session's chat history with the AI response
 			h.cacheService.UpdateSessionChatHistory(msg.SessionID, "ai", aiResponse.String())
-			log.Printf("Updated session chat history for session: %s with AI response", msg.SessionID)
 
 			// Send end-of-message signal
 			endMsg := Message{
@@ -134,14 +104,10 @@ func (h *Handler) handleChatMessage(conn *websocket.Conn, msg Message, ctx conte
 				SessionID: msg.SessionID,
 			}
 			if err := conn.WriteJSON(endMsg); err != nil {
-				log.Println("Error writing end message:", err)
-			} else {
-				log.Printf("Sent end-of-message signal for session: %s", msg.SessionID)
 			}
 			break
 		}
 		if err != nil {
-			log.Println("Error streaming response:", err)
 			break
 		}
 
@@ -153,12 +119,10 @@ func (h *Handler) handleChatMessage(conn *websocket.Conn, msg Message, ctx conte
 			case *genai.Text:
 				content = string(*part)
 			default:
-				log.Printf("Unexpected content type: %T", part)
 				continue
 			}
 			// Aggregating the ai response to later save in DB.
 			aiResponse.WriteString(content)
-			log.Printf("Aggregated AI response content for session: %s", msg.SessionID)
 
 			// Send the content as it is returned from the iterator
 			responseMsg := Message{
@@ -167,10 +131,7 @@ func (h *Handler) handleChatMessage(conn *websocket.Conn, msg Message, ctx conte
 				SessionID: msg.SessionID,
 			}
 			if err := conn.WriteJSON(responseMsg); err != nil {
-				log.Println("Error writing response:", err)
 				return
-			} else {
-				log.Printf("Sent AI response content for session: %s", msg.SessionID)
 			}
 		}
 	}

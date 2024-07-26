@@ -48,7 +48,7 @@ func main() {
 	}
 	defer genaiClient.Close()
 
-	cacheService, err := services.NewCacheService(ctx, genaiClient, projectID)
+	cacheService, err := services.NewCacheService(ctx, genaiClient, projectID, database.DB)
 	if err != nil {
 		log.Fatalf("Failed to create CacheService: %v", err)
 	}
