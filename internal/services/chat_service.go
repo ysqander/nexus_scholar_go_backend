@@ -1,45 +1,62 @@
 package services
 
 import (
-	"time"
-
 	"nexus_scholar_go_backend/internal/models"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
+// ChatService defines the interface for chat-related operations
+type ChatService interface {
+	SaveChat(userID uuid.UUID, sessionID string) error
+	SaveMessage(sessionID, msgType, content string) error
+	GetChatBySessionID(sessionID string) (*models.Chat, error)
+	GetChatsByUserID(userID uuid.UUID) ([]models.Chat, error)
+	DeleteChatBySessionID(sessionID string) error
+	GetMessagesByChatID(chatID uint) ([]models.Message, error)
+}
+
+// DefaultChatService implements ChatService
+type DefaultChatService struct {
+	db *gorm.DB
+}
+
+// NewChatService creates a new DefaultChatService
+func NewChatService(db *gorm.DB) ChatService {
+	return &DefaultChatService{db: db}
+}
+
 // SaveChat creates a new chat session or updates an existing one
-func SaveChat(db *gorm.DB, userID uuid.UUID, sessionID string) error {
+func (s *DefaultChatService) SaveChat(userID uuid.UUID, sessionID string) error {
 	chat := &models.Chat{
 		UserID:    userID,
 		SessionID: sessionID,
 	}
-
-	return db.Where(models.Chat{SessionID: sessionID}).Assign(chat).FirstOrCreate(chat).Error
+	result := s.db.Where(models.Chat{SessionID: sessionID}).Assign(chat).FirstOrCreate(chat)
+	return result.Error
 }
 
 // SaveMessage adds a new message to an existing chat
-func SaveMessage(db *gorm.DB, sessionID, msgType, content string) error {
+func (s *DefaultChatService) SaveMessage(sessionID, msgType, content string) error {
 	var chat models.Chat
-	if err := db.Where("session_id = ?", sessionID).First(&chat).Error; err != nil {
+	if err := s.db.Where("session_id = ?", sessionID).First(&chat).Error; err != nil {
 		return err
 	}
-
 	message := &models.Message{
 		ChatID:    chat.ID,
 		Type:      msgType,
 		Content:   content,
 		Timestamp: time.Now(),
 	}
-
-	return db.Create(message).Error
+	return s.db.Create(message).Error
 }
 
 // GetChatBySessionID retrieves a chat and its messages by session ID
-func GetChatBySessionID(db *gorm.DB, sessionID string) (*models.Chat, error) {
+func (s *DefaultChatService) GetChatBySessionID(sessionID string) (*models.Chat, error) {
 	var chat models.Chat
-	result := db.Preload("Messages").Where("session_id = ?", sessionID).First(&chat)
+	result := s.db.Preload("Messages").Where("session_id = ?", sessionID).First(&chat)
 	if result.Error != nil {
 		return nil, result.Error
 	}
@@ -47,9 +64,9 @@ func GetChatBySessionID(db *gorm.DB, sessionID string) (*models.Chat, error) {
 }
 
 // GetChatsByUserID retrieves all chats for a given user
-func GetChatsByUserID(db *gorm.DB, userID uuid.UUID) ([]models.Chat, error) {
+func (s *DefaultChatService) GetChatsByUserID(userID uuid.UUID) ([]models.Chat, error) {
 	var chats []models.Chat
-	result := db.Preload("Messages").Where("user_id = ?", userID).Find(&chats)
+	result := s.db.Preload("Messages").Where("user_id = ?", userID).Find(&chats)
 	if result.Error != nil {
 		return nil, result.Error
 	}
@@ -57,27 +74,25 @@ func GetChatsByUserID(db *gorm.DB, userID uuid.UUID) ([]models.Chat, error) {
 }
 
 // DeleteChatBySessionID deletes a chat and its associated messages
-func DeleteChatBySessionID(db *gorm.DB, sessionID string) error {
-	return db.Transaction(func(tx *gorm.DB) error {
+func (s *DefaultChatService) DeleteChatBySessionID(sessionID string) error {
+	return s.db.Transaction(func(tx *gorm.DB) error {
 		var chat models.Chat
 		if err := tx.Where("session_id = ?", sessionID).First(&chat).Error; err != nil {
 			return err
 		}
-
 		// Delete associated messages
 		if err := tx.Where("chat_id = ?", chat.ID).Delete(&models.Message{}).Error; err != nil {
 			return err
 		}
-
 		// Delete the chat
 		return tx.Delete(&chat).Error
 	})
 }
 
 // GetMessagesByChatID retrieves all messages for a given chat
-func GetMessagesByChatID(db *gorm.DB, chatID uint) ([]models.Message, error) {
+func (s *DefaultChatService) GetMessagesByChatID(chatID uint) ([]models.Message, error) {
 	var messages []models.Message
-	result := db.Where("chat_id = ?", chatID).Order("timestamp asc").Find(&messages)
+	result := s.db.Where("chat_id = ?", chatID).Order("timestamp asc").Find(&messages)
 	if result.Error != nil {
 		return nil, result.Error
 	}

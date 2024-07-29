@@ -41,6 +41,8 @@ func main() {
 	}
 
 	database.InitDB()
+	// Initialize ChatService
+	chatService := services.NewChatService(database.DB)
 
 	genaiClient, err := genai.NewClient(ctx, option.WithAPIKey(genai_apiKey))
 	if err != nil {
@@ -48,7 +50,7 @@ func main() {
 	}
 	defer genaiClient.Close()
 
-	cacheService, err := services.NewCacheService(ctx, genaiClient, projectID, database.DB)
+	cacheService := services.NewCacheService(genaiClient, database.DB, chatService, projectID)
 	if err != nil {
 		log.Fatalf("Failed to create CacheService: %v", err)
 	}
@@ -82,7 +84,7 @@ func main() {
 	// Create WebSocket handler
 	wsHandler := wsocket.NewHandler(cacheService, upgrader)
 
-	api.SetupRoutes(r, cacheService)
+	api.SetupRoutes(r, cacheService, chatService)
 	auth.SetupRoutes(r)
 
 	// Add WebSocket route

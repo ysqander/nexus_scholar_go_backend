@@ -6,11 +6,9 @@ import (
 	"net/http"
 	"strings"
 
-	"nexus_scholar_go_backend/internal/models"
 	"nexus_scholar_go_backend/internal/services"
 
 	"github.com/google/generative-ai-go/genai"
-	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"google.golang.org/api/iterator"
 )
@@ -41,11 +39,6 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request, user i
 	}
 	defer conn.Close()
 
-	userModel, ok := user.(*models.User)
-	if !ok {
-		return
-	}
-
 	// heartbeat listening mechanism
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
@@ -63,7 +56,7 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request, user i
 
 		switch msg.Type {
 		case "message":
-			h.handleChatMessage(conn, msg, ctx, userModel.ID)
+			h.handleChatMessage(conn, msg, ctx)
 		case "heartbeat":
 			h.cacheService.UpdateSessionHeartbeat(msg.SessionID)
 		case "terminate":
@@ -79,7 +72,7 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request, user i
 	}
 }
 
-func (h *Handler) handleChatMessage(conn *websocket.Conn, msg Message, ctx context.Context, userID uuid.UUID) {
+func (h *Handler) handleChatMessage(conn *websocket.Conn, msg Message, ctx context.Context) {
 	responseIterator, err := h.cacheService.StreamChatMessage(ctx, msg.SessionID, msg.Content)
 	if err != nil {
 		return

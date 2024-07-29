@@ -9,14 +9,13 @@ import (
 	"time"
 
 	"nexus_scholar_go_backend/internal/auth"
-	"nexus_scholar_go_backend/internal/database"
 	"nexus_scholar_go_backend/internal/models"
 	"nexus_scholar_go_backend/internal/services"
 
 	"github.com/gin-gonic/gin"
 )
 
-func SetupRoutes(r *gin.Engine, cacheService *services.CacheService) {
+func SetupRoutes(r *gin.Engine, cacheService *services.CacheService, chatService services.ChatService) {
 	api := r.Group("/api")
 	{
 		api.GET("/papers/:arxiv_id", auth.AuthMiddleware(), getPaper)
@@ -26,7 +25,7 @@ func SetupRoutes(r *gin.Engine, cacheService *services.CacheService) {
 		api.DELETE("/cache/:cacheId", auth.AuthMiddleware(), deleteCacheHandler(cacheService))
 		api.POST("/chat/start", auth.AuthMiddleware(), startChatSessionHandler(cacheService))
 		api.POST("/chat/terminate", auth.AuthMiddleware(), terminateChatSessionHandler(cacheService))
-		api.GET("/chat/history", auth.AuthMiddleware(), getChatHistoryHandler())
+		api.GET("/chat/history", auth.AuthMiddleware(), getChatHistoryHandler(chatService))
 	}
 }
 
@@ -190,7 +189,7 @@ func terminateChatSessionHandler(cacheService *services.CacheService) gin.Handle
 	}
 }
 
-func getChatHistoryHandler() gin.HandlerFunc {
+func getChatHistoryHandler(chatService services.ChatService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user, exists := c.Get("user")
 		if !exists {
@@ -204,7 +203,7 @@ func getChatHistoryHandler() gin.HandlerFunc {
 			return
 		}
 
-		chats, err := services.GetChatsByUserID(database.DB, userModel.ID)
+		chats, err := chatService.GetChatsByUserID(userModel.ID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to retrieve chat history: %v", err)})
 			return

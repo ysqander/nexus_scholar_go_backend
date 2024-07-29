@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"strings"
 	"sync"
 	"time"
 
-	"nexus_scholar_go_backend/internal/database"
 	"nexus_scholar_go_backend/internal/models"
 
 	"github.com/gin-gonic/gin"
@@ -19,6 +19,69 @@ import (
 	"github.com/ledongthuc/pdf"
 	"gorm.io/gorm"
 )
+
+type ContentCreator interface {
+	CreateCachedContent(ctx context.Context, cc *genai.CachedContent) (*genai.CachedContent, error)
+}
+
+type ContentRetriever interface {
+	GetCachedContent(ctx context.Context, name string) (*genai.CachedContent, error)
+}
+
+type ContentDeleter interface {
+	DeleteCachedContent(ctx context.Context, name string) error
+}
+
+type ContentUpdater interface {
+	UpdateCachedContent(ctx context.Context, cc *genai.CachedContent, update *genai.CachedContentToUpdate) (*genai.CachedContent, error)
+}
+
+type ModelGenerator interface {
+	GenerativeModelFromCachedContent(cc *genai.CachedContent) *genai.GenerativeModel
+}
+
+type GenAIClient interface {
+	ContentCreator
+	ContentRetriever
+	ContentDeleter
+	ContentUpdater
+	ModelGenerator
+}
+
+type DBOperations interface {
+	Where(query interface{}, args ...interface{}) *gorm.DB
+	Assign(attrs ...interface{}) *gorm.DB
+	FirstOrCreate(dest interface{}, conds ...interface{}) *gorm.DB
+	Create(value interface{}) *gorm.DB
+}
+
+// Functional option type
+type CacheServiceOption func(*CacheService)
+
+// Functional options
+func WithExpirationTime(d time.Duration) CacheServiceOption {
+	return func(cs *CacheService) {
+		cs.expirationTime = d
+	}
+}
+
+func WithHeartbeatTimeout(d time.Duration) CacheServiceOption {
+	return func(cs *CacheService) {
+		cs.heartbeatTimeout = d
+	}
+}
+
+func WithSessionTimeout(d time.Duration) CacheServiceOption {
+	return func(cs *CacheService) {
+		cs.sessionTimeout = d
+	}
+}
+
+func WithCacheExtendPeriod(d time.Duration) CacheServiceOption {
+	return func(cs *CacheService) {
+		cs.cacheExtendPeriod = d
+	}
+}
 
 type ChatSessionInfo struct {
 	Session           *genai.ChatSession
@@ -37,11 +100,11 @@ type ChatMessage struct {
 }
 
 type CacheService struct {
-	genaiClient       *genai.Client
-	db                *gorm.DB
+	genaiClient       GenAIClient
+	chatService       ChatService
+	db                DBOperations
 	arxivBaseURL      string
 	projectID         string
-	location          string
 	sessions          sync.Map
 	expirationTime    time.Duration
 	sessionsMutex     sync.RWMutex
@@ -50,23 +113,25 @@ type CacheService struct {
 	cacheExtendPeriod time.Duration
 }
 
-func NewCacheService(ctx context.Context, genaiClient *genai.Client, projectID string, db *gorm.DB) (*CacheService, error) {
-	const location = "US-CENTRAL1"
-
+func NewCacheService(genaiClient GenAIClient, db DBOperations, chatService ChatService, projectID string, options ...CacheServiceOption) *CacheService {
 	cs := &CacheService{
 		genaiClient:       genaiClient,
+		chatService:       chatService,
 		db:                db,
 		arxivBaseURL:      "https://arxiv.org/pdf/",
 		projectID:         projectID,
-		location:          location,
 		expirationTime:    10 * time.Minute,
 		heartbeatTimeout:  1 * time.Minute,  // Timeout after 1 minute of no heartbeats
 		sessionTimeout:    10 * time.Minute, // Timeout after 10 minutes of no activity
 		cacheExtendPeriod: 5 * time.Minute,  // Extend cache every 5 minutes of activity
 	}
 
+	for _, option := range options {
+		option(cs)
+	}
+
 	go cs.periodicCleanup()
-	return cs, nil
+	return cs
 }
 
 func (s *CacheService) CreateContentCache(ctx context.Context, arxivIDs []string, userPDFs []string, cacheExpirationTTL time.Duration) (string, error) {
@@ -228,7 +293,7 @@ func (s *CacheService) StartChatSession(c *gin.Context, cachedContentName string
 	}
 
 	// Save the chat to the database
-	if err := SaveChat(s.db, userModel.ID, sessionID); err != nil {
+	if err := s.chatService.SaveChat(userModel.ID, sessionID); err != nil {
 		return "", fmt.Errorf("failed to save chat: %v", err)
 	}
 
@@ -300,7 +365,7 @@ func (s *CacheService) extendCacheLifetime(cachedContentName string) error {
 // StreamChatMessage sends a message to the chat session and streams the response
 func (s *CacheService) StreamChatMessage(ctx context.Context, sessionID string, message string) (*genai.GenerateContentResponseIterator, error) {
 
-	sessionInfo, exists := s.getAndUpdateSession(ctx, sessionID)
+	sessionInfo, exists := s.getAndUpdateSession(sessionID)
 	if !exists {
 		return nil, fmt.Errorf("chat session not found")
 	}
@@ -315,7 +380,7 @@ func (s *CacheService) StreamChatMessage(ctx context.Context, sessionID string, 
 	return responseIterator, nil
 }
 
-func (s *CacheService) getAndUpdateSession(ctx context.Context, sessionID string) (ChatSessionInfo, bool) {
+func (s *CacheService) getAndUpdateSession(sessionID string) (ChatSessionInfo, bool) {
 	s.sessionsMutex.Lock()
 	defer s.sessionsMutex.Unlock()
 
@@ -337,8 +402,14 @@ func (s *CacheService) UpdateSessionChatHistory(sessionID, chatType, content str
 	s.sessionsMutex.Lock()
 	defer s.sessionsMutex.Unlock()
 
+	// Check if session exists
+	_, exists := s.sessions.Load(sessionID)
+	if !exists {
+		return fmt.Errorf("session not found")
+	}
+
 	// Save the new message
-	if err := SaveMessage(database.DB, sessionID, chatType, content); err != nil {
+	if err := s.chatService.SaveMessage(sessionID, chatType, content); err != nil {
 		return fmt.Errorf("failed to save message: %v", err)
 	}
 
@@ -410,7 +481,7 @@ func (s *CacheService) TerminateSession(ctx context.Context, sessionID string) e
 	// Delete the cached content
 	err = s.genaiClient.DeleteCachedContent(ctx, sessionInfo.CachedContentName)
 	if err != nil {
-		// Log the error but don't return it
+		log.Printf("Failed to delete cached content: %v", err)
 	}
 
 	return nil
