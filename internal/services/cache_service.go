@@ -100,17 +100,18 @@ type ChatMessage struct {
 }
 
 type CacheService struct {
-	genaiClient       GenAIClient
-	chatService       ChatService
-	db                DBOperations
-	arxivBaseURL      string
-	projectID         string
-	sessions          sync.Map
-	expirationTime    time.Duration
-	sessionsMutex     sync.RWMutex
-	heartbeatTimeout  time.Duration
-	sessionTimeout    time.Duration
-	cacheExtendPeriod time.Duration
+	genaiClient        GenAIClient
+	chatService        ChatService
+	db                 DBOperations
+	contentAggregation *ContentAggregationService
+	arxivBaseURL       string
+	projectID          string
+	sessions           sync.Map
+	expirationTime     time.Duration
+	sessionsMutex      sync.RWMutex
+	heartbeatTimeout   time.Duration
+	sessionTimeout     time.Duration
+	cacheExtendPeriod  time.Duration
 }
 
 func NewCacheService(genaiClient GenAIClient, db DBOperations, chatService ChatService, projectID string, options ...CacheServiceOption) *CacheService {
@@ -118,7 +119,6 @@ func NewCacheService(genaiClient GenAIClient, db DBOperations, chatService ChatS
 		genaiClient:       genaiClient,
 		chatService:       chatService,
 		db:                db,
-		arxivBaseURL:      "https://arxiv.org/pdf/",
 		projectID:         projectID,
 		expirationTime:    10 * time.Minute,
 		heartbeatTimeout:  1 * time.Minute,  // Timeout after 1 minute of no heartbeats
@@ -130,6 +130,8 @@ func NewCacheService(genaiClient GenAIClient, db DBOperations, chatService ChatS
 		option(cs)
 	}
 
+	cs.contentAggregation = NewContentAggregationService(cs.arxivBaseURL)
+
 	go cs.periodicCleanup()
 	return cs
 }
@@ -137,7 +139,7 @@ func NewCacheService(genaiClient GenAIClient, db DBOperations, chatService ChatS
 func (s *CacheService) CreateContentCache(ctx context.Context, arxivIDs []string, userPDFs []string, cacheExpirationTTL time.Duration) (string, error) {
 
 	// 1. Process documents and aggregate content
-	aggregatedContent, err := s.aggregateDocuments(arxivIDs, userPDFs)
+	aggregatedContent, err := s.contentAggregation.AggregateDocuments(arxivIDs, userPDFs)
 	if err != nil {
 		return "", fmt.Errorf("failed to aggregate documents: %v", err)
 	}

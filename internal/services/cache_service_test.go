@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"nexus_scholar_go_backend/internal/models"
+	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -16,6 +18,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
 
@@ -507,4 +510,40 @@ func TestConcurrentAccess(t *testing.T) {
 	mockClient.AssertExpectations(t)
 	mockChatService.AssertExpectations(t)
 	mockDB.AssertExpectations(t)
+}
+
+func TestCacheService_CreateContentCache_Integration(t *testing.T) {
+	// Setup
+	mockGenAIClient := &MockGenAIClient{}
+	mockDB := &MockDB{}
+	mockChatService := &MockChatService{}
+
+	cacheService := NewCacheService(mockGenAIClient, mockDB, mockChatService, "test-project")
+
+	// Create a temporary PDF file
+	tempPDF, err := os.CreateTemp("", "test*.pdf")
+	require.NoError(t, err)
+	defer os.Remove(tempPDF.Name())
+	_, err = tempPDF.WriteString("Mock PDF content")
+	require.NoError(t, err)
+	tempPDF.Close()
+
+	// Test
+	arxivIDs := []string{"2103.13620"} // Use a real arXiv ID for integration testing
+	userPDFs := []string{tempPDF.Name()}
+	ctx := context.Background()
+
+	mockGenAIClient.On("CreateCachedContent", mock.Anything, mock.Anything).Return(&genai.CachedContent{Name: "test-cache"}, nil)
+
+	cacheName, err := cacheService.CreateContentCache(ctx, arxivIDs, userPDFs, 10*time.Minute)
+
+	// Assertions
+	assert.NoError(t, err)
+	assert.Equal(t, "test-cache", cacheName)
+
+	// Verify that the content was aggregated correctly
+	mockGenAIClient.AssertCalled(t, "CreateCachedContent", mock.Anything, mock.MatchedBy(func(cc *genai.CachedContent) bool {
+		content := cc.Contents[0].Parts[0].(genai.Text)
+		return strings.Contains(string(content), "arXiv:2103.13620") && strings.Contains(string(content), "Mock PDF content")
+	}))
 }
