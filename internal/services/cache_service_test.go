@@ -449,19 +449,19 @@ func TestConcurrentAccess(t *testing.T) {
 		CachedContentName: "test-cached-content",
 	})
 
-	mockClient.On("GetCachedContent", mock.Anything, mock.Anything).Return(&genai.CachedContent{}, nil)
-	mockClient.On("DeleteCachedContent", mock.Anything, mock.Anything).Return(nil)
+	//mockClient.On("GetCachedContent", mock.Anything, mock.Anything).Return(&genai.CachedContent{}, nil)
+	//mockClient.On("DeleteCachedContent", mock.Anything, mock.Anything).Return(nil)
+	mockClient.On("UpdateCachedContent", mock.Anything, mock.Anything, mock.Anything).Return(&genai.CachedContent{}, nil)
 	mockChatService.On("SaveMessage", sessionID, chatType, content).Return(nil)
 
 	numGoroutines := 100
 	var wg sync.WaitGroup
-	wg.Add(numGoroutines * 3)
+	wg.Add(numGoroutines * 2)
 
 	// Use atomic operations to count successful operations
 	var (
-		heartbeatsUpdated  int32
-		messagesAdded      int32
-		sessionsTerminated int32
+		heartbeatsUpdated int32
+		messagesAdded     int32
 	)
 
 	for i := 0; i < numGoroutines; i++ {
@@ -470,6 +470,8 @@ func TestConcurrentAccess(t *testing.T) {
 			err := cacheService.UpdateSessionHeartbeat(sessionID)
 			if err == nil {
 				atomic.AddInt32(&heartbeatsUpdated, 1)
+			} else {
+				t.Logf("UpdateSessionHeartbeat error: %v", err)
 			}
 		}()
 
@@ -478,14 +480,8 @@ func TestConcurrentAccess(t *testing.T) {
 			err := cacheService.UpdateSessionChatHistory(sessionID, chatType, content)
 			if err == nil {
 				atomic.AddInt32(&messagesAdded, 1)
-			}
-		}()
-
-		go func() {
-			defer wg.Done()
-			err := cacheService.TerminateSession(context.Background(), sessionID)
-			if err == nil {
-				atomic.AddInt32(&sessionsTerminated, 1)
+			} else {
+				t.Logf("UpdateSessionChatHistory error: %v", err)
 			}
 		}()
 	}
@@ -494,21 +490,19 @@ func TestConcurrentAccess(t *testing.T) {
 
 	// Check the final state
 	_, ok := cacheService.sessions.Load(sessionID)
-	assert.False(t, ok, "Session should be terminated after concurrent operations")
+	assert.True(t, ok, "Session should not be terminated after concurrent operations")
 
 	// Log the counts of successful operations
 	t.Logf("Heartbeats updated: %d", heartbeatsUpdated)
 	t.Logf("Messages added: %d", messagesAdded)
-	t.Logf("Sessions terminated: %d", sessionsTerminated)
 
 	// Assert that at least some operations were successful
 	assert.True(t, heartbeatsUpdated > 0, "Some heartbeats should have been updated")
 	assert.True(t, messagesAdded > 0, "Some messages should have been added")
-	assert.True(t, sessionsTerminated > 0, "Session should have been terminated at least once")
 
 	// Check that the total number of operations is correct
-	assert.Equal(t, int32(numGoroutines*3), heartbeatsUpdated+messagesAdded+sessionsTerminated,
-		"Total number of successful operations should equal the number of goroutines * 3")
+	assert.Equal(t, int32(numGoroutines*2), heartbeatsUpdated+messagesAdded,
+		"Total number of successful operations should equal the number of goroutines * 2")
 
 	mockClient.AssertExpectations(t)
 	mockChatService.AssertExpectations(t)

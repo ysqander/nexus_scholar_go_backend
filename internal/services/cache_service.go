@@ -331,6 +331,7 @@ func (s *CacheService) UpdateSessionHeartbeat(sessionID string) error {
 	// Check if it's time to extend the cache
 	if now.Sub(sessionInfo.LastCacheExtend) >= s.cacheExtendPeriod {
 		if err := s.extendCacheLifetime(sessionInfo.CachedContentName); err != nil {
+			// Handle error if needed
 		} else {
 			sessionInfo.LastCacheExtend = now
 		}
