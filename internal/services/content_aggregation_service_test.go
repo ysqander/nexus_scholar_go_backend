@@ -2,9 +2,7 @@ package services
 
 import (
 	"bytes"
-	"io"
-	"net/http"
-	"net/http/httptest"
+	"os"
 	"testing"
 
 	"github.com/jung-kurt/gofpdf"
@@ -18,11 +16,6 @@ type MockPDFProcessor struct {
 	mock.Mock
 }
 
-func (m *MockPDFProcessor) extractTextFromPDF(reader io.Reader) (string, error) {
-	args := m.Called(reader)
-	return args.String(0), args.Error(1)
-}
-
 func createTestPDF(content string) ([]byte, error) {
 	pdf := gofpdf.New("P", "mm", "A4", "")
 	pdf.AddPage()
@@ -34,73 +27,29 @@ func createTestPDF(content string) ([]byte, error) {
 	return buf.Bytes(), err
 }
 
-func TestContentAggregationService_AggregateDocuments(t *testing.T) {
-	mockPDFProcessor := new(MockPDFProcessor)
-	service := NewContentAggregationService("http://mock-arxiv.org/")
-	service.pdfProcessor = mockPDFProcessor
+func TestExtractTextFromPDF(t *testing.T) {
+	// Create a test PDF with known content
+	expectedContent := "This is a test PDF content."
+	pdfBytes, err := createTestPDF(expectedContent)
+	require.NoError(t, err)
 
-	// Setup a mock HTTP server to simulate arXiv
-	mockArxiv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		pdfContent, err := createTestPDF("Mock arXiv paper content")
-		require.NoError(t, err)
-		w.WriteHeader(http.StatusOK)
-		w.Write(pdfContent)
-	}))
-	defer mockArxiv.Close()
-	service.arxivBaseURL = mockArxiv.URL + "/"
+	// Create a temporary file to store the PDF
+	tempFile, err := os.CreateTemp("", "test-*.pdf")
+	require.NoError(t, err)
+	defer os.Remove(tempFile.Name())
+	defer tempFile.Close()
 
-	// Set up expectations
-	mockPDFProcessor.On("extractTextFromPDF", mock.Anything).Return("Extracted arXiv content", nil).Once()
-	mockPDFProcessor.On("extractTextFromPDF", mock.Anything).Return("Extracted user PDF content", nil).Once()
+	// Write the PDF bytes to the temporary file
+	_, err = tempFile.Write(pdfBytes)
+	require.NoError(t, err)
 
-	arxivIDs := []string{"1234.5678"}
-	userPDFs := []string{"user_pdf.pdf"}
-
-	aggregatedContent, err := service.AggregateDocuments(arxivIDs, userPDFs)
-	assert.NoError(t, err)
-	assert.Contains(t, aggregatedContent, "arXiv:1234.5678")
-	assert.Contains(t, aggregatedContent, "Extracted arXiv content")
-	assert.Contains(t, aggregatedContent, "User PDF 1")
-	assert.Contains(t, aggregatedContent, "Extracted user PDF content")
-
-	mockPDFProcessor.AssertExpectations(t)
-}
-
-func TestContentAggregationService_ProcessArXivPaper(t *testing.T) {
-	mockPDFProcessor := new(MockPDFProcessor)
-	service := NewContentAggregationService("http://mock-arxiv.org/")
-	service.pdfProcessor = mockPDFProcessor
-
-	mockArxiv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		pdfContent, err := createTestPDF("Mock arXiv paper content")
-		assert.NoError(t, err)
-		w.WriteHeader(http.StatusOK)
-		w.Write(pdfContent)
-	}))
-	defer mockArxiv.Close()
-	service.arxivBaseURL = mockArxiv.URL + "/"
-
-	mockPDFProcessor.On("extractTextFromPDF", mock.Anything).Return("Extracted arXiv content", nil)
-
-	content, err := service.processArXivPaper("1234.5678")
-
-	assert.NoError(t, err)
-	assert.Equal(t, "Extracted arXiv content", content)
-
-	mockPDFProcessor.AssertExpectations(t)
-}
-
-func TestContentAggregationService_ProcessUserPDF(t *testing.T) {
-	mockPDFProcessor := new(MockPDFProcessor)
+	// Initialize the ContentAggregationService
 	service := NewContentAggregationService("")
-	service.pdfProcessor = mockPDFProcessor
 
-	mockPDFProcessor.On("extractTextFromPDF", mock.Anything).Return("Extracted user PDF content", nil)
+	// Call the extractTextFromPDF method
+	actualContent, err := service.extractTextFromPDF(tempFile.Name())
+	require.NoError(t, err)
 
-	content, err := service.processUserPDF("user_pdf.pdf")
-
-	assert.NoError(t, err)
-	assert.Equal(t, "Extracted user PDF content", content)
-
-	mockPDFProcessor.AssertExpectations(t)
+	// Assert that the extracted content matches the expected content
+	assert.Contains(t, actualContent, expectedContent)
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/generative-ai-go/genai"
 	"github.com/google/uuid"
+	"github.com/jung-kurt/gofpdf"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -518,18 +519,28 @@ func TestCacheService_CreateContentCache_Integration(t *testing.T) {
 	mockDB := &MockDB{}
 	mockChatService := &MockChatService{}
 
-	cacheService := NewCacheService(mockGenAIClient, mockDB, mockChatService, "test-project")
+	// Initialize CacheService with arxivBaseURL
+	arxivBaseURL := "https://arxiv.org/pdf/"
+	cacheService := NewCacheService(mockGenAIClient, mockDB, mockChatService, "test-project",
+		func(cs *CacheService) {
+			cs.contentAggregation = NewContentAggregationService(arxivBaseURL)
+		},
+	)
 
-	// Create a temporary PDF file
+	// Create a temporary PDF file using gofpdf
 	tempPDF, err := os.CreateTemp("", "test*.pdf")
 	require.NoError(t, err)
 	defer os.Remove(tempPDF.Name())
-	_, err = tempPDF.WriteString("Mock PDF content")
+
+	pdf := gofpdf.New("P", "mm", "A4", "")
+	pdf.AddPage()
+	pdf.SetFont("Arial", "", 12)
+	pdf.Cell(40, 10, "This is a test PDF content.")
+	err = pdf.OutputFileAndClose(tempPDF.Name())
 	require.NoError(t, err)
-	tempPDF.Close()
 
 	// Test
-	arxivIDs := []string{"2103.13620"} // Use a real arXiv ID for integration testing
+	arxivIDs := []string{"2406.07394v2"} // Use a real arXiv ID for integration testing
 	userPDFs := []string{tempPDF.Name()}
 	ctx := context.Background()
 
@@ -539,11 +550,12 @@ func TestCacheService_CreateContentCache_Integration(t *testing.T) {
 
 	// Assertions
 	assert.NoError(t, err)
+	fmt.Println("cacheName", cacheName)
 	assert.Equal(t, "test-cache", cacheName)
 
 	// Verify that the content was aggregated correctly
 	mockGenAIClient.AssertCalled(t, "CreateCachedContent", mock.Anything, mock.MatchedBy(func(cc *genai.CachedContent) bool {
 		content := cc.Contents[0].Parts[0].(genai.Text)
-		return strings.Contains(string(content), "arXiv:2103.13620") && strings.Contains(string(content), "Mock PDF content")
+		return strings.Contains(string(content), "arXiv:2406.07394v2") && strings.Contains(string(content), "This is a test PDF content.")
 	}))
 }
