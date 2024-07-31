@@ -3,6 +3,7 @@ package wsocket
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -14,8 +15,8 @@ import (
 )
 
 type Handler struct {
-	cacheService *services.CacheService
-	upgrader     websocket.Upgrader
+	researchChatService *services.ResearchChatService
+	upgrader            websocket.Upgrader
 }
 
 type Message struct {
@@ -25,10 +26,10 @@ type Message struct {
 	CachedContentName string `json:"cachedContentName,omitempty"`
 }
 
-func NewHandler(cacheService *services.CacheService, upgrader websocket.Upgrader) *Handler {
+func NewHandler(researchChatService *services.ResearchChatService, upgrader websocket.Upgrader) *Handler {
 	return &Handler{
-		cacheService: cacheService,
-		upgrader:     upgrader,
+		researchChatService: researchChatService,
+		upgrader:            upgrader,
 	}
 }
 
@@ -58,12 +59,19 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request, user i
 		case "message":
 			h.handleChatMessage(conn, msg, ctx)
 		case "heartbeat":
-			h.cacheService.UpdateSessionHeartbeat(msg.SessionID)
+			err := h.researchChatService.UpdateSessionHeartbeat(ctx, msg.SessionID)
+			if err != nil {
+				conn.WriteJSON(Message{
+					Type:      "error",
+					Content:   fmt.Sprintf("Failed to update session heartbeat: %v", err),
+					SessionID: msg.SessionID,
+				})
+			}
 		case "terminate":
-			if err := h.cacheService.TerminateSession(ctx, msg.SessionID); err == nil {
+			if err := h.researchChatService.EndResearchSession(ctx, msg.SessionID); err == nil {
 				conn.WriteJSON(Message{
 					Type:      "info",
-					Content:   "Session terminated successfully",
+					Content:   "Research session terminated successfully",
 					SessionID: msg.SessionID,
 				})
 			}
@@ -73,13 +81,25 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request, user i
 }
 
 func (h *Handler) handleChatMessage(conn *websocket.Conn, msg Message, ctx context.Context) {
-	responseIterator, err := h.cacheService.StreamChatMessage(ctx, msg.SessionID, msg.Content)
+	responseIterator, err := h.researchChatService.SendMessage(ctx, msg.SessionID, msg.Content)
 	if err != nil {
+		conn.WriteJSON(Message{
+			Type:      "error",
+			Content:   fmt.Sprintf("Failed to send message: %v", err),
+			SessionID: msg.SessionID,
+		})
+
 		return
 	}
 
 	// Save user message
-	if err := h.cacheService.UpdateSessionChatHistory(msg.SessionID, "user", msg.Content); err != nil {
+	if err := h.researchChatService.UpdateSessionChatHistory(ctx, msg.SessionID, "user", msg.Content); err != nil {
+		conn.WriteJSON(Message{
+			Type:      "error",
+			Content:   fmt.Sprintf("Failed to save user message: %v", err),
+			SessionID: msg.SessionID,
+		})
+		return
 	}
 
 	var aiResponse strings.Builder
@@ -88,8 +108,13 @@ func (h *Handler) handleChatMessage(conn *websocket.Conn, msg Message, ctx conte
 		response, err := responseIterator.Next()
 		if err == iterator.Done {
 			// Update the session's chat history with the AI response
-			h.cacheService.UpdateSessionChatHistory(msg.SessionID, "ai", aiResponse.String())
-
+			if err := h.researchChatService.UpdateSessionChatHistory(ctx, msg.SessionID, "ai", aiResponse.String()); err != nil {
+				conn.WriteJSON(Message{
+					Type:      "error",
+					Content:   fmt.Sprintf("Failed to save AI response to chat history: %v", err),
+					SessionID: msg.SessionID,
+				})
+			}
 			// Send end-of-message signal
 			endMsg := Message{
 				Type:      "ai",
@@ -101,6 +126,11 @@ func (h *Handler) handleChatMessage(conn *websocket.Conn, msg Message, ctx conte
 			break
 		}
 		if err != nil {
+			conn.WriteJSON(Message{
+				Type:      "error",
+				Content:   fmt.Sprintf("Error getting response: %v", err),
+				SessionID: msg.SessionID,
+			})
 			break
 		}
 

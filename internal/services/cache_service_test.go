@@ -119,7 +119,7 @@ func (m *MockChatService) GetMessagesByChatID(chatID uint) ([]models.Message, er
 	return args.Get(0).([]models.Message), args.Error(1)
 }
 
-func TestStartChatSession(t *testing.T) {
+func TestStartChatSession_old(t *testing.T) {
 	// Setup
 	gin.SetMode(gin.TestMode)
 	mockClient := new(MockGenAIClient)
@@ -210,6 +210,86 @@ func TestStartChatSession(t *testing.T) {
 		_, err := cacheService.StartChatSession(c, cachedContentName)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to save chat")
+	})
+}
+
+func TestStartChatSession(t *testing.T) {
+	// Setup
+	gin.SetMode(gin.TestMode)
+	mockGenAIClient := new(MockGenAIClient)
+	mockChatService := new(MockChatService)
+	mockChatSessionService := new(MockChatSessionService)
+
+	cacheService := NewCacheService(mockGenAIClient, mockChatService, "test-project")
+	cacheService.chatSession = mockChatSessionService
+
+	cachedContentName := "testCacheName"
+
+	t.Run("Successful session start", func(t *testing.T) {
+		// Create a mock Gin context
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+
+		// Add a valid HTTP request to the context
+		req, _ := http.NewRequest(http.MethodGet, "/", nil)
+		c.Request = req
+
+		// Add a user to the context
+		userID := uuid.New()
+		user := &models.User{ID: userID}
+		c.Set("user", user)
+
+		expectedSessionID := "test-session-id"
+		mockChatSessionService.On("StartChatSession", c.Request.Context(), userID, cachedContentName).Return(expectedSessionID, nil).Once()
+
+		// Test execution
+		sessionID, err := cacheService.StartChatSession(c, cachedContentName)
+
+		// Assertions
+		assert.NoError(t, err)
+		assert.Equal(t, expectedSessionID, sessionID)
+
+		mockChatSessionService.AssertExpectations(t)
+	})
+
+	t.Run("No user in context", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		req, _ := http.NewRequest(http.MethodGet, "/", nil)
+		c.Request = req
+
+		_, err := cacheService.StartChatSession(c, cachedContentName)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "user not found in context")
+	})
+
+	t.Run("Invalid user type in context", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		req, _ := http.NewRequest(http.MethodGet, "/", nil)
+		c.Request = req
+		c.Set("user", "invalid user")
+
+		_, err := cacheService.StartChatSession(c, cachedContentName)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid user type in context")
+	})
+
+	t.Run("Error starting chat session", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		req, _ := http.NewRequest(http.MethodGet, "/", nil)
+		c.Request = req
+
+		userID := uuid.New()
+		user := &models.User{ID: userID}
+		c.Set("user", user)
+
+		mockChatSessionService.On("StartChatSession", c.Request.Context(), userID, cachedContentName).Return("", fmt.Errorf("failed to start chat session")).Once()
+
+		_, err := cacheService.StartChatSession(c, cachedContentName)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to start chat session")
 	})
 }
 

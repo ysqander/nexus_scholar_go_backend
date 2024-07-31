@@ -1,0 +1,228 @@
+package services
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log"
+	"sync"
+	"time"
+
+	"github.com/google/generative-ai-go/genai"
+	"github.com/google/uuid"
+)
+
+type ChatSessionInfo struct {
+	Session           *genai.ChatSession
+	CachedContentName string
+	LastAccessed      time.Time
+	LastHeartbeat     time.Time
+	HeartbeatsMissed  int
+	LastCacheExtend   time.Time
+	ChatHistory       []ChatMessage
+	UserID            uuid.UUID
+}
+
+type ChatMessage struct {
+	Type      string
+	Content   string
+	Timestamp time.Time
+}
+
+type ChatSessionService struct {
+	sessions               sync.Map
+	sessionsMutex          sync.RWMutex
+	genAIClient            GenAIClient
+	chatService            ChatService
+	cacheManagementService *CacheManagementService
+	heartbeatTimeout       time.Duration
+	sessionTimeout         time.Duration
+	cacheExtendPeriod      time.Duration
+}
+
+func NewChatSessionService(
+	genAIClient GenAIClient,
+	chatService ChatService,
+	cacheManagementService *CacheManagementService,
+	heartbeatTimeout,
+	sessionTimeout time.Duration,
+) *ChatSessionService {
+	css := &ChatSessionService{
+		genAIClient:            genAIClient,
+		chatService:            chatService,
+		cacheManagementService: cacheManagementService,
+		heartbeatTimeout:       heartbeatTimeout,
+		sessionTimeout:         sessionTimeout,
+	}
+	go css.periodicCleanup()
+	return css
+}
+
+func (css *ChatSessionService) StartChatSession(ctx context.Context, userID uuid.UUID, cachedContentName string) (string, error) {
+	// Get the GenerativeModel using the CacheManagementService
+	model, err := css.cacheManagementService.GetGenerativeModel(ctx, cachedContentName)
+	if err != nil {
+		return "", err
+	}
+
+	session := model.StartChat()
+	sessionID := uuid.New().String()
+
+	if err := css.chatService.SaveChat(userID, sessionID); err != nil {
+		return "", err
+	}
+
+	css.sessionsMutex.Lock()
+	defer css.sessionsMutex.Unlock()
+
+	css.sessions.Store(sessionID, ChatSessionInfo{
+		Session:           session,
+		CachedContentName: cachedContentName,
+		LastAccessed:      time.Now(),
+		LastHeartbeat:     time.Now(),
+		HeartbeatsMissed:  0,
+		LastCacheExtend:   time.Now(),
+		ChatHistory:       []ChatMessage{},
+		UserID:            userID,
+	})
+
+	return sessionID, nil
+}
+
+func (css *ChatSessionService) UpdateSessionHeartbeat(ctx context.Context, sessionID string) error {
+	css.sessionsMutex.Lock()
+	defer css.sessionsMutex.Unlock()
+
+	sessionInterface, ok := css.sessions.Load(sessionID)
+	if !ok {
+		return errors.New("session not found")
+	}
+
+	sessionInfo := sessionInterface.(ChatSessionInfo)
+	now := time.Now()
+	sessionInfo.LastHeartbeat = now
+	sessionInfo.HeartbeatsMissed = 0
+	sessionInfo.LastAccessed = now
+
+	// Check if it's time to extend the cache
+	if now.Sub(sessionInfo.LastCacheExtend) >= css.cacheExtendPeriod {
+		if err := css.cacheManagementService.ExtendCacheLifetime(ctx, sessionInfo.CachedContentName); err != nil {
+			// Log the error, but don't fail the heartbeat update
+			// You might want to add proper logging here
+		} else {
+			sessionInfo.LastCacheExtend = now
+		}
+	}
+
+	css.sessions.Store(sessionID, sessionInfo)
+	return nil
+}
+
+func (css *ChatSessionService) UpdateSessionChatHistory(sessionID, chatType, content string) error {
+	css.sessionsMutex.Lock()
+	defer css.sessionsMutex.Unlock()
+
+	sessionInterface, ok := css.sessions.Load(sessionID)
+	if !ok {
+		return fmt.Errorf("session not found")
+	}
+
+	sessionInfo := sessionInterface.(ChatSessionInfo)
+	sessionInfo.ChatHistory = append(sessionInfo.ChatHistory, ChatMessage{
+		Type:      chatType,
+		Content:   content,
+		Timestamp: time.Now(),
+	})
+	css.sessions.Store(sessionID, sessionInfo)
+
+	// Save the new message to the database
+	if err := css.chatService.SaveMessage(sessionID, chatType, content); err != nil {
+		return fmt.Errorf("failed to save message: %v", err)
+	}
+
+	return nil
+}
+
+func (css *ChatSessionService) TerminateSession(ctx context.Context, sessionID string) error {
+	css.sessionsMutex.Lock()
+	defer css.sessionsMutex.Unlock()
+
+	sessionInterface, ok := css.sessions.Load(sessionID)
+	if !ok {
+		// Session doesn't exist, it might have been already terminated
+		return nil
+	}
+
+	sessionInfo := sessionInterface.(ChatSessionInfo)
+	css.sessions.Delete(sessionID)
+
+	// Delete the cached content when terminating the session
+	if err := css.cacheManagementService.DeleteCache(ctx, sessionInfo.CachedContentName); err != nil {
+		log.Printf("Failed to delete cached content: %v", err)
+	}
+
+	return css.chatService.DeleteChatBySessionID(sessionID)
+}
+
+func (css *ChatSessionService) StreamChatMessage(ctx context.Context, sessionID string, message string) (*genai.GenerateContentResponseIterator, error) {
+	sessionInfo, exists := css.getAndUpdateSession(sessionID)
+	if !exists {
+		return nil, errors.New("chat session not found")
+	}
+
+	formattedMessage := css.formatMessage(message)
+	responseIterator := sessionInfo.Session.SendMessageStream(ctx, genai.Text(formattedMessage))
+
+	return responseIterator, nil
+}
+
+func (css *ChatSessionService) getAndUpdateSession(sessionID string) (ChatSessionInfo, bool) {
+	css.sessionsMutex.Lock()
+	defer css.sessionsMutex.Unlock()
+
+	sessionInterface, ok := css.sessions.Load(sessionID)
+	if !ok {
+		return ChatSessionInfo{}, false
+	}
+
+	sessionInfo := sessionInterface.(ChatSessionInfo)
+	sessionInfo.LastAccessed = time.Now()
+	css.sessions.Store(sessionID, sessionInfo)
+
+	return sessionInfo, true
+}
+
+func (css *ChatSessionService) formatMessage(message string) string {
+	return message + "\n\nFormat your answer in markdown with easily readable paragraphs."
+}
+
+func (css *ChatSessionService) periodicCleanup() {
+	ticker := time.NewTicker(10 * time.Minute)
+	for range ticker.C {
+		css.cleanupExpiredSessions()
+	}
+}
+
+func (css *ChatSessionService) cleanupExpiredSessions() {
+	now := time.Now()
+	css.sessions.Range(func(key, value interface{}) bool {
+		sessionID := key.(string)
+		sessionInfo := value.(ChatSessionInfo)
+
+		if now.Sub(sessionInfo.LastAccessed) > css.sessionTimeout {
+			css.TerminateSession(context.Background(), sessionID)
+			return true
+		}
+
+		if now.Sub(sessionInfo.LastHeartbeat) > css.heartbeatTimeout {
+			sessionInfo.HeartbeatsMissed++
+			if sessionInfo.HeartbeatsMissed >= 3 {
+				css.TerminateSession(context.Background(), sessionID)
+				return true
+			}
+			css.sessions.Store(sessionID, sessionInfo)
+		}
+
+		return true
+	})
+}

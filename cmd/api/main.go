@@ -42,7 +42,6 @@ func main() {
 
 	database.InitDB()
 	// Initialize ChatService
-	chatService := services.NewChatService(database.DB)
 
 	genaiClient, err := genai.NewClient(ctx, option.WithAPIKey(genai_apiKey))
 	if err != nil {
@@ -50,10 +49,37 @@ func main() {
 	}
 	defer genaiClient.Close()
 
-	cacheService := services.NewCacheService(genaiClient, database.DB, chatService, projectID)
-	if err != nil {
-		log.Fatalf("Failed to create CacheService: %v", err)
-	}
+	// Initial paramters for services
+	arxivBaseURL := "https://arxiv.org/pdf/"
+	cacheExpirationTime := 10 * time.Minute
+	cacheExtendPeriod := 5 * time.Minute
+	heartbeatTimeout := 1 * time.Minute
+	sessionTimeout := 10 * time.Minute
+
+	// Initialize services
+	chatService := services.NewChatService(database.DB)
+	contentAggregationService := services.NewContentAggregationService(arxivBaseURL)
+	cacheManagementService := services.NewCacheManagementService(
+		genaiClient,
+		contentAggregationService,
+		cacheExpirationTime,
+		cacheExtendPeriod,
+	)
+
+	chatSessionService := services.NewChatSessionService(
+		genaiClient,
+		chatService,
+		cacheManagementService,
+		heartbeatTimeout,
+		sessionTimeout,
+	)
+	researchChatService := services.NewResearchChatService(
+		contentAggregationService,
+		cacheManagementService,
+		chatSessionService,
+		chatService,
+		cacheExpirationTime,
+	)
 
 	r := gin.Default()
 
@@ -82,9 +108,9 @@ func main() {
 	}
 
 	// Create WebSocket handler
-	wsHandler := wsocket.NewHandler(cacheService, upgrader)
+	wsHandler := wsocket.NewHandler(researchChatService, upgrader)
 
-	api.SetupRoutes(r, cacheService, chatService)
+	api.SetupRoutes(r, researchChatService, chatService)
 	auth.SetupRoutes(r)
 
 	// Add WebSocket route
