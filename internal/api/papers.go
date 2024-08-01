@@ -18,7 +18,7 @@ import (
 	"google.golang.org/api/iterator"
 )
 
-func SetupRoutes(r *gin.Engine, researchChatService *services.ResearchChatService, chatService services.ChatService) {
+func SetupRoutes(r *gin.Engine, researchChatService *services.ResearchChatService, chatService services.ChatServiceDB) {
 	api := r.Group("/api")
 	{
 		api.GET("/papers/:arxiv_id", auth.AuthMiddleware(), getPaper)

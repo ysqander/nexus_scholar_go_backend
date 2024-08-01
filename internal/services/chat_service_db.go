@@ -9,13 +9,13 @@ import (
 )
 
 // ChatService defines the interface for chat-related operations
-type ChatService interface {
-	SaveChat(userID uuid.UUID, sessionID string) error
-	SaveMessage(sessionID, msgType, content string) error
-	GetChatBySessionID(sessionID string) (*models.Chat, error)
-	GetChatsByUserID(userID uuid.UUID) ([]models.Chat, error)
-	DeleteChatBySessionID(sessionID string) error
-	GetMessagesByChatID(chatID uint) ([]models.Message, error)
+type ChatServiceDB interface {
+	SaveChatToDB(userID uuid.UUID, sessionID string) error
+	SaveMessageToDB(sessionID, msgType, content string) error
+	GetChatBySessionIDFromDB(sessionID string) (*models.Chat, error)
+	GetChatsByUserIDFromDB(userID uuid.UUID) ([]models.Chat, error)
+	DeleteChatBySessionIDFromDB(sessionID string) error
+	GetMessagesByChatIDFromDB(chatID uint) ([]models.Message, error)
 }
 
 // DefaultChatService implements ChatService
@@ -24,12 +24,12 @@ type DefaultChatService struct {
 }
 
 // NewChatService creates a new DefaultChatService
-func NewChatService(db *gorm.DB) ChatService {
+func NewChatServiceDB(db *gorm.DB) ChatServiceDB {
 	return &DefaultChatService{db: db}
 }
 
 // SaveChat creates a new chat session or updates an existing one
-func (s *DefaultChatService) SaveChat(userID uuid.UUID, sessionID string) error {
+func (s *DefaultChatService) SaveChatToDB(userID uuid.UUID, sessionID string) error {
 	chat := &models.Chat{
 		UserID:    userID,
 		SessionID: sessionID,
@@ -39,7 +39,7 @@ func (s *DefaultChatService) SaveChat(userID uuid.UUID, sessionID string) error 
 }
 
 // SaveMessage adds a new message to an existing chat
-func (s *DefaultChatService) SaveMessage(sessionID, msgType, content string) error {
+func (s *DefaultChatService) SaveMessageToDB(sessionID, msgType, content string) error {
 	var chat models.Chat
 	if err := s.db.Where("session_id = ?", sessionID).First(&chat).Error; err != nil {
 		return err
@@ -54,7 +54,7 @@ func (s *DefaultChatService) SaveMessage(sessionID, msgType, content string) err
 }
 
 // GetChatBySessionID retrieves a chat and its messages by session ID
-func (s *DefaultChatService) GetChatBySessionID(sessionID string) (*models.Chat, error) {
+func (s *DefaultChatService) GetChatBySessionIDFromDB(sessionID string) (*models.Chat, error) {
 	var chat models.Chat
 	result := s.db.Preload("Messages").Where("session_id = ?", sessionID).First(&chat)
 	if result.Error != nil {
@@ -64,7 +64,7 @@ func (s *DefaultChatService) GetChatBySessionID(sessionID string) (*models.Chat,
 }
 
 // GetChatsByUserID retrieves all chats for a given user
-func (s *DefaultChatService) GetChatsByUserID(userID uuid.UUID) ([]models.Chat, error) {
+func (s *DefaultChatService) GetChatsByUserIDFromDB(userID uuid.UUID) ([]models.Chat, error) {
 	var chats []models.Chat
 	result := s.db.Preload("Messages").Where("user_id = ?", userID).Find(&chats)
 	if result.Error != nil {
@@ -74,7 +74,7 @@ func (s *DefaultChatService) GetChatsByUserID(userID uuid.UUID) ([]models.Chat, 
 }
 
 // DeleteChatBySessionID deletes a chat and its associated messages
-func (s *DefaultChatService) DeleteChatBySessionID(sessionID string) error {
+func (s *DefaultChatService) DeleteChatBySessionIDFromDB(sessionID string) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		var chat models.Chat
 		if err := tx.Where("session_id = ?", sessionID).First(&chat).Error; err != nil {
@@ -90,7 +90,7 @@ func (s *DefaultChatService) DeleteChatBySessionID(sessionID string) error {
 }
 
 // GetMessagesByChatID retrieves all messages for a given chat
-func (s *DefaultChatService) GetMessagesByChatID(chatID uint) ([]models.Message, error) {
+func (s *DefaultChatService) GetMessagesByChatIDFromDB(chatID uint) ([]models.Message, error) {
 	var messages []models.Message
 	result := s.db.Where("chat_id = ?", chatID).Order("timestamp asc").Find(&messages)
 	if result.Error != nil {

@@ -13,18 +13,18 @@ import (
 )
 
 type ResearchChatService struct {
-	contentAggregation *ContentAggregationService
-	cacheManagement    *CacheManagementService
-	chatSession        *ChatSessionService
-	chatService        ChatService
+	contentAggregation ContentAggregator
+	cacheManagement    CacheManager
+	chatSession        ChatSessionManager
+	chatService        ChatServiceDB
 	cacheExpiration    time.Duration
 }
 
 func NewResearchChatService(
-	ca *ContentAggregationService,
-	cm *CacheManagementService,
-	cs *ChatSessionService,
-	chat ChatService,
+	ca ContentAggregator,
+	cm CacheManager,
+	cs ChatSessionManager,
+	chat ChatServiceDB,
 	cacheExpiration time.Duration,
 ) *ResearchChatService {
 	return &ResearchChatService{
@@ -67,7 +67,7 @@ func (s *ResearchChatService) StartResearchSession(c *gin.Context, arxivIDs []st
 	}
 
 	// Step 4: Save chat session to history
-	if err := s.chatService.SaveChat(userModel.ID, sessionID); err != nil {
+	if err := s.chatService.SaveChatToDB(userModel.ID, sessionID); err != nil {
 		return "", "", fmt.Errorf("failed to save chat to history: %w", err)
 	}
 
@@ -82,7 +82,7 @@ func (s *ResearchChatService) SendMessage(ctx context.Context, sessionID, messag
 	}
 
 	// Save user message to history
-	if err := s.chatService.SaveMessage(sessionID, "user", message); err != nil {
+	if err := s.chatService.SaveMessageToDB(sessionID, "user", message); err != nil {
 		return nil, fmt.Errorf("failed to save user message: %w", err)
 	}
 
@@ -91,7 +91,7 @@ func (s *ResearchChatService) SendMessage(ctx context.Context, sessionID, messag
 
 func (s *ResearchChatService) SaveAIResponse(sessionID, response string) error {
 	// Save AI response to history
-	if err := s.chatService.SaveMessage(sessionID, "ai", response); err != nil {
+	if err := s.chatService.SaveMessageToDB(sessionID, "ai", response); err != nil {
 		return fmt.Errorf("failed to save AI response: %w", err)
 	}
 
@@ -106,13 +106,13 @@ func (s *ResearchChatService) EndResearchSession(ctx context.Context, sessionID 
 }
 
 func (s *ResearchChatService) GetUserChatHistory(userID uuid.UUID) ([]models.Chat, error) {
-	return s.chatService.GetChatsByUserID(userID)
+	return s.chatService.GetChatsByUserIDFromDB(userID)
 }
 
 func (s *ResearchChatService) UpdateSessionHeartbeat(ctx context.Context, sessionID string) error {
 	return s.chatSession.UpdateSessionHeartbeat(ctx, sessionID)
 }
 
-func (s *ResearchChatService) UpdateSessionChatHistory(ctx context.Context, sessionID, msgType, content string) error {
-	return s.chatSession.UpdateSessionChatHistory(sessionID, msgType, content)
+func (s *ResearchChatService) SaveMessageToDB(ctx context.Context, sessionID, msgType, content string) error {
+	return s.chatService.SaveMessageToDB(sessionID, msgType, content)
 }

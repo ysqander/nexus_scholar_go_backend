@@ -93,7 +93,7 @@ func (h *Handler) handleChatMessage(conn *websocket.Conn, msg Message, ctx conte
 	}
 
 	// Save user message
-	if err := h.researchChatService.UpdateSessionChatHistory(ctx, msg.SessionID, "user", msg.Content); err != nil {
+	if err := h.researchChatService.SaveMessageToDB(ctx, msg.SessionID, "user", msg.Content); err != nil {
 		conn.WriteJSON(Message{
 			Type:      "error",
 			Content:   fmt.Sprintf("Failed to save user message: %v", err),
@@ -108,7 +108,7 @@ func (h *Handler) handleChatMessage(conn *websocket.Conn, msg Message, ctx conte
 		response, err := responseIterator.Next()
 		if err == iterator.Done {
 			// Update the session's chat history with the AI response
-			if err := h.researchChatService.UpdateSessionChatHistory(ctx, msg.SessionID, "ai", aiResponse.String()); err != nil {
+			if err := h.researchChatService.SaveMessageToDB(ctx, msg.SessionID, "ai", aiResponse.String()); err != nil {
 				conn.WriteJSON(Message{
 					Type:      "error",
 					Content:   fmt.Sprintf("Failed to save AI response to chat history: %v", err),

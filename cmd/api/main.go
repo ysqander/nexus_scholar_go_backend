@@ -57,7 +57,7 @@ func main() {
 	sessionTimeout := 10 * time.Minute
 
 	// Initialize services
-	chatService := services.NewChatService(database.DB)
+	chatService := services.NewChatServiceDB(database.DB)
 	contentAggregationService := services.NewContentAggregationService(arxivBaseURL)
 	cacheManagementService := services.NewCacheManagementService(
 		genaiClient,

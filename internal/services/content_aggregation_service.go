@@ -76,7 +76,7 @@ func (s *ContentAggregationService) processArXivPaper(arxivID string) (string, e
 	}
 
 	// Process the PDF file
-	content, err := s.extractTextFromPDF(tempFile.Name())
+	content, err := s.ExtractTextFromPDF(tempFile.Name())
 	if err != nil {
 		return "", fmt.Errorf("failed to extract text from PDF: %v", err)
 	}
@@ -85,10 +85,10 @@ func (s *ContentAggregationService) processArXivPaper(arxivID string) (string, e
 }
 
 func (s *ContentAggregationService) processUserPDF(pdfPath string) (string, error) {
-	return s.extractTextFromPDF(pdfPath)
+	return s.ExtractTextFromPDF(pdfPath)
 }
 
-func (s *ContentAggregationService) extractTextFromPDF(pdfPath string) (string, error) {
+func (s *ContentAggregationService) ExtractTextFromPDF(pdfPath string) (string, error) {
 	f, r, err := pdf.Open(pdfPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to open PDF: %v", err)

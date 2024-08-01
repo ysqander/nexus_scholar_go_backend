@@ -10,7 +10,6 @@ import (
 	"nexus_scholar_go_backend/internal/database"
 	"nexus_scholar_go_backend/internal/models"
 	"regexp"
-	"strconv"
 	"strings"
 
 	"encoding/xml"
@@ -137,11 +136,6 @@ func (pl *PaperLoader) getField(entry bibtex.BibEntry, key string) string {
 		return field.String()
 	}
 	return ""
-}
-
-func (pl *PaperLoader) stringToUint(s string) uint {
-	u, _ := strconv.ParseUint(s, 10, 64)
-	return uint(u)
 }
 
 func (pl *PaperLoader) downloadPaper(arxivID string) ([]byte, error) {

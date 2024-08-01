@@ -1,7 +1,8 @@
-package services
+package services_test
 
 import (
 	"bytes"
+	"nexus_scholar_go_backend/internal/services"
 	"os"
 	"testing"
 
@@ -44,10 +45,10 @@ func TestExtractTextFromPDF(t *testing.T) {
 	require.NoError(t, err)
 
 	// Initialize the ContentAggregationService
-	service := NewContentAggregationService("")
+	service := services.NewContentAggregationService("")
 
-	// Call the extractTextFromPDF method
-	actualContent, err := service.extractTextFromPDF(tempFile.Name())
+	// Call the ExtractTextFromPDF method
+	actualContent, err := service.ExtractTextFromPDF(tempFile.Name())
 	require.NoError(t, err)
 
 	// Assert that the extracted content matches the expected content

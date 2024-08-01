@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -19,7 +18,6 @@ type ChatSessionInfo struct {
 	LastHeartbeat     time.Time
 	HeartbeatsMissed  int
 	LastCacheExtend   time.Time
-	ChatHistory       []ChatMessage
 	UserID            uuid.UUID
 }
 
@@ -30,29 +28,29 @@ type ChatMessage struct {
 }
 
 type ChatSessionService struct {
-	sessions               sync.Map
-	sessionsMutex          sync.RWMutex
-	genAIClient            GenAIClient
-	chatService            ChatService
-	cacheManagementService *CacheManagementService
-	heartbeatTimeout       time.Duration
-	sessionTimeout         time.Duration
-	cacheExtendPeriod      time.Duration
+	sessions          sync.Map
+	sessionsMutex     sync.RWMutex
+	genAIClient       GenAIClient
+	chatService       ChatServiceDB
+	CacheManager      CacheManager
+	heartbeatTimeout  time.Duration
+	sessionTimeout    time.Duration
+	cacheExtendPeriod time.Duration
 }
 
 func NewChatSessionService(
 	genAIClient GenAIClient,
-	chatService ChatService,
-	cacheManagementService *CacheManagementService,
+	chatService ChatServiceDB,
+	CacheManager CacheManager,
 	heartbeatTimeout,
 	sessionTimeout time.Duration,
 ) *ChatSessionService {
 	css := &ChatSessionService{
-		genAIClient:            genAIClient,
-		chatService:            chatService,
-		cacheManagementService: cacheManagementService,
-		heartbeatTimeout:       heartbeatTimeout,
-		sessionTimeout:         sessionTimeout,
+		genAIClient:      genAIClient,
+		chatService:      chatService,
+		CacheManager:     CacheManager,
+		heartbeatTimeout: heartbeatTimeout,
+		sessionTimeout:   sessionTimeout,
 	}
 	go css.periodicCleanup()
 	return css
@@ -60,7 +58,7 @@ func NewChatSessionService(
 
 func (css *ChatSessionService) StartChatSession(ctx context.Context, userID uuid.UUID, cachedContentName string) (string, error) {
 	// Get the GenerativeModel using the CacheManagementService
-	model, err := css.cacheManagementService.GetGenerativeModel(ctx, cachedContentName)
+	model, err := css.CacheManager.GetGenerativeModel(ctx, cachedContentName)
 	if err != nil {
 		return "", err
 	}
@@ -68,7 +66,7 @@ func (css *ChatSessionService) StartChatSession(ctx context.Context, userID uuid
 	session := model.StartChat()
 	sessionID := uuid.New().String()
 
-	if err := css.chatService.SaveChat(userID, sessionID); err != nil {
+	if err := css.chatService.SaveChatToDB(userID, sessionID); err != nil {
 		return "", err
 	}
 
@@ -82,7 +80,6 @@ func (css *ChatSessionService) StartChatSession(ctx context.Context, userID uuid
 		LastHeartbeat:     time.Now(),
 		HeartbeatsMissed:  0,
 		LastCacheExtend:   time.Now(),
-		ChatHistory:       []ChatMessage{},
 		UserID:            userID,
 	})
 
@@ -106,7 +103,7 @@ func (css *ChatSessionService) UpdateSessionHeartbeat(ctx context.Context, sessi
 
 	// Check if it's time to extend the cache
 	if now.Sub(sessionInfo.LastCacheExtend) >= css.cacheExtendPeriod {
-		if err := css.cacheManagementService.ExtendCacheLifetime(ctx, sessionInfo.CachedContentName); err != nil {
+		if err := css.CacheManager.ExtendCacheLifetime(ctx, sessionInfo.CachedContentName); err != nil {
 			// Log the error, but don't fail the heartbeat update
 			// You might want to add proper logging here
 		} else {
@@ -115,31 +112,6 @@ func (css *ChatSessionService) UpdateSessionHeartbeat(ctx context.Context, sessi
 	}
 
 	css.sessions.Store(sessionID, sessionInfo)
-	return nil
-}
-
-func (css *ChatSessionService) UpdateSessionChatHistory(sessionID, chatType, content string) error {
-	css.sessionsMutex.Lock()
-	defer css.sessionsMutex.Unlock()
-
-	sessionInterface, ok := css.sessions.Load(sessionID)
-	if !ok {
-		return fmt.Errorf("session not found")
-	}
-
-	sessionInfo := sessionInterface.(ChatSessionInfo)
-	sessionInfo.ChatHistory = append(sessionInfo.ChatHistory, ChatMessage{
-		Type:      chatType,
-		Content:   content,
-		Timestamp: time.Now(),
-	})
-	css.sessions.Store(sessionID, sessionInfo)
-
-	// Save the new message to the database
-	if err := css.chatService.SaveMessage(sessionID, chatType, content); err != nil {
-		return fmt.Errorf("failed to save message: %v", err)
-	}
-
 	return nil
 }
 
@@ -157,11 +129,11 @@ func (css *ChatSessionService) TerminateSession(ctx context.Context, sessionID s
 	css.sessions.Delete(sessionID)
 
 	// Delete the cached content when terminating the session
-	if err := css.cacheManagementService.DeleteCache(ctx, sessionInfo.CachedContentName); err != nil {
+	if err := css.CacheManager.DeleteCache(ctx, sessionInfo.CachedContentName); err != nil {
 		log.Printf("Failed to delete cached content: %v", err)
 	}
 
-	return css.chatService.DeleteChatBySessionID(sessionID)
+	return css.chatService.DeleteChatBySessionIDFromDB(sessionID)
 }
 
 func (css *ChatSessionService) StreamChatMessage(ctx context.Context, sessionID string, message string) (*genai.GenerateContentResponseIterator, error) {
@@ -225,4 +197,8 @@ func (css *ChatSessionService) cleanupExpiredSessions() {
 
 		return true
 	})
+}
+
+func (css *ChatSessionService) Sessions() *sync.Map {
+	return &css.sessions
 }
