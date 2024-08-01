@@ -99,7 +99,9 @@ func (s *ResearchChatService) SaveAIResponse(sessionID, response string) error {
 }
 
 func (s *ResearchChatService) EndResearchSession(ctx context.Context, sessionID string) error {
-	if err := s.chatSession.TerminateSession(ctx, sessionID); err != nil {
+	// Assumes the only caller of this method is an api endpoint whena user Terminates a chat
+	var reason TerminationReason = UserInitiated
+	if err := s.chatSession.TerminateSession(ctx, sessionID, reason); err != nil {
 		return fmt.Errorf("failed to terminate chat session: %w", err)
 	}
 	return nil

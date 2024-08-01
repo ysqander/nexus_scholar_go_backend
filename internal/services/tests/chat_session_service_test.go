@@ -2,6 +2,7 @@ package services_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"nexus_scholar_go_backend/internal/services"
 	"testing"
@@ -203,4 +204,236 @@ func TestUpdateSessionHeartbeat(t *testing.T) {
 		// Verify mock expectations
 		mockCacheManager.AssertExpectations(t)
 	})
+}
+
+func TestTerminateSession(t *testing.T) {
+	mockGenAIClient := new(MockGenAIClient)
+	mockChatServiceDB := new(MockChatServiceDB)
+	mockCacheManager := new(MockCacheManager)
+
+	css := services.NewChatSessionService(
+		mockGenAIClient,
+		mockChatServiceDB,
+		mockCacheManager,
+		1*time.Minute,  // heartbeatTimeout
+		10*time.Minute, // sessionTimeout
+	)
+
+	ctx := context.Background()
+	sessionID := "test-session-id"
+	cachedContentName := "test-cached-content"
+	userID := uuid.New()
+
+	t.Run("Successful TerminateSession", func(t *testing.T) {
+		// Setup
+		sessionInfo := services.ChatSessionInfo{
+			Session:           nil, // Not needed for this test
+			CachedContentName: cachedContentName,
+			LastAccessed:      time.Now(),
+			LastHeartbeat:     time.Now(),
+			HeartbeatsMissed:  0,
+			LastCacheExtend:   time.Now(),
+			UserID:            userID,
+		}
+		css.Sessions().Store(sessionID, sessionInfo)
+
+		mockCacheManager.On("DeleteCache", mock.Anything, cachedContentName).Return(nil).Once()
+		mockChatServiceDB.On("DeleteChatBySessionIDFromDB", sessionID).Return(nil).Once()
+
+		// Execute
+		err := css.TerminateSession(ctx, sessionID, services.UserInitiated)
+
+		// Assert
+		assert.NoError(t, err)
+		_, exists := css.Sessions().Load(sessionID)
+		assert.False(t, exists, "Session should be removed")
+
+		// Verify expectations
+		mockCacheManager.AssertExpectations(t)
+		mockChatServiceDB.AssertExpectations(t)
+	})
+
+	t.Run("Session Not Found", func(t *testing.T) {
+		// Execute
+		err := css.TerminateSession(ctx, "non-existent-session", services.UserInitiated)
+
+		// Assert
+		assert.Error(t, err)
+		assert.Equal(t, services.ErrSessionNotFound, err)
+	})
+
+	t.Run("Cache Deletion Failure", func(t *testing.T) {
+		// Setup
+		sessionInfo := services.ChatSessionInfo{
+			Session:           nil,
+			CachedContentName: cachedContentName,
+			LastAccessed:      time.Now(),
+			LastHeartbeat:     time.Now(),
+			HeartbeatsMissed:  0,
+			LastCacheExtend:   time.Now(),
+			UserID:            userID,
+		}
+		css.Sessions().Store(sessionID, sessionInfo)
+
+		mockCacheManager.On("DeleteCache", mock.Anything, cachedContentName).Return(errors.New("cache deletion error")).Once()
+		mockChatServiceDB.On("DeleteChatBySessionIDFromDB", sessionID).Return(nil).Once()
+
+		// Execute
+		err := css.TerminateSession(ctx, sessionID, services.UserInitiated)
+
+		// Assert
+		assert.NoError(t, err)
+		_, exists := css.Sessions().Load(sessionID)
+		assert.False(t, exists, "Session should be removed even if cache deletion fails")
+
+		// Verify expectations
+		mockCacheManager.AssertExpectations(t)
+		mockChatServiceDB.AssertExpectations(t)
+	})
+
+	t.Run("Database Deletion Failure", func(t *testing.T) {
+		// Setup
+		sessionInfo := services.ChatSessionInfo{
+			Session:           nil,
+			CachedContentName: cachedContentName,
+			LastAccessed:      time.Now(),
+			LastHeartbeat:     time.Now(),
+			HeartbeatsMissed:  0,
+			LastCacheExtend:   time.Now(),
+			UserID:            userID,
+		}
+		css.Sessions().Store(sessionID, sessionInfo)
+
+		mockCacheManager.On("DeleteCache", mock.Anything, cachedContentName).Return(nil).Once()
+		mockChatServiceDB.On("DeleteChatBySessionIDFromDB", sessionID).Return(errors.New("database deletion error")).Once()
+
+		// Execute
+		err := css.TerminateSession(ctx, sessionID, services.UserInitiated)
+
+		// Assert
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to delete chat from database")
+		_, exists := css.Sessions().Load(sessionID)
+		assert.True(t, exists, "Session should not be removed if database deletion fails")
+
+		// Verify expectations
+		mockCacheManager.AssertExpectations(t)
+		mockChatServiceDB.AssertExpectations(t)
+	})
+}
+
+func TestCleanupExpiredSessions(t *testing.T) {
+	mockGenAIClient := new(MockGenAIClient)
+	mockChatServiceDB := new(MockChatServiceDB)
+	mockCacheManager := new(MockCacheManager)
+
+	heartbeatTimeout := 5 * time.Minute
+	sessionTimeout := 30 * time.Minute
+
+	css := services.NewChatSessionService(
+		mockGenAIClient,
+		mockChatServiceDB,
+		mockCacheManager,
+		heartbeatTimeout,
+		sessionTimeout,
+	)
+
+	now := time.Now()
+
+	// Helper function to create a session
+	createSession := func(lastAccessed, lastHeartbeat time.Time, heartbeatsMissed int) services.ChatSessionInfo {
+		return services.ChatSessionInfo{
+			Session:           nil,
+			CachedContentName: "test-cached-content",
+			LastAccessed:      lastAccessed,
+			LastHeartbeat:     lastHeartbeat,
+			HeartbeatsMissed:  heartbeatsMissed,
+			LastCacheExtend:   now.Add(-10 * time.Minute),
+			UserID:            uuid.New(),
+		}
+	}
+
+	// Test cases
+	testCases := []struct {
+		name                 string
+		sessions             map[string]services.ChatSessionInfo
+		expectedTerminations int
+		expectedActive       int
+	}{
+		{
+			name: "No expired sessions",
+			sessions: map[string]services.ChatSessionInfo{
+				"session1": createSession(now.Add(-5*time.Minute), now.Add(-1*time.Minute), 0),
+				"session2": createSession(now.Add(-10*time.Minute), now.Add(-2*time.Minute), 1),
+			},
+			expectedTerminations: 0,
+			expectedActive:       2,
+		},
+		{
+			name: "One session expired due to inactivity",
+			sessions: map[string]services.ChatSessionInfo{
+				"session1": createSession(now.Add(-5*time.Minute), now.Add(-1*time.Minute), 0),
+				"session2": createSession(now.Add(-31*time.Minute), now.Add(-31*time.Minute), 1),
+			},
+			expectedTerminations: 1,
+			expectedActive:       1,
+		},
+		{
+			name: "One session expired due to missed heartbeats",
+			sessions: map[string]services.ChatSessionInfo{
+				"session1": createSession(now.Add(-5*time.Minute), now.Add(-1*time.Minute), 0),
+				"session2": createSession(now.Add(-10*time.Minute), now.Add(-6*time.Minute), 3),
+			},
+			expectedTerminations: 1,
+			expectedActive:       1,
+		},
+		{
+			name: "Multiple expired sessions",
+			sessions: map[string]services.ChatSessionInfo{
+				"session1": createSession(now.Add(-5*time.Minute), now.Add(-1*time.Minute), 0),
+				"session2": createSession(now.Add(-31*time.Minute), now.Add(-31*time.Minute), 1),
+				"session3": createSession(now.Add(-10*time.Minute), now.Add(-6*time.Minute), 3),
+				"session4": createSession(now.Add(-40*time.Minute), now.Add(-35*time.Minute), 5),
+			},
+			expectedTerminations: 3,
+			expectedActive:       1,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Setup
+			css.Sessions().Range(func(key, value interface{}) bool {
+				css.Sessions().Delete(key)
+				return true
+			})
+			for id, session := range tc.sessions {
+				css.Sessions().Store(id, session)
+			}
+
+			// Set up expectations for mock calls
+			if tc.expectedTerminations > 0 {
+				mockCacheManager.On("DeleteCache", mock.Anything, mock.Anything).Return(nil).Times(tc.expectedTerminations)
+				mockChatServiceDB.On("DeleteChatBySessionIDFromDB", mock.Anything).Return(nil).Times(tc.expectedTerminations)
+			}
+
+			// Execute
+			css.CleanupExpiredSessions()
+
+			// Assert
+			activeSessions := 0
+			css.Sessions().Range(func(key, value interface{}) bool {
+				activeSessions++
+				return true
+			})
+
+			assert.Equal(t, tc.expectedActive, activeSessions, "Number of active sessions after cleanup")
+			mockCacheManager.AssertExpectations(t)
+			mockChatServiceDB.AssertExpectations(t)
+
+			// Reset mocks for the next test case
+			mockCacheManager.ExpectedCalls = nil
+			mockChatServiceDB.ExpectedCalls = nil
+		})
+	}
 }

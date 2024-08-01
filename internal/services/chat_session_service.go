@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -115,25 +116,48 @@ func (css *ChatSessionService) UpdateSessionHeartbeat(ctx context.Context, sessi
 	return nil
 }
 
-func (css *ChatSessionService) TerminateSession(ctx context.Context, sessionID string) error {
+var (
+	ErrSessionNotFound = errors.New("session not found")
+	ErrCacheDelete     = errors.New("failed to delete cache")
+	ErrDBDelete        = errors.New("failed to delete chat from database")
+)
+
+type TerminationReason int
+
+const (
+	UserInitiated TerminationReason = iota
+	SessionTimeout
+	HeartbeatMissed
+)
+
+func (css *ChatSessionService) TerminateSession(ctx context.Context, sessionID string, reason TerminationReason) error {
 	css.sessionsMutex.Lock()
 	defer css.sessionsMutex.Unlock()
 
 	sessionInterface, ok := css.sessions.Load(sessionID)
 	if !ok {
-		// Session doesn't exist, it might have been already terminated
-		return nil
+		return ErrSessionNotFound
 	}
 
 	sessionInfo := sessionInterface.(ChatSessionInfo)
-	css.sessions.Delete(sessionID)
 
 	// Delete the cached content when terminating the session
 	if err := css.CacheManager.DeleteCache(ctx, sessionInfo.CachedContentName); err != nil {
-		log.Printf("Failed to delete cached content: %v", err)
+		log.Printf("Failed to delete cached content for session %s: %v", sessionID, err)
 	}
 
-	return css.chatService.DeleteChatBySessionIDFromDB(sessionID)
+	// Delete the chat from the database
+	if err := css.chatService.DeleteChatBySessionIDFromDB(sessionID); err != nil {
+		return fmt.Errorf("%w: %v", ErrDBDelete, err)
+	}
+
+	// Remove the session from the map
+	css.sessions.Delete(sessionID)
+
+	// Log the termination
+	log.Printf("Session %s terminated. Reason: %v", sessionID, reason)
+
+	return nil
 }
 
 func (css *ChatSessionService) StreamChatMessage(ctx context.Context, sessionID string, message string) (*genai.GenerateContentResponseIterator, error) {
@@ -169,30 +193,38 @@ func (css *ChatSessionService) formatMessage(message string) string {
 }
 
 func (css *ChatSessionService) periodicCleanup() {
-	ticker := time.NewTicker(10 * time.Minute)
+	ticker := time.NewTicker(3 * time.Minute)
 	for range ticker.C {
-		css.cleanupExpiredSessions()
+		css.CleanupExpiredSessions()
 	}
 }
 
-func (css *ChatSessionService) cleanupExpiredSessions() {
+func (css *ChatSessionService) CleanupExpiredSessions() {
 	now := time.Now()
 	css.sessions.Range(func(key, value interface{}) bool {
 		sessionID := key.(string)
 		sessionInfo := value.(ChatSessionInfo)
 
-		if now.Sub(sessionInfo.LastAccessed) > css.sessionTimeout {
-			css.TerminateSession(context.Background(), sessionID)
-			return true
-		}
+		var reason TerminationReason
+		var shouldTerminate bool
 
-		if now.Sub(sessionInfo.LastHeartbeat) > css.heartbeatTimeout {
+		if now.Sub(sessionInfo.LastAccessed) > css.sessionTimeout {
+			reason = SessionTimeout
+			shouldTerminate = true
+		} else if now.Sub(sessionInfo.LastHeartbeat) > css.heartbeatTimeout {
 			sessionInfo.HeartbeatsMissed++
 			if sessionInfo.HeartbeatsMissed >= 3 {
-				css.TerminateSession(context.Background(), sessionID)
-				return true
+				reason = HeartbeatMissed
+				shouldTerminate = true
+			} else {
+				css.sessions.Store(sessionID, sessionInfo)
 			}
-			css.sessions.Store(sessionID, sessionInfo)
+		}
+
+		if shouldTerminate {
+			if err := css.TerminateSession(context.Background(), sessionID, reason); err != nil {
+				log.Printf("Failed to terminate session %s: %v", sessionID, err)
+			}
 		}
 
 		return true

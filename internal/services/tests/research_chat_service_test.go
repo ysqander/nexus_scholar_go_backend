@@ -213,10 +213,11 @@ func TestEndResearchSession(t *testing.T) {
 	ctx.Request = req
 
 	sessionID := "test-session-123"
+	reason := services.UserInitiated
 
 	t.Run("Successful EndResearchSession", func(t *testing.T) {
 		// Expectations
-		mockChatSession.On("TerminateSession", mock.Anything, sessionID).Return(nil).Once()
+		mockChatSession.On("TerminateSession", mock.Anything, sessionID, reason).Return(nil).Once()
 
 		// Execute
 		err := service.EndResearchSession(ctx.Request.Context(), sessionID)
@@ -234,7 +235,7 @@ func TestEndResearchSession(t *testing.T) {
 
 		// Expectations for failure case
 		expectedError := fmt.Errorf("failed to terminate session")
-		mockChatSession.On("TerminateSession", mock.Anything, sessionID).Return(expectedError).Once()
+		mockChatSession.On("TerminateSession", mock.Anything, sessionID, reason).Return(expectedError).Once()
 
 		// Execute
 		err := service.EndResearchSession(ctx.Request.Context(), sessionID)

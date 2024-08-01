@@ -3,6 +3,7 @@ package services_test
 import (
 	"context"
 	"nexus_scholar_go_backend/internal/models"
+	"nexus_scholar_go_backend/internal/services"
 
 	"github.com/google/generative-ai-go/genai"
 	"github.com/google/uuid"
@@ -158,8 +159,8 @@ func (m *MockChatSessionManager) UpdateSessionChatHistory(sessionID, chatType, c
 	return args.Error(0)
 }
 
-func (m *MockChatSessionManager) TerminateSession(ctx context.Context, sessionID string) error {
-	args := m.Called(ctx, sessionID)
+func (m *MockChatSessionManager) TerminateSession(ctx context.Context, sessionID string, reason services.TerminationReason) error {
+	args := m.Called(ctx, sessionID, reason)
 	return args.Error(0)
 }
 
