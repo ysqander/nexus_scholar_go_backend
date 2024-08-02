@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -144,11 +143,6 @@ func (css *ChatSessionService) TerminateSession(ctx context.Context, sessionID s
 	// Delete the cached content when terminating the session
 	if err := css.CacheManager.DeleteCache(ctx, sessionInfo.CachedContentName); err != nil {
 		log.Printf("Failed to delete cached content for session %s: %v", sessionID, err)
-	}
-
-	// Delete the chat from the database
-	if err := css.chatService.DeleteChatBySessionIDFromDB(sessionID); err != nil {
-		return fmt.Errorf("%w: %v", ErrDBDelete, err)
 	}
 
 	// Remove the session from the map

@@ -81,11 +81,6 @@ func (s *ResearchChatService) SendMessage(ctx context.Context, sessionID, messag
 		return nil, fmt.Errorf("failed to send message: %w", err)
 	}
 
-	// Save user message to history
-	if err := s.chatService.SaveMessageToDB(sessionID, "user", message); err != nil {
-		return nil, fmt.Errorf("failed to save user message: %w", err)
-	}
-
 	return responseIterator, nil
 }
 
