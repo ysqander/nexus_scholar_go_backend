@@ -1,2 +1,4 @@
 .env
 nexus-scholar-key.json
+
+internal/services/tests/testPdfFiles/*

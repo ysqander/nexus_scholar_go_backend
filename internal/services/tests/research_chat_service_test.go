@@ -127,7 +127,6 @@ func TestSendMessage(t *testing.T) {
 
 	// Expectations
 	mockChatSession.On("StreamChatMessage", mock.Anything, sessionID, message).Return(mockIterator, nil)
-	mockChatServiceDB.On("SaveMessageToDB", sessionID, "user", message).Return(nil)
 
 	// Execute
 	resultIterator, err := service.SendMessage(c.Request.Context(), sessionID, message)

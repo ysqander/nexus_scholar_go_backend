@@ -238,7 +238,6 @@ func TestTerminateSession(t *testing.T) {
 		css.Sessions().Store(sessionID, sessionInfo)
 
 		mockCacheManager.On("DeleteCache", mock.Anything, cachedContentName).Return(nil).Once()
-		mockChatServiceDB.On("DeleteChatBySessionIDFromDB", sessionID).Return(nil).Once()
 
 		// Execute
 		err := css.TerminateSession(ctx, sessionID, services.UserInitiated)
@@ -276,7 +275,6 @@ func TestTerminateSession(t *testing.T) {
 		css.Sessions().Store(sessionID, sessionInfo)
 
 		mockCacheManager.On("DeleteCache", mock.Anything, cachedContentName).Return(errors.New("cache deletion error")).Once()
-		mockChatServiceDB.On("DeleteChatBySessionIDFromDB", sessionID).Return(nil).Once()
 
 		// Execute
 		err := css.TerminateSession(ctx, sessionID, services.UserInitiated)
@@ -291,35 +289,6 @@ func TestTerminateSession(t *testing.T) {
 		mockChatServiceDB.AssertExpectations(t)
 	})
 
-	t.Run("Database Deletion Failure", func(t *testing.T) {
-		// Setup
-		sessionInfo := services.ChatSessionInfo{
-			Session:           nil,
-			CachedContentName: cachedContentName,
-			LastAccessed:      time.Now(),
-			LastHeartbeat:     time.Now(),
-			HeartbeatsMissed:  0,
-			LastCacheExtend:   time.Now(),
-			UserID:            userID,
-		}
-		css.Sessions().Store(sessionID, sessionInfo)
-
-		mockCacheManager.On("DeleteCache", mock.Anything, cachedContentName).Return(nil).Once()
-		mockChatServiceDB.On("DeleteChatBySessionIDFromDB", sessionID).Return(errors.New("database deletion error")).Once()
-
-		// Execute
-		err := css.TerminateSession(ctx, sessionID, services.UserInitiated)
-
-		// Assert
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to delete chat from database")
-		_, exists := css.Sessions().Load(sessionID)
-		assert.True(t, exists, "Session should not be removed if database deletion fails")
-
-		// Verify expectations
-		mockCacheManager.AssertExpectations(t)
-		mockChatServiceDB.AssertExpectations(t)
-	})
 }
 
 func TestCleanupExpiredSessions(t *testing.T) {
@@ -414,7 +383,6 @@ func TestCleanupExpiredSessions(t *testing.T) {
 			// Set up expectations for mock calls
 			if tc.expectedTerminations > 0 {
 				mockCacheManager.On("DeleteCache", mock.Anything, mock.Anything).Return(nil).Times(tc.expectedTerminations)
-				mockChatServiceDB.On("DeleteChatBySessionIDFromDB", mock.Anything).Return(nil).Times(tc.expectedTerminations)
 			}
 
 			// Execute

@@ -97,7 +97,7 @@ func (pl *PaperLoader) ProcessPaper(arxivID string) (map[string]interface{}, err
 			FormattedText:      formattedRef["text"].(string),
 			IsAvailableOnArxiv: formattedRef["is_available_on_arxiv"].(bool),
 		}
-		if err := CreateReference(&dbRef); err != nil {
+		if err := CreateOrUpdateReference(&dbRef); err != nil {
 			return nil, fmt.Errorf("failed to save reference to database: %v", err)
 		}
 	}
