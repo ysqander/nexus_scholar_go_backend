@@ -2,6 +2,7 @@ package services_test
 
 import (
 	"context"
+	"io"
 	"nexus_scholar_go_backend/internal/models"
 	"nexus_scholar_go_backend/internal/services"
 
@@ -144,9 +145,9 @@ type MockChatSessionManager struct {
 	mock.Mock
 }
 
-func (m *MockChatSessionManager) StartChatSession(ctx context.Context, userID uuid.UUID, cachedContentName string) (string, error) {
-	args := m.Called(ctx, userID, cachedContentName)
-	return args.String(0), args.Error(1)
+func (m *MockChatSessionManager) StartChatSession(ctx context.Context, userID uuid.UUID, cachedContentName string, sessionID string) error {
+	args := m.Called(ctx, userID, cachedContentName, sessionID)
+	return args.Error(0)
 }
 
 func (m *MockChatSessionManager) UpdateSessionHeartbeat(ctx context.Context, sessionID string) error {
@@ -167,4 +168,28 @@ func (m *MockChatSessionManager) TerminateSession(ctx context.Context, sessionID
 func (m *MockChatSessionManager) StreamChatMessage(ctx context.Context, sessionID string, message string) (*genai.GenerateContentResponseIterator, error) {
 	args := m.Called(ctx, sessionID, message)
 	return args.Get(0).(*genai.GenerateContentResponseIterator), args.Error(1)
+}
+
+type MockCloudStorageManager struct {
+	mock.Mock
+}
+
+func (m *MockCloudStorageManager) UploadFile(ctx context.Context, bucketName, objectName string, content io.Reader) error {
+	args := m.Called(ctx, bucketName, objectName, content)
+	return args.Error(0)
+}
+
+func (m *MockCloudStorageManager) DownloadFile(ctx context.Context, bucketName, objectName string) ([]byte, error) {
+	args := m.Called(ctx, bucketName, objectName)
+	return args.Get(0).([]byte), args.Error(1)
+}
+
+func (m *MockCloudStorageManager) DeleteFile(ctx context.Context, bucketName, objectName string) error {
+	args := m.Called(ctx, bucketName, objectName)
+	return args.Error(0)
+}
+
+func (m *MockCloudStorageManager) ListFiles(ctx context.Context, bucketName string) ([]string, error) {
+	args := m.Called(ctx, bucketName)
+	return args.Get(0).([]string), args.Error(1)
 }

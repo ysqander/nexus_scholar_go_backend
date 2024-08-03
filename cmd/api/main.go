@@ -55,6 +55,10 @@ func main() {
 	cacheExtendPeriod := 5 * time.Minute
 	heartbeatTimeout := 1 * time.Minute
 	sessionTimeout := 10 * time.Minute
+	gcsBucketName := os.Getenv("GCS_BUCKET_NAME")
+	if gcsBucketName == "" {
+		log.Fatal("GCS_BUCKET_NAME environment variable is not set")
+	}
 
 	// Initialize services
 	chatService := services.NewChatServiceDB(database.DB)
@@ -73,12 +77,20 @@ func main() {
 		heartbeatTimeout,
 		sessionTimeout,
 	)
+	// Initialize GCS service
+	gcsService, err := services.NewGCSService(ctx)
+	if err != nil {
+		log.Fatalf("Failed to create GCS service: %v", err)
+	}
+
 	researchChatService := services.NewResearchChatService(
 		contentAggregationService,
 		cacheManagementService,
 		chatSessionService,
 		chatService,
 		cacheExpirationTime,
+		gcsService,
+		gcsBucketName,
 	)
 
 	r := gin.Default()

@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"nexus_scholar_go_backend/internal/models"
@@ -17,7 +18,9 @@ type ResearchChatService struct {
 	cacheManagement    CacheManager
 	chatSession        ChatSessionManager
 	chatService        ChatServiceDB
+	cloudStorage       CloudStorageManager
 	cacheExpiration    time.Duration
+	bucketName         string
 }
 
 func NewResearchChatService(
@@ -26,6 +29,8 @@ func NewResearchChatService(
 	cs ChatSessionManager,
 	chat ChatServiceDB,
 	cacheExpiration time.Duration,
+	cloudStorage CloudStorageManager,
+	bucketName string,
 ) *ResearchChatService {
 	return &ResearchChatService{
 		contentAggregation: ca,
@@ -33,6 +38,8 @@ func NewResearchChatService(
 		chatSession:        cs,
 		chatService:        chat,
 		cacheExpiration:    cacheExpiration,
+		cloudStorage:       cloudStorage,
+		bucketName:         bucketName,
 	}
 }
 
@@ -46,32 +53,57 @@ func (s *ResearchChatService) StartResearchSession(c *gin.Context, arxivIDs []st
 		return "", "", fmt.Errorf("invalid user type in context")
 	}
 
-	// Step 1: Aggregate content
+	// Aggregate content
 	aggregatedContent, err := s.contentAggregation.AggregateDocuments(arxivIDs, userPDFs)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to aggregate documents: %w", err)
 	}
 
-	// Step 2: Create cache
+	// Save raw text cache to Google Cloud Storage
+	sessionID := uuid.New().String() // Generate a unique session ID
+	err = s.SaveRawTextCache(c.Request.Context(), sessionID, aggregatedContent)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to save raw text cache: %w", err)
+	}
+
+	// Create cache
 	cacheName, err := s.cacheManagement.CreateContentCache(c.Request.Context(), aggregatedContent)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to create content cache: %w", err)
 	}
 
-	// Step 3: Start chat session
-	sessionID, err := s.chatSession.StartChatSession(c.Request.Context(), userModel.ID, cacheName)
+	// Start chat session
+	err = s.chatSession.StartChatSession(c.Request.Context(), userModel.ID, cacheName, sessionID)
 	if err != nil {
 		// Clean up cache if session start fails
 		_ = s.cacheManagement.DeleteCache(c.Request.Context(), cacheName)
+
+		// cleanup the storage file
+		fileName := fmt.Sprintf("raw_cache_%s.txt", sessionID)
+		_ = s.cloudStorage.DeleteFile(c.Request.Context(), s.bucketName, fileName)
+
 		return "", "", fmt.Errorf("failed to start chat session: %w", err)
 	}
 
-	// Step 4: Save chat session to history
+	// Save chat session to history
 	if err := s.chatService.SaveChatToDB(userModel.ID, sessionID); err != nil {
 		return "", "", fmt.Errorf("failed to save chat to history: %w", err)
 	}
 
 	return sessionID, cacheName, nil
+}
+func (s *ResearchChatService) SaveRawTextCache(ctx context.Context, sessionID string, content string) error {
+	objectName := fmt.Sprintf("raw_cache_%s.txt", sessionID)
+	return s.cloudStorage.UploadFile(ctx, s.bucketName, objectName, strings.NewReader(content))
+}
+
+func (s *ResearchChatService) GetRawTextCache(ctx context.Context, sessionID string) (string, error) {
+	objectName := fmt.Sprintf("raw_cache_%s.txt", sessionID)
+	content, err := s.cloudStorage.DownloadFile(ctx, s.bucketName, objectName)
+	if err != nil {
+		return "", err
+	}
+	return string(content), nil
 }
 
 func (s *ResearchChatService) SendMessage(ctx context.Context, sessionID, message string) (*genai.GenerateContentResponseIterator, error) {

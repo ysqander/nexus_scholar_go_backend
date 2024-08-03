@@ -23,6 +23,7 @@ func TestStartResearchSession(t *testing.T) {
 	mockCacheManagement := new(MockCacheManager)
 	mockChatSession := new(MockChatSessionManager)
 	mockChatServiceDB := new(MockChatServiceDB)
+	mockCloudStorage := new(MockCloudStorageManager)
 
 	service := services.NewResearchChatService(
 		mockContentAggregation,
@@ -30,6 +31,8 @@ func TestStartResearchSession(t *testing.T) {
 		mockChatSession,
 		mockChatServiceDB,
 		10*time.Minute,
+		mockCloudStorage,
+		"test-bucket",
 	)
 
 	// Common test data
@@ -45,28 +48,30 @@ func TestStartResearchSession(t *testing.T) {
 
 	aggregatedContent := "Aggregated content"
 	cacheName := "cache123"
-	sessionID := "session456"
 
 	t.Run("Successful StartResearchSession", func(t *testing.T) {
 		// Expectations for success case
 		mockContentAggregation.On("AggregateDocuments", arxivIDs, userPDFs).Return(aggregatedContent, nil).Once()
+		mockCloudStorage.On("UploadFile", mock.Anything, "test-bucket", mock.AnythingOfType("string"), mock.AnythingOfType("*strings.Reader")).Return(nil).Once()
 		mockCacheManagement.On("CreateContentCache", mock.Anything, aggregatedContent).Return(cacheName, nil).Once()
-		mockChatSession.On("StartChatSession", mock.Anything, userID, cacheName).Return(sessionID, nil).Once()
-		mockChatServiceDB.On("SaveChatToDB", userID, sessionID).Return(nil).Once()
+		mockChatSession.On("StartChatSession", mock.Anything, userID, cacheName, mock.AnythingOfType("string")).Return(nil).Once()
+		mockChatServiceDB.On("SaveChatToDB", userID, mock.AnythingOfType("string")).Return(nil).Once()
 
 		// Execute
 		resultSessionID, resultCacheName, err := service.StartResearchSession(ctx, arxivIDs, userPDFs)
 
 		// Assert
 		assert.NoError(t, err)
-		assert.Equal(t, sessionID, resultSessionID)
+		assert.NotEmpty(t, resultSessionID)
 		assert.Equal(t, cacheName, resultCacheName)
 
 		// Verify expectations
 		mockContentAggregation.AssertExpectations(t)
+		mockCloudStorage.AssertExpectations(t)
 		mockCacheManagement.AssertExpectations(t)
 		mockChatSession.AssertExpectations(t)
 		mockChatServiceDB.AssertExpectations(t)
+
 	})
 
 	t.Run("Failed StartChatSession with Cache Cleanup", func(t *testing.T) {
@@ -75,12 +80,15 @@ func TestStartResearchSession(t *testing.T) {
 		mockCacheManagement.ExpectedCalls = nil
 		mockChatSession.ExpectedCalls = nil
 		mockChatServiceDB.ExpectedCalls = nil
+		mockCloudStorage.ExpectedCalls = nil
 
 		// Expectations for failure case
 		mockContentAggregation.On("AggregateDocuments", arxivIDs, userPDFs).Return(aggregatedContent, nil).Once()
+		mockCloudStorage.On("UploadFile", mock.Anything, "test-bucket", mock.AnythingOfType("string"), mock.AnythingOfType("*strings.Reader")).Return(nil).Once()
 		mockCacheManagement.On("CreateContentCache", mock.Anything, aggregatedContent).Return(cacheName, nil).Once()
-		mockChatSession.On("StartChatSession", mock.Anything, userID, cacheName).Return("", fmt.Errorf("failed to start chat session")).Once()
+		mockChatSession.On("StartChatSession", mock.Anything, userID, cacheName, mock.AnythingOfType("string")).Return(fmt.Errorf("failed to start chat session")).Once()
 		mockCacheManagement.On("DeleteCache", mock.Anything, cacheName).Return(nil).Once()
+		mockCloudStorage.On("DeleteFile", mock.Anything, "test-bucket", mock.AnythingOfType("string")).Return(nil).Once()
 
 		// Execute
 		resultSessionID, resultCacheName, err := service.StartResearchSession(ctx, arxivIDs, userPDFs)
@@ -93,6 +101,7 @@ func TestStartResearchSession(t *testing.T) {
 
 		// Verify expectations
 		mockContentAggregation.AssertExpectations(t)
+		mockCloudStorage.AssertExpectations(t)
 		mockCacheManagement.AssertExpectations(t)
 		mockChatSession.AssertExpectations(t)
 		mockChatServiceDB.AssertExpectations(t)
@@ -104,6 +113,7 @@ func TestSendMessage(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	mockChatSession := new(MockChatSessionManager)
 	mockChatServiceDB := new(MockChatServiceDB)
+	mockCloudStorage := new(MockCloudStorageManager)
 
 	service := services.NewResearchChatService(
 		nil, // MockContentAggregator (not needed for this test)
@@ -111,6 +121,8 @@ func TestSendMessage(t *testing.T) {
 		mockChatSession,
 		mockChatServiceDB,
 		10*time.Minute,
+		mockCloudStorage,
+		"test-bucket",
 	)
 
 	// Test data
@@ -143,12 +155,16 @@ func TestSendMessage(t *testing.T) {
 func TestSaveAIResponse(t *testing.T) {
 	// Setup
 	mockChatServiceDB := new(MockChatServiceDB)
+	mockCloudStorage := new(MockCloudStorageManager)
+
 	service := services.NewResearchChatService(
 		nil, // MockContentAggregator (not needed for this test)
 		nil, // MockCacheManager (not needed for this test)
 		nil, // MockChatSessionManager (not needed for this test)
 		mockChatServiceDB,
 		10*time.Minute,
+		mockCloudStorage,
+		"test-bucket",
 	)
 
 	// Test data
@@ -196,6 +212,7 @@ func TestEndResearchSession(t *testing.T) {
 	mockChatSession := new(MockChatSessionManager)
 	mockChatServiceDB := new(MockChatServiceDB)
 	mockCacheManager := new(MockCacheManager)
+	mockCloudStorage := new(MockCloudStorageManager)
 
 	service := services.NewResearchChatService(
 		nil, // MockContentAggregator (not needed for this test)
@@ -203,6 +220,8 @@ func TestEndResearchSession(t *testing.T) {
 		mockChatSession,
 		mockChatServiceDB,
 		10*time.Minute,
+		mockCloudStorage,
+		"test-bucket",
 	)
 
 	// Test data

@@ -33,6 +33,7 @@ func TestStartChatSession(t *testing.T) {
 	userID := uuid.New()
 	cachedContentName := "test-cached-content"
 	mockModel := &genai.GenerativeModel{}
+	sessionID := uuid.New().String()
 
 	t.Run("Successful StartChatSession", func(t *testing.T) {
 		// Expectations
@@ -40,7 +41,7 @@ func TestStartChatSession(t *testing.T) {
 		mockChatServiceDB.On("SaveChatToDB", userID, mock.AnythingOfType("string")).Return(nil).Once()
 
 		// Execute
-		sessionID, err := chatSessionService.StartChatSession(ctx, userID, cachedContentName)
+		err := chatSessionService.StartChatSession(ctx, userID, cachedContentName, sessionID)
 
 		// Assert
 		assert.NoError(t, err)
@@ -63,11 +64,10 @@ func TestStartChatSession(t *testing.T) {
 		mockCacheManager.On("GetGenerativeModel", mock.Anything, cachedContentName).Return(nilModel, expectedError).Once()
 
 		// Execute
-		sessionID, err := chatSessionService.StartChatSession(ctx, userID, cachedContentName)
+		err := chatSessionService.StartChatSession(ctx, userID, cachedContentName, sessionID)
 
 		// Assert
 		assert.Error(t, err)
-		assert.Empty(t, sessionID)
 		assert.Contains(t, err.Error(), expectedError.Error())
 
 		// Verify expectations
@@ -85,11 +85,10 @@ func TestStartChatSession(t *testing.T) {
 		mockChatServiceDB.On("SaveChatToDB", userID, mock.AnythingOfType("string")).Return(expectedError).Once()
 
 		// Execute
-		sessionID, err := chatSessionService.StartChatSession(ctx, userID, cachedContentName)
+		err := chatSessionService.StartChatSession(ctx, userID, cachedContentName, sessionID)
 
 		// Assert
 		assert.Error(t, err)
-		assert.Empty(t, sessionID)
 		assert.Contains(t, err.Error(), expectedError.Error())
 
 		// Verify expectations

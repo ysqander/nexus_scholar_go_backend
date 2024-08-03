@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"io"
 
 	"github.com/google/generative-ai-go/genai"
 	"github.com/google/uuid"
@@ -19,8 +20,15 @@ type CacheManager interface {
 }
 
 type ChatSessionManager interface {
-	StartChatSession(ctx context.Context, userID uuid.UUID, cachedContentName string) (string, error)
+	StartChatSession(ctx context.Context, userID uuid.UUID, cachedContentName string, sessionID string) error
 	UpdateSessionHeartbeat(ctx context.Context, sessionID string) error
 	TerminateSession(ctx context.Context, sessionID string, reason TerminationReason) error
 	StreamChatMessage(ctx context.Context, sessionID string, message string) (*genai.GenerateContentResponseIterator, error)
+}
+
+type CloudStorageManager interface {
+	UploadFile(ctx context.Context, bucketName, objectName string, content io.Reader) error
+	DownloadFile(ctx context.Context, bucketName, objectName string) ([]byte, error)
+	DeleteFile(ctx context.Context, bucketName, objectName string) error
+	ListFiles(ctx context.Context, bucketName string) ([]string, error)
 }

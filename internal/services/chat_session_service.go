@@ -56,18 +56,17 @@ func NewChatSessionService(
 	return css
 }
 
-func (css *ChatSessionService) StartChatSession(ctx context.Context, userID uuid.UUID, cachedContentName string) (string, error) {
+func (css *ChatSessionService) StartChatSession(ctx context.Context, userID uuid.UUID, cachedContentName string, sessionID string) error {
 	// Get the GenerativeModel using the CacheManagementService
 	model, err := css.CacheManager.GetGenerativeModel(ctx, cachedContentName)
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	session := model.StartChat()
-	sessionID := uuid.New().String()
 
 	if err := css.chatService.SaveChatToDB(userID, sessionID); err != nil {
-		return "", err
+		return err
 	}
 
 	css.sessionsMutex.Lock()
@@ -83,7 +82,7 @@ func (css *ChatSessionService) StartChatSession(ctx context.Context, userID uuid
 		UserID:            userID,
 	})
 
-	return sessionID, nil
+	return nil
 }
 
 func (css *ChatSessionService) UpdateSessionHeartbeat(ctx context.Context, sessionID string) error {
