@@ -121,8 +121,8 @@ type MockCacheManager struct {
 	mock.Mock
 }
 
-func (m *MockCacheManager) CreateContentCache(ctx context.Context, aggregatedContent string) (string, error) {
-	args := m.Called(ctx, aggregatedContent)
+func (m *MockCacheManager) CreateContentCache(ctx context.Context, userID uuid.UUID, sessionID string, priceTier, aggregatedContent string) (string, error) {
+	args := m.Called(ctx, userID, sessionID, priceTier, aggregatedContent)
 	return args.String(0), args.Error(1)
 }
 
@@ -131,8 +131,8 @@ func (m *MockCacheManager) ExtendCacheLifetime(ctx context.Context, cachedConten
 	return args.Error(0)
 }
 
-func (m *MockCacheManager) DeleteCache(ctx context.Context, cachedContentName string) error {
-	args := m.Called(ctx, cachedContentName)
+func (m *MockCacheManager) DeleteCache(ctx context.Context, userID uuid.UUID, sessionID string, cachedContentName string) error {
+	args := m.Called(ctx, userID, sessionID, cachedContentName)
 	return args.Error(0)
 }
 

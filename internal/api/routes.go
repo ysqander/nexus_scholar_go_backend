@@ -1,12 +1,14 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"nexus_scholar_go_backend/internal/auth"
@@ -15,10 +17,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/generative-ai-go/genai"
+	"github.com/google/uuid"
+	"github.com/stripe/stripe-go/v79"
 	"google.golang.org/api/iterator"
+	"gorm.io/gorm"
 )
 
-func SetupRoutes(r *gin.Engine, researchChatService *services.ResearchChatService, chatService services.ChatServiceDB) {
+func SetupRoutes(r *gin.Engine, researchChatService *services.ResearchChatService, chatService services.ChatServiceDB, stripeService *services.StripeService, cacheManagementService *services.CacheManagementService) {
 	api := r.Group("/api")
 	{
 		api.GET("/papers/:arxiv_id", auth.AuthMiddleware(), getPaper)
@@ -29,6 +34,8 @@ func SetupRoutes(r *gin.Engine, researchChatService *services.ResearchChatServic
 		api.POST("/chat/message", auth.AuthMiddleware(), sendChatMessageHandler(researchChatService))
 		api.POST("/chat/terminate", auth.AuthMiddleware(), terminateChatSessionHandler(researchChatService))
 		api.GET("/chat/history", auth.AuthMiddleware(), getChatHistoryHandler(researchChatService))
+		api.POST("/purchase-cache-volume", auth.AuthMiddleware(), purchaseCacheVolume(stripeService, cacheManagementService))
+		api.POST("/stripe/webhook", stripeWebhookHandler(stripeService, cacheManagementService))
 	}
 }
 
@@ -68,6 +75,7 @@ func privateRoute(c *gin.Context) {
 
 func createResearchSessionHandler(researchChatService *services.ResearchChatService) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		priceTier := c.PostForm("price_tier")
 		// Get arXiv IDs
 		arxivIDsJSON := c.PostForm("arxiv_ids")
 		var arxivIDs []string
@@ -102,7 +110,7 @@ func createResearchSessionHandler(researchChatService *services.ResearchChatServ
 			pdfPaths = append(pdfPaths, filename)
 		}
 
-		sessionID, cachedContentName, err := researchChatService.StartResearchSession(c, arxivIDs, pdfPaths)
+		sessionID, cachedContentName, err := researchChatService.StartResearchSession(c, arxivIDs, pdfPaths, priceTier)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -240,4 +248,105 @@ func getRawCacheHandler(researchChatService *services.ResearchChatService) gin.H
 
 		c.JSON(http.StatusOK, gin.H{"content": content})
 	}
+}
+
+func purchaseCacheVolume(stripeService *services.StripeService, cacheManagementService *services.CacheManagementService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var request struct {
+			PriceTier  string  `json:"price_tier" binding:"required"`
+			TokenHours float64 `json:"token_hours" binding:"required"`
+		}
+
+		if err := c.ShouldBindJSON(&request); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		user, _ := c.Get("user")
+		userModel := user.(*models.User)
+
+		// Check if the user has an existing CacheUsage record
+		_, err := cacheManagementService.GetCacheUsage(c.Request.Context(), userModel.ID)
+		if err != nil && err != gorm.ErrRecordNotFound {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check existing cache usage"})
+			return
+		}
+
+		// Calculate amount based on your pricing strategy
+		cachePricePerMillionTokenHour := int64(100) // $1.00 per million token-hour, in cents
+		amount := int64(request.TokenHours * 1_000_000 * float64(cachePricePerMillionTokenHour))
+
+		session, err := stripeService.CreateCheckoutSession(userModel.ID.String(), request.TokenHours, request.PriceTier, amount)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create checkout session"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"session_id": session.ID})
+	}
+}
+
+func stripeWebhookHandler(stripeService *services.StripeService, cacheManagementService *services.CacheManagementService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		payload, err := io.ReadAll(c.Request.Body)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to read request body"})
+			return
+		}
+
+		signatureHeader := c.GetHeader("Stripe-Signature")
+		event, err := stripeService.HandleWebhook(payload, signatureHeader)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to verify webhook signature"})
+			return
+		}
+
+		switch event.Type {
+		case "checkout.session.completed":
+			var session stripe.CheckoutSession
+			err := json.Unmarshal(event.Data.Raw, &session)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse checkout session"})
+				return
+			}
+
+			// Process the successful payment
+			err = processSuccessfulPayment(session, cacheManagementService)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process payment"})
+				return
+			}
+
+		// Handle other event types as needed
+
+		default:
+			c.JSON(http.StatusOK, gin.H{"received": true})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"received": true})
+	}
+}
+
+func processSuccessfulPayment(session stripe.CheckoutSession, cacheManagementService *services.CacheManagementService) error {
+	userID, err := uuid.Parse(session.ClientReferenceID)
+	if err != nil {
+		return fmt.Errorf("invalid user ID: %v", err)
+	}
+
+	// Retrieve the purchased token hours from the session metadata
+	tokenHours, err := strconv.ParseFloat(session.Metadata["token_hours"], 64)
+	if err != nil {
+		return fmt.Errorf("invalid token hours: %v", err)
+	}
+
+	priceTier := session.Metadata["price_tier"]
+
+	// Update the user's allowed cache usage
+	err = cacheManagementService.UpdateAllowedCacheUsage(context.Background(), userID, priceTier, tokenHours)
+	if err != nil {
+		return fmt.Errorf("failed to update allowed cache usage: %v", err)
+	}
+
+	return nil
 }

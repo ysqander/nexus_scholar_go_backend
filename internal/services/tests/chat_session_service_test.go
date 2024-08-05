@@ -236,7 +236,7 @@ func TestTerminateSession(t *testing.T) {
 		}
 		css.Sessions().Store(sessionID, sessionInfo)
 
-		mockCacheManager.On("DeleteCache", mock.Anything, cachedContentName).Return(nil).Once()
+		mockCacheManager.On("DeleteCache", mock.Anything, userID, sessionID, cachedContentName).Return(nil).Once()
 
 		// Execute
 		err := css.TerminateSession(ctx, sessionID, services.UserInitiated)
@@ -273,7 +273,7 @@ func TestTerminateSession(t *testing.T) {
 		}
 		css.Sessions().Store(sessionID, sessionInfo)
 
-		mockCacheManager.On("DeleteCache", mock.Anything, cachedContentName).Return(errors.New("cache deletion error")).Once()
+		mockCacheManager.On("DeleteCache", mock.Anything, userID, sessionID, cachedContentName).Return(errors.New("cache deletion error")).Once()
 
 		// Execute
 		err := css.TerminateSession(ctx, sessionID, services.UserInitiated)
@@ -381,7 +381,7 @@ func TestCleanupExpiredSessions(t *testing.T) {
 
 			// Set up expectations for mock calls
 			if tc.expectedTerminations > 0 {
-				mockCacheManager.On("DeleteCache", mock.Anything, mock.Anything).Return(nil).Times(tc.expectedTerminations)
+				mockCacheManager.On("DeleteCache", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Times(tc.expectedTerminations)
 			}
 
 			// Execute

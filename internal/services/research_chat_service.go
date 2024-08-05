@@ -43,7 +43,7 @@ func NewResearchChatService(
 	}
 }
 
-func (s *ResearchChatService) StartResearchSession(c *gin.Context, arxivIDs []string, userPDFs []string) (string, string, error) {
+func (s *ResearchChatService) StartResearchSession(c *gin.Context, arxivIDs []string, userPDFs []string, priceTier string) (string, string, error) {
 	user, exists := c.Get("user")
 	if !exists {
 		return "", "", fmt.Errorf("user not found in context")
@@ -67,7 +67,7 @@ func (s *ResearchChatService) StartResearchSession(c *gin.Context, arxivIDs []st
 	}
 
 	// Create cache
-	cacheName, err := s.cacheManagement.CreateContentCache(c.Request.Context(), aggregatedContent)
+	cacheName, err := s.cacheManagement.CreateContentCache(c.Request.Context(), userModel.ID, sessionID, priceTier, aggregatedContent)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to create content cache: %w", err)
 	}
@@ -76,7 +76,7 @@ func (s *ResearchChatService) StartResearchSession(c *gin.Context, arxivIDs []st
 	err = s.chatSession.StartChatSession(c.Request.Context(), userModel.ID, cacheName, sessionID)
 	if err != nil {
 		// Clean up cache if session start fails
-		_ = s.cacheManagement.DeleteCache(c.Request.Context(), cacheName)
+		_ = s.cacheManagement.DeleteCache(c.Request.Context(), userModel.ID, sessionID, cacheName)
 
 		// cleanup the storage file
 		fileName := fmt.Sprintf("raw_cache_%s.txt", sessionID)

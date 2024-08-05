@@ -140,7 +140,7 @@ func (css *ChatSessionService) TerminateSession(ctx context.Context, sessionID s
 	sessionInfo := sessionInterface.(ChatSessionInfo)
 
 	// Delete the cached content when terminating the session
-	if err := css.CacheManager.DeleteCache(ctx, sessionInfo.CachedContentName); err != nil {
+	if err := css.CacheManager.DeleteCache(ctx, sessionInfo.UserID, sessionID, sessionInfo.CachedContentName); err != nil {
 		log.Printf("Failed to delete cached content for session %s: %v", sessionID, err)
 	}
 

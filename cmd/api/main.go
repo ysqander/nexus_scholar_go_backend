@@ -41,7 +41,11 @@ func main() {
 	}
 
 	database.InitDB()
-	// Initialize ChatService
+
+	// Initialize external services clients
+	stripePublicKey := os.Getenv("STRIPE_PUBLIC_KEY")
+	stripeSecretKey := os.Getenv("STRIPE_SECRET_KEY")
+	stripeService := services.NewStripeService(stripePublicKey, stripeSecretKey)
 
 	genaiClient, err := genai.NewClient(ctx, option.WithAPIKey(genai_apiKey))
 	if err != nil {
@@ -60,19 +64,21 @@ func main() {
 		log.Fatal("GCS_BUCKET_NAME environment variable is not set")
 	}
 
-	// Initialize services
-	chatService := services.NewChatServiceDB(database.DB)
+	// Initialize Internal services
+	chatServiceDB := services.NewChatServiceDB(database.DB)
+	cacheServiceDB := services.NewCacheServiceDB(database.DB)
 	contentAggregationService := services.NewContentAggregationService(arxivBaseURL)
 	cacheManagementService := services.NewCacheManagementService(
 		genaiClient,
 		contentAggregationService,
 		cacheExpirationTime,
 		cacheExtendPeriod,
+		cacheServiceDB,
 	)
 
 	chatSessionService := services.NewChatSessionService(
 		genaiClient,
-		chatService,
+		chatServiceDB,
 		cacheManagementService,
 		heartbeatTimeout,
 		sessionTimeout,
@@ -87,7 +93,7 @@ func main() {
 		contentAggregationService,
 		cacheManagementService,
 		chatSessionService,
-		chatService,
+		chatServiceDB,
 		cacheExpirationTime,
 		gcsService,
 		gcsBucketName,
@@ -122,7 +128,7 @@ func main() {
 	// Create WebSocket handler
 	wsHandler := wsocket.NewHandler(researchChatService, upgrader)
 
-	api.SetupRoutes(r, researchChatService, chatService)
+	api.SetupRoutes(r, researchChatService, chatServiceDB, stripeService, cacheManagementService)
 	auth.SetupRoutes(r)
 
 	// Add WebSocket route

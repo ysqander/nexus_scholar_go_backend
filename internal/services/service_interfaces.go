@@ -13,9 +13,9 @@ type ContentAggregator interface {
 }
 
 type CacheManager interface {
-	CreateContentCache(ctx context.Context, aggregatedContent string) (string, error)
+	CreateContentCache(ctx context.Context, userID uuid.UUID, sessionID string, priceTier, aggregatedContent string) (string, error)
 	ExtendCacheLifetime(ctx context.Context, cachedContentName string) error
-	DeleteCache(ctx context.Context, cachedContentName string) error
+	DeleteCache(ctx context.Context, userID uuid.UUID, sessionID string, cachedContentName string) error
 	GetGenerativeModel(ctx context.Context, cachedContentName string) (*genai.GenerativeModel, error)
 }
 

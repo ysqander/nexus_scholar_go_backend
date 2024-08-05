@@ -48,17 +48,18 @@ func TestStartResearchSession(t *testing.T) {
 
 	aggregatedContent := "Aggregated content"
 	cacheName := "cache123"
+	priceTier := "Base"
 
 	t.Run("Successful StartResearchSession", func(t *testing.T) {
 		// Expectations for success case
 		mockContentAggregation.On("AggregateDocuments", arxivIDs, userPDFs).Return(aggregatedContent, nil).Once()
 		mockCloudStorage.On("UploadFile", mock.Anything, "test-bucket", mock.AnythingOfType("string"), mock.AnythingOfType("*strings.Reader")).Return(nil).Once()
-		mockCacheManagement.On("CreateContentCache", mock.Anything, aggregatedContent).Return(cacheName, nil).Once()
+		mockCacheManagement.On("CreateContentCache", mock.Anything, userID, mock.AnythingOfType("string"), priceTier, aggregatedContent).Return(cacheName, nil).Once()
 		mockChatSession.On("StartChatSession", mock.Anything, userID, cacheName, mock.AnythingOfType("string")).Return(nil).Once()
 		mockChatServiceDB.On("SaveChatToDB", userID, mock.AnythingOfType("string")).Return(nil).Once()
 
 		// Execute
-		resultSessionID, resultCacheName, err := service.StartResearchSession(ctx, arxivIDs, userPDFs)
+		resultSessionID, resultCacheName, err := service.StartResearchSession(ctx, arxivIDs, userPDFs, priceTier)
 
 		// Assert
 		assert.NoError(t, err)
@@ -85,13 +86,13 @@ func TestStartResearchSession(t *testing.T) {
 		// Expectations for failure case
 		mockContentAggregation.On("AggregateDocuments", arxivIDs, userPDFs).Return(aggregatedContent, nil).Once()
 		mockCloudStorage.On("UploadFile", mock.Anything, "test-bucket", mock.AnythingOfType("string"), mock.AnythingOfType("*strings.Reader")).Return(nil).Once()
-		mockCacheManagement.On("CreateContentCache", mock.Anything, aggregatedContent).Return(cacheName, nil).Once()
+		mockCacheManagement.On("CreateContentCache", mock.Anything, userID, mock.AnythingOfType("string"), priceTier, aggregatedContent).Return(cacheName, nil).Once()
 		mockChatSession.On("StartChatSession", mock.Anything, userID, cacheName, mock.AnythingOfType("string")).Return(fmt.Errorf("failed to start chat session")).Once()
-		mockCacheManagement.On("DeleteCache", mock.Anything, cacheName).Return(nil).Once()
+		mockCacheManagement.On("DeleteCache", mock.Anything, mock.Anything, mock.AnythingOfType("string"), cacheName).Return(nil).Once()
 		mockCloudStorage.On("DeleteFile", mock.Anything, "test-bucket", mock.AnythingOfType("string")).Return(nil).Once()
 
 		// Execute
-		resultSessionID, resultCacheName, err := service.StartResearchSession(ctx, arxivIDs, userPDFs)
+		resultSessionID, resultCacheName, err := service.StartResearchSession(ctx, arxivIDs, userPDFs, priceTier)
 
 		// Assert
 		assert.Error(t, err)
