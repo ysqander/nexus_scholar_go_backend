@@ -25,6 +25,7 @@ func SetupRoutes(r *gin.Engine, researchChatService *services.ResearchChatServic
 		api.GET("/papers/:arxiv_id/title", auth.AuthMiddleware(), getPaperTitle)
 		api.GET("/private", auth.AuthMiddleware(), privateRoute)
 		api.POST("/create-research-session", auth.AuthMiddleware(), createResearchSessionHandler(researchChatService))
+		api.GET("/raw-cache", auth.AuthMiddleware(), getRawCacheHandler(researchChatService))
 		api.POST("/chat/message", auth.AuthMiddleware(), sendChatMessageHandler(researchChatService))
 		api.POST("/chat/terminate", auth.AuthMiddleware(), terminateChatSessionHandler(researchChatService))
 		api.GET("/chat/history", auth.AuthMiddleware(), getChatHistoryHandler(researchChatService))
@@ -220,5 +221,23 @@ func getChatHistoryHandler(researchChatService *services.ResearchChatService) gi
 		}
 
 		c.JSON(http.StatusOK, gin.H{"chat_history": chatHistory})
+	}
+}
+
+func getRawCacheHandler(researchChatService *services.ResearchChatService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		sessionID := c.Query("session_id")
+		if sessionID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "session_id is required"})
+			return
+		}
+
+		content, err := researchChatService.GetRawTextCache(c.Request.Context(), sessionID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to get raw cache: %v", err)})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"content": content})
 	}
 }
