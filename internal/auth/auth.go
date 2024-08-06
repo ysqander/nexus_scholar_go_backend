@@ -60,7 +60,7 @@ func AuthMiddleware() gin.HandlerFunc {
 		nickname, _ := claims["nickname"].(string)
 
 		// Create or update user in database
-		user, err := services.CreateOrUpdateUser(auth0ID, email, name, nickname)
+		user, err := services.CreateOrUpdateUser(c.Request.Context(), auth0ID, email, name, nickname)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process user information"})
 			c.Abort()

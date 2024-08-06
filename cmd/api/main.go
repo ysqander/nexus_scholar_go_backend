@@ -76,6 +76,8 @@ func main() {
 		cacheServiceDB,
 	)
 
+	services.InitUserService(database.DB, cacheManagementService)
+
 	chatSessionService := services.NewChatSessionService(
 		genaiClient,
 		chatServiceDB,

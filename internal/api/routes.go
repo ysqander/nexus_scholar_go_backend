@@ -34,6 +34,7 @@ func SetupRoutes(r *gin.Engine, researchChatService *services.ResearchChatServic
 		api.POST("/chat/terminate", auth.AuthMiddleware(), terminateChatSessionHandler(researchChatService))
 		api.GET("/chat/history", auth.AuthMiddleware(), getChatHistoryHandler(researchChatService))
 		api.POST("/purchase-cache-volume", auth.AuthMiddleware(), purchaseCacheVolume(stripeService))
+		api.GET("/cache-usage", auth.AuthMiddleware(), getCacheUsageHandler(cacheManagementService))
 		api.POST("/stripe/webhook", stripeWebhookHandler(stripeService, cacheManagementService))
 		api.POST("/stripe/webhook_clitest", stripeWebhookHandler_clitest(stripeService, cacheManagementService))
 	}
@@ -76,6 +77,11 @@ func privateRoute(c *gin.Context) {
 func createResearchSessionHandler(researchChatService *services.ResearchChatService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		priceTier := c.PostForm("price_tier")
+		if priceTier != "base" && priceTier != "pro" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid price_tier. Must be 'base' or 'pro'."})
+			return
+		}
+
 		// Get arXiv IDs
 		arxivIDsJSON := c.PostForm("arxiv_ids")
 		var arxivIDs []string
@@ -395,5 +401,32 @@ func stripeWebhookHandler_clitest(stripeService *services.StripeService, cacheMa
 		}
 
 		c.JSON(http.StatusOK, gin.H{"received": true})
+	}
+}
+
+func getCacheUsageHandler(cacheManagementService *services.CacheManagementService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user, exists := c.Get("user")
+		if !exists {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found in context"})
+			return
+		}
+
+		userModel, ok := user.(*models.User)
+		if !ok {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to cast user to *models.User"})
+			return
+		}
+
+		baseTokens, proTokens, err := cacheManagementService.GetNetTokensByTier(c.Request.Context(), userModel.ID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to get net tokens: %v", err)})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"base_net_tokens": baseTokens,
+			"pro_net_tokens":  proTokens,
+		})
 	}
 }

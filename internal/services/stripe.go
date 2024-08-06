@@ -38,7 +38,7 @@ func (s *StripeService) CreateCheckoutSession(userID string, priceID string, tok
 			},
 		},
 		Mode:              stripe.String(string(stripe.CheckoutSessionModePayment)),
-		SuccessURL:        stripe.String(fmt.Sprintf("%s/success?session_id={CHECKOUT_SESSION_ID}", frontendURL)),
+		SuccessURL:        stripe.String(fmt.Sprintf("%s/stripesuccess?session_id={CHECKOUT_SESSION_ID}", frontendURL)),
 		CancelURL:         stripe.String(fmt.Sprintf("%s/cancel", frontendURL)),
 		ClientReferenceID: stripe.String(userID),
 		Metadata: map[string]string{

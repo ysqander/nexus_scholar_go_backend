@@ -64,8 +64,14 @@ func NewCacheManagementService(
 }
 
 func (cms *CacheManagementService) CreateContentCache(ctx context.Context, userID uuid.UUID, sessionID string, priceTier, aggregatedContent string) (string, error) {
+	var modelName string
+	if priceTier == "pro" {
+		modelName = "gemini-1.5-pro-001"
+	} else {
+		modelName = "gemini-1.5-flash-001"
+	}
 	cc := &genai.CachedContent{
-		Model: "gemini-1.5-flash-001",
+		Model: modelName,
 		Expiration: genai.ExpireTimeOrTTL{
 			TTL: cms.expirationTime,
 		},
@@ -218,4 +224,27 @@ func (cms *CacheManagementService) LogCacheUsage(ctx context.Context, userID uui
 	modelUsage.TokensUsed += tokensUsed
 
 	return cms.cacheServiceDB.UpdateCacheUsageDB(usage)
+}
+
+func (cms *CacheManagementService) GetNetTokensByTier(ctx context.Context, userID uuid.UUID) (float64, float64, error) {
+	usage, err := cms.cacheServiceDB.GetCacheUsageDB(userID)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			// If no usage record exists, return 0 for both tiers
+			return 0, 0, nil
+		}
+		return 0, 0, fmt.Errorf("failed to get cache usage: %v", err)
+	}
+
+	var baseNetTokens, proNetTokens float64
+	for _, modelUsage := range usage.ModelUsages {
+		netTokens := modelUsage.TokensBought - modelUsage.TokensUsed
+		if modelUsage.PriceTier == "base" {
+			baseNetTokens += netTokens
+		} else if modelUsage.PriceTier == "pro" {
+			proNetTokens += netTokens
+		}
+	}
+
+	return baseNetTokens, proNetTokens, nil
 }
