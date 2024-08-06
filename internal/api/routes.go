@@ -22,19 +22,19 @@ import (
 	"google.golang.org/api/iterator"
 )
 
-func SetupRoutes(r *gin.Engine, researchChatService *services.ResearchChatService, chatService services.ChatServiceDB, stripeService *services.StripeService, cacheManagementService *services.CacheManagementService) {
+func SetupRoutes(r *gin.Engine, researchChatService *services.ResearchChatService, chatService services.ChatServiceDB, stripeService *services.StripeService, cacheManagementService *services.CacheManagementService, userService *services.UserService) {
 	api := r.Group("/api")
 	{
-		api.GET("/papers/:arxiv_id", auth.AuthMiddleware(), getPaper)
-		api.GET("/papers/:arxiv_id/title", auth.AuthMiddleware(), getPaperTitle)
-		api.GET("/private", auth.AuthMiddleware(), privateRoute)
-		api.POST("/create-research-session", auth.AuthMiddleware(), createResearchSessionHandler(researchChatService))
-		api.GET("/raw-cache", auth.AuthMiddleware(), getRawCacheHandler(researchChatService))
-		api.POST("/chat/message", auth.AuthMiddleware(), sendChatMessageHandler(researchChatService))
-		api.POST("/chat/terminate", auth.AuthMiddleware(), terminateChatSessionHandler(researchChatService))
-		api.GET("/chat/history", auth.AuthMiddleware(), getChatHistoryHandler(researchChatService))
-		api.POST("/purchase-cache-volume", auth.AuthMiddleware(), purchaseCacheVolume(stripeService))
-		api.GET("/cache-usage", auth.AuthMiddleware(), getCacheUsageHandler(cacheManagementService))
+		api.GET("/papers/:arxiv_id", auth.AuthMiddleware(userService), getPaper)
+		api.GET("/papers/:arxiv_id/title", auth.AuthMiddleware(userService), getPaperTitle)
+		api.GET("/private", auth.AuthMiddleware(userService), privateRoute)
+		api.POST("/create-research-session", auth.AuthMiddleware(userService), createResearchSessionHandler(researchChatService))
+		api.GET("/raw-cache", auth.AuthMiddleware(userService), getRawCacheHandler(researchChatService))
+		api.POST("/chat/message", auth.AuthMiddleware(userService), sendChatMessageHandler(researchChatService))
+		api.POST("/chat/terminate", auth.AuthMiddleware(userService), terminateChatSessionHandler(researchChatService))
+		api.GET("/chat/history", auth.AuthMiddleware(userService), getChatHistoryHandler(researchChatService))
+		api.POST("/purchase-cache-volume", auth.AuthMiddleware(userService), purchaseCacheVolume(stripeService))
+		api.GET("/cache-usage", auth.AuthMiddleware(userService), getCacheUsageHandler(cacheManagementService))
 		api.POST("/stripe/webhook", stripeWebhookHandler(stripeService, cacheManagementService))
 		api.POST("/stripe/webhook_clitest", stripeWebhookHandler_clitest(stripeService, cacheManagementService))
 	}

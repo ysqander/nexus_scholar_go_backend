@@ -76,7 +76,7 @@ func main() {
 		cacheServiceDB,
 	)
 
-	services.InitUserService(database.DB, cacheManagementService)
+	userService := services.NewUserService(database.DB, cacheManagementService)
 
 	chatSessionService := services.NewChatSessionService(
 		genaiClient,
@@ -130,11 +130,11 @@ func main() {
 	// Create WebSocket handler
 	wsHandler := wsocket.NewHandler(researchChatService, upgrader)
 
-	api.SetupRoutes(r, researchChatService, chatServiceDB, stripeService, cacheManagementService)
-	auth.SetupRoutes(r)
+	api.SetupRoutes(r, researchChatService, chatServiceDB, stripeService, cacheManagementService, userService)
+	auth.SetupRoutes(r, userService)
 
 	// Add WebSocket route
-	r.GET("/ws", auth.AuthMiddleware(), func(c *gin.Context) {
+	r.GET("/ws", auth.AuthMiddleware(userService), func(c *gin.Context) {
 		user, _ := c.Get("user")
 		wsHandler.HandleWebSocket(c.Writer, c.Request, user)
 	})

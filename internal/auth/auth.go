@@ -11,41 +11,34 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt"
-	"github.com/gorilla/websocket"
 )
 
-func SetupRoutes(r *gin.Engine) {
+func SetupRoutes(r *gin.Engine, userService *services.UserService) {
 	auth := r.Group("/auth")
 	{
-		auth.GET("/user", AuthMiddleware(), getUser)
+		auth.GET("/user", AuthMiddleware(userService), getUser)
 	}
 }
 
-func AuthMiddleware() gin.HandlerFunc {
+func AuthMiddleware(userService *services.UserService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var token string
-
-		// Check if it's a WebSocket upgrade request
-		if websocket.IsWebSocketUpgrade(c.Request) {
-			// For WebSocket, get the token from query parameters
-			token = c.Query("token")
-		} else {
-			// For regular HTTP requests, get the token from the Authorization header
-			authHeader := c.GetHeader("Authorization")
-			if authHeader == "" {
-				c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header is required"})
-				c.Abort()
-				return
-			}
-			bearerToken := strings.Split(authHeader, " ")
-			if len(bearerToken) != 2 {
-				c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid authorization header"})
-				c.Abort()
-				return
-			}
-			token = bearerToken[1]
+		// Extract token from Authorization header
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header is required"})
+			c.Abort()
+			return
 		}
+		bearerToken := strings.Split(authHeader, " ")
+		if len(bearerToken) != 2 {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid authorization header"})
+			c.Abort()
+			return
+		}
+		token = bearerToken[1]
 
+		// Verify the token
 		claims, err := verifyToken(token)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
@@ -59,8 +52,8 @@ func AuthMiddleware() gin.HandlerFunc {
 		name, _ := claims["name"].(string)
 		nickname, _ := claims["nickname"].(string)
 
-		// Create or update user in database
-		user, err := services.CreateOrUpdateUser(c.Request.Context(), auth0ID, email, name, nickname)
+		// Create or update user
+		user, err := userService.CreateOrUpdateUser(c.Request.Context(), auth0ID, email, name, nickname)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process user information"})
 			c.Abort()
