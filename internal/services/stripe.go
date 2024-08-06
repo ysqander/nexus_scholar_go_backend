@@ -2,6 +2,7 @@ package services
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/stripe/stripe-go/v79"
 	"github.com/stripe/stripe-go/v79/checkout/session"
@@ -21,37 +22,34 @@ func NewStripeService(publicKey, secretKey string) *StripeService {
 	}
 }
 
-func (s *StripeService) CreateCheckoutSession(userID string, tokenHours float64, priceTier string, amount int64) (*stripe.CheckoutSession, error) {
+func (s *StripeService) CreateCheckoutSession(userID string, priceID string, tokenHours float64, priceTier string) (*stripe.CheckoutSession, error) {
+	frontendURL := os.Getenv("FRONTEND_URL")
+	if frontendURL == "" {
+		return nil, fmt.Errorf("FRONTEND_URL is not set")
+	}
 	params := &stripe.CheckoutSessionParams{
 		PaymentMethodTypes: stripe.StringSlice([]string{
 			"card",
 		}),
 		LineItems: []*stripe.CheckoutSessionLineItemParams{
 			{
-				PriceData: &stripe.CheckoutSessionLineItemPriceDataParams{
-					Currency: stripe.String("usd"),
-					ProductData: &stripe.CheckoutSessionLineItemPriceDataProductDataParams{
-						Name: stripe.String(fmt.Sprintf("%.2f Million Token-Hours", tokenHours)),
-					},
-					UnitAmount: &amount,
-				},
-				Quantity: stripe.Int64(1),
+				Price:    stripe.String(priceID),
+				Quantity: stripe.Int64(int64(tokenHours)),
 			},
 		},
 		Mode:              stripe.String(string(stripe.CheckoutSessionModePayment)),
-		SuccessURL:        stripe.String("https://yourapp.com/success?session_id={CHECKOUT_SESSION_ID}"),
-		CancelURL:         stripe.String("https://yourapp.com/cancel"),
+		SuccessURL:        stripe.String(fmt.Sprintf("%s/success?session_id={CHECKOUT_SESSION_ID}", frontendURL)),
+		CancelURL:         stripe.String(fmt.Sprintf("%s/cancel", frontendURL)),
 		ClientReferenceID: stripe.String(userID),
 		Metadata: map[string]string{
 			"token_hours": fmt.Sprintf("%.2f", tokenHours),
 			"price_tier":  priceTier,
 		},
 	}
-
 	return session.New(params)
 }
 
 func (s *StripeService) HandleWebhook(payload []byte, signatureHeader string) (stripe.Event, error) {
-	endpointSecret := "whsec_your_webhook_signing_secret" // Replace with your actual webhook signing secret
+	endpointSecret := os.Getenv("STRIPE_WEBHOOK_SECRET")
 	return webhook.ConstructEvent(payload, signatureHeader, endpointSecret)
 }

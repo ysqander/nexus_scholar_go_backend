@@ -20,7 +20,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/stripe/stripe-go/v79"
 	"google.golang.org/api/iterator"
-	"gorm.io/gorm"
 )
 
 func SetupRoutes(r *gin.Engine, researchChatService *services.ResearchChatService, chatService services.ChatServiceDB, stripeService *services.StripeService, cacheManagementService *services.CacheManagementService) {
@@ -34,7 +33,7 @@ func SetupRoutes(r *gin.Engine, researchChatService *services.ResearchChatServic
 		api.POST("/chat/message", auth.AuthMiddleware(), sendChatMessageHandler(researchChatService))
 		api.POST("/chat/terminate", auth.AuthMiddleware(), terminateChatSessionHandler(researchChatService))
 		api.GET("/chat/history", auth.AuthMiddleware(), getChatHistoryHandler(researchChatService))
-		api.POST("/purchase-cache-volume", auth.AuthMiddleware(), purchaseCacheVolume(stripeService, cacheManagementService))
+		api.POST("/purchase-cache-volume", auth.AuthMiddleware(), purchaseCacheVolume(stripeService))
 		api.POST("/stripe/webhook", stripeWebhookHandler(stripeService, cacheManagementService))
 	}
 }
@@ -250,11 +249,11 @@ func getRawCacheHandler(researchChatService *services.ResearchChatService) gin.H
 	}
 }
 
-func purchaseCacheVolume(stripeService *services.StripeService, cacheManagementService *services.CacheManagementService) gin.HandlerFunc {
+func purchaseCacheVolume(stripeService *services.StripeService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var request struct {
-			PriceTier  string  `json:"price_tier" binding:"required"`
-			TokenHours float64 `json:"token_hours" binding:"required"`
+			PriceTier  string `json:"price_tier" binding:"required"`
+			TokenHours string `json:"token_hours" binding:"required"`
 		}
 
 		if err := c.ShouldBindJSON(&request); err != nil {
@@ -262,21 +261,21 @@ func purchaseCacheVolume(stripeService *services.StripeService, cacheManagementS
 			return
 		}
 
-		user, _ := c.Get("user")
-		userModel := user.(*models.User)
-
-		// Check if the user has an existing CacheUsage record
-		_, err := cacheManagementService.GetCacheUsage(c.Request.Context(), userModel.ID)
-		if err != nil && err != gorm.ErrRecordNotFound {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check existing cache usage"})
+		// Convert TokenHours to float64
+		tokenHours, err := strconv.ParseFloat(request.TokenHours, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid token_hours value"})
 			return
 		}
 
-		// Calculate amount based on your pricing strategy
-		cachePricePerMillionTokenHour := int64(100) // $1.00 per million token-hour, in cents
-		amount := int64(request.TokenHours * 1_000_000 * float64(cachePricePerMillionTokenHour))
+		user, _ := c.Get("user")
+		userModel := user.(*models.User)
 
-		session, err := stripeService.CreateCheckoutSession(userModel.ID.String(), request.TokenHours, request.PriceTier, amount)
+		// Calculate amount based on your pricing strategy
+		priceID := "random"
+		priceTier := "random"
+
+		session, err := stripeService.CreateCheckoutSession(userModel.ID.String(), priceID, tokenHours, priceTier)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create checkout session"})
 			return
