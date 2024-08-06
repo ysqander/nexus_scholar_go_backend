@@ -35,6 +35,7 @@ func SetupRoutes(r *gin.Engine, researchChatService *services.ResearchChatServic
 		api.GET("/chat/history", auth.AuthMiddleware(), getChatHistoryHandler(researchChatService))
 		api.POST("/purchase-cache-volume", auth.AuthMiddleware(), purchaseCacheVolume(stripeService))
 		api.POST("/stripe/webhook", stripeWebhookHandler(stripeService, cacheManagementService))
+		api.POST("/stripe/webhook_clitest", stripeWebhookHandler_clitest(stripeService, cacheManagementService))
 	}
 }
 
@@ -287,15 +288,20 @@ func purchaseCacheVolume(stripeService *services.StripeService) gin.HandlerFunc 
 
 func stripeWebhookHandler(stripeService *services.StripeService, cacheManagementService *services.CacheManagementService) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		const MaxBodyBytes = int64(65536)
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, MaxBodyBytes)
+
 		payload, err := io.ReadAll(c.Request.Body)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to read request body"})
+			fmt.Printf("Error reading request body: %v\n", err)
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Error reading request body"})
 			return
 		}
 
 		signatureHeader := c.GetHeader("Stripe-Signature")
 		event, err := stripeService.HandleWebhook(payload, signatureHeader)
 		if err != nil {
+			fmt.Printf("Error verifying webhook signature: %v\n", err)
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to verify webhook signature"})
 			return
 		}
@@ -305,35 +311,32 @@ func stripeWebhookHandler(stripeService *services.StripeService, cacheManagement
 			var session stripe.CheckoutSession
 			err := json.Unmarshal(event.Data.Raw, &session)
 			if err != nil {
+				fmt.Printf("Error parsing checkout session: %v\n", err)
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse checkout session"})
 				return
 			}
 
-			// Process the successful payment
-			err = processSuccessfulPayment(session, cacheManagementService)
+			err = processSuccessfulCheckoutSession(session, cacheManagementService)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process payment"})
+				fmt.Printf("Error processing checkout session: %v\n", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process checkout session"})
 				return
 			}
 
-		// Handle other event types as needed
-
 		default:
-			c.JSON(http.StatusOK, gin.H{"received": true})
-			return
+			fmt.Printf("Unhandled event type: %s\n", event.Type)
 		}
 
 		c.JSON(http.StatusOK, gin.H{"received": true})
 	}
 }
 
-func processSuccessfulPayment(session stripe.CheckoutSession, cacheManagementService *services.CacheManagementService) error {
+func processSuccessfulCheckoutSession(session stripe.CheckoutSession, cacheManagementService *services.CacheManagementService) error {
 	userID, err := uuid.Parse(session.ClientReferenceID)
 	if err != nil {
 		return fmt.Errorf("invalid user ID: %v", err)
 	}
 
-	// Retrieve the purchased token hours from the session metadata
 	tokenHours, err := strconv.ParseFloat(session.Metadata["token_hours"], 64)
 	if err != nil {
 		return fmt.Errorf("invalid token hours: %v", err)
@@ -341,11 +344,56 @@ func processSuccessfulPayment(session stripe.CheckoutSession, cacheManagementSer
 
 	priceTier := session.Metadata["price_tier"]
 
-	// Update the user's allowed cache usage
 	err = cacheManagementService.UpdateAllowedCacheUsage(context.Background(), userID, priceTier, tokenHours)
 	if err != nil {
 		return fmt.Errorf("failed to update allowed cache usage: %v", err)
 	}
 
 	return nil
+}
+
+// Stripe Webook versions that match the CLI API version
+func stripeWebhookHandler_clitest(stripeService *services.StripeService, cacheManagementService *services.CacheManagementService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		const MaxBodyBytes = int64(65536)
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, MaxBodyBytes)
+
+		payload, err := io.ReadAll(c.Request.Body)
+		if err != nil {
+			fmt.Printf("Error reading request body: %v\n", err)
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Error reading request body"})
+			return
+		}
+
+		signatureHeader := c.GetHeader("Stripe-Signature")
+		event, err := stripeService.HandleWebhook_clitest(payload, signatureHeader)
+		if err != nil {
+			fmt.Printf("Error verifying webhook signature: %v\n", err)
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to verify webhook signature"})
+			return
+		}
+
+		switch event.Type {
+		case "checkout.session.completed":
+			var session stripe.CheckoutSession
+			err := json.Unmarshal(event.Data.Raw, &session)
+			if err != nil {
+				fmt.Printf("Error parsing checkout session: %v\n", err)
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse checkout session"})
+				return
+			}
+
+			err = processSuccessfulCheckoutSession(session, cacheManagementService)
+			if err != nil {
+				fmt.Printf("Error processing checkout session: %v\n", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process checkout session"})
+				return
+			}
+
+		default:
+			fmt.Printf("Unhandled event type: %s\n", event.Type)
+		}
+
+		c.JSON(http.StatusOK, gin.H{"received": true})
+	}
 }

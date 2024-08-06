@@ -51,5 +51,18 @@ func (s *StripeService) CreateCheckoutSession(userID string, priceID string, tok
 
 func (s *StripeService) HandleWebhook(payload []byte, signatureHeader string) (stripe.Event, error) {
 	endpointSecret := os.Getenv("STRIPE_WEBHOOK_SECRET")
+	if endpointSecret == "" {
+		return stripe.Event{}, fmt.Errorf("STRIPE_WEBHOOK_SECRET is not set")
+	}
 	return webhook.ConstructEvent(payload, signatureHeader, endpointSecret)
+}
+
+func (s *StripeService) HandleWebhook_clitest(payload []byte, signatureHeader string) (stripe.Event, error) {
+	endpointSecret := os.Getenv("STRIPE_WEBHOOK_SECRET")
+	if endpointSecret == "" {
+		return stripe.Event{}, fmt.Errorf("STRIPE_WEBHOOK_SECRET is not set")
+	}
+	return webhook.ConstructEventWithOptions(payload, signatureHeader, endpointSecret, webhook.ConstructEventOptions{
+		IgnoreAPIVersionMismatch: true,
+	})
 }
