@@ -18,16 +18,10 @@ type Cache struct {
 	TerminationTime time.Time
 }
 
-type CacheUsage struct {
+type TierTokenBudget struct {
 	gorm.Model
-	UserID      uuid.UUID    `gorm:"type:uuid;index"`
-	ModelUsages []ModelUsage `gorm:"foreignKey:CacheUsageID"`
-}
-
-type ModelUsage struct {
-	gorm.Model
-	CacheUsageID uint
-	PriceTier    string  `gorm:"index"`
-	TokensBought float64 // Total tokens bought for this model (in millions)
-	TokensUsed   float64 // Cumulative tokens used for this model (in millions)
+	UserID       uuid.UUID `gorm:"type:uuid;index"`
+	PriceTier    string    `gorm:"index"`
+	TokensBought float64   // Total tokens bought for this model (in millions)
+	TokensUsed   float64   // Cumulative tokens used for this model (in millions)
 }

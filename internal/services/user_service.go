@@ -38,7 +38,7 @@ func (s *UserService) CreateOrUpdateUser(ctx context.Context, auth0ID, email, na
 				return nil, err
 			}
 			// Initialize cache usage for new user
-			if err := s.initializeCacheUsage(ctx, user.ID); err != nil {
+			if err := s.initializeCacheAllocation(ctx, user.ID); err != nil {
 				return nil, err
 			}
 		} else {
@@ -59,8 +59,9 @@ func (s *UserService) CreateOrUpdateUser(ctx context.Context, auth0ID, email, na
 	return &user, nil
 }
 
-func (s *UserService) initializeCacheUsage(ctx context.Context, userID uuid.UUID) error {
-	// Initialize with 2 pro token hours and 5 base token hours
+func (s *UserService) initializeCacheAllocation(ctx context.Context, userID uuid.UUID) error {
+
+	// Initialize with 2 pro token hours
 	err := s.cacheManagementService.UpdateAllowedCacheUsage(ctx, userID, "pro", 2)
 	if err != nil {
 		log.Printf("Failed to initialize pro cache usage for user %s: %v", userID, err)
@@ -68,6 +69,7 @@ func (s *UserService) initializeCacheUsage(ctx context.Context, userID uuid.UUID
 	}
 	log.Printf("Initialized pro cache usage for user %s", userID)
 
+	// Initialize with 5 base token hours
 	err = s.cacheManagementService.UpdateAllowedCacheUsage(ctx, userID, "base", 5)
 	if err != nil {
 		log.Printf("Failed to initialize base cache usage for user %s: %v", userID, err)

@@ -156,92 +156,55 @@ func (cms *CacheManagementService) GetGenerativeModel(ctx context.Context, cache
 
 // Cache Usage functions
 
-func (cms *CacheManagementService) GetCacheUsage(ctx context.Context, userID uuid.UUID) (*models.CacheUsage, error) {
-	return cms.cacheServiceDB.GetCacheUsageDB(userID)
-}
-
 func (cms *CacheManagementService) UpdateAllowedCacheUsage(ctx context.Context, userID uuid.UUID, priceTier string, additionalTokens float64) error {
-	usage, err := cms.cacheServiceDB.GetCacheUsageDB(userID)
+
+	// Handle TierTokenBudget
+	budget, err := cms.cacheServiceDB.GetTierTokenBudgetDB(userID, priceTier)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			// Create new usage record if it doesn't exist
-			usage = &models.CacheUsage{
-				UserID: userID,
-				ModelUsages: []models.ModelUsage{
-					{
-						PriceTier:    priceTier,
-						TokensBought: additionalTokens,
-					},
-				},
+			// Create new budget if it doesn't exist
+			budget = &models.TierTokenBudget{
+				UserID:       userID,
+				PriceTier:    priceTier,
+				TokensBought: additionalTokens,
+				TokensUsed:   0, // Initialize TokensUsed to 0
 			}
-			return cms.cacheServiceDB.CreateCacheUsageDB(usage)
+			return cms.cacheServiceDB.CreateTierTokenBudgetDB(budget)
 		}
-		return fmt.Errorf("failed to get cache usage: %v", err)
+		return fmt.Errorf("failed to get tier token budget: %v", err)
 	}
 
-	// Find or create ModelUsage for the specific model
-	var modelUsage *models.ModelUsage
-	for i := range usage.ModelUsages {
-		if usage.ModelUsages[i].PriceTier == priceTier {
-			modelUsage = &usage.ModelUsages[i]
-			break
-		}
-	}
-	if modelUsage == nil {
-		usage.ModelUsages = append(usage.ModelUsages, models.ModelUsage{
-			PriceTier:    priceTier,
-			TokensBought: additionalTokens,
-		})
-	} else {
-		modelUsage.TokensBought += additionalTokens
-	}
-
-	return cms.cacheServiceDB.UpdateCacheUsageDB(usage)
+	// Update existing budget
+	budget.TokensBought += additionalTokens
+	return cms.cacheServiceDB.UpdateTierTokenBudgetDB(budget)
 }
 
 func (cms *CacheManagementService) LogCacheUsage(ctx context.Context, userID uuid.UUID, priceTier string, tokensUsed float64) error {
-	usage, err := cms.cacheServiceDB.GetCacheUsageDB(userID)
+	budget, err := cms.cacheServiceDB.GetTierTokenBudgetDB(userID, priceTier)
 	if err != nil {
-		return fmt.Errorf("failed to get cache usage: %v", err)
+		return fmt.Errorf("failed to get tier token budget: %v", err)
 	}
 
-	var modelUsage *models.ModelUsage
-	for i := range usage.ModelUsages {
-		if usage.ModelUsages[i].PriceTier == priceTier {
-			modelUsage = &usage.ModelUsages[i]
-			break
-		}
+	if budget.TokensUsed+tokensUsed > budget.TokensBought {
+		return fmt.Errorf("usage limit exceeded for tier: %s", priceTier)
 	}
 
-	if modelUsage == nil {
-		return fmt.Errorf("no usage record found for price tier: %s", priceTier)
-	}
-
-	if modelUsage.TokensUsed+tokensUsed > modelUsage.TokensBought {
-		return fmt.Errorf("usage limit exceeded for model: %s", priceTier)
-	}
-
-	modelUsage.TokensUsed += tokensUsed
-
-	return cms.cacheServiceDB.UpdateCacheUsageDB(usage)
+	budget.TokensUsed += tokensUsed
+	return cms.cacheServiceDB.UpdateTierTokenBudgetDB(budget)
 }
 
 func (cms *CacheManagementService) GetNetTokensByTier(ctx context.Context, userID uuid.UUID) (float64, float64, error) {
-	usage, err := cms.cacheServiceDB.GetCacheUsageDB(userID)
+	budgets, err := cms.cacheServiceDB.GetAllTierTokenBudgetsDB(userID)
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			// If no usage record exists, return 0 for both tiers
-			return 0, 0, nil
-		}
-		return 0, 0, fmt.Errorf("failed to get cache usage: %v", err)
+		return 0, 0, fmt.Errorf("failed to get tier token budgets: %v", err)
 	}
 
 	var baseNetTokens, proNetTokens float64
-	for _, modelUsage := range usage.ModelUsages {
-		netTokens := modelUsage.TokensBought - modelUsage.TokensUsed
-		if modelUsage.PriceTier == "base" {
+	for _, budget := range budgets {
+		netTokens := budget.TokensBought - budget.TokensUsed
+		if budget.PriceTier == "base" {
 			baseNetTokens += netTokens
-		} else if modelUsage.PriceTier == "pro" {
+		} else if budget.PriceTier == "pro" {
 			proNetTokens += netTokens
 		}
 	}

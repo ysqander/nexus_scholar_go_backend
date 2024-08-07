@@ -14,10 +14,10 @@ type CacheServiceDB interface {
 	UpdateCacheTokenCountDB(sessionID string, tokenCount int32) error
 	UpdateCacheTerminationTimeDB(sessionID string, terminationTime time.Time) error
 	DeleteCacheDB(sessionID string) error
-	CreateCacheUsageDB(usage *models.CacheUsage) error
-	GetCacheUsageDB(userID uuid.UUID) (*models.CacheUsage, error)
-	UpdateCacheUsageDB(usage *models.CacheUsage) error
-	DeleteCacheUsageDB(userID uuid.UUID) error
+	GetTierTokenBudgetDB(userID uuid.UUID, priceTier string) (*models.TierTokenBudget, error)
+	CreateTierTokenBudgetDB(budget *models.TierTokenBudget) error
+	UpdateTierTokenBudgetDB(budget *models.TierTokenBudget) error
+	GetAllTierTokenBudgetsDB(userID uuid.UUID) ([]models.TierTokenBudget, error)
 }
 
 type DefaultCacheService struct {
@@ -62,23 +62,28 @@ func (s *DefaultCacheService) DeleteCacheDB(sessionID string) error {
 	return s.db.Where("session_id = ?", sessionID).Delete(&models.Cache{}).Error
 }
 
-func (s *DefaultCacheService) CreateCacheUsageDB(usage *models.CacheUsage) error {
-	return s.db.Create(usage).Error
-}
-
-func (s *DefaultCacheService) GetCacheUsageDB(userID uuid.UUID) (*models.CacheUsage, error) {
-	var usage models.CacheUsage
-	err := s.db.Where("user_id = ?", userID).First(&usage).Error
+func (s *DefaultCacheService) GetTierTokenBudgetDB(userID uuid.UUID, priceTier string) (*models.TierTokenBudget, error) {
+	var budget models.TierTokenBudget
+	err := s.db.Where("user_id = ? AND price_tier = ?", userID, priceTier).First(&budget).Error
 	if err != nil {
 		return nil, err
 	}
-	return &usage, nil
+	return &budget, nil
 }
 
-func (s *DefaultCacheService) UpdateCacheUsageDB(usage *models.CacheUsage) error {
-	return s.db.Save(usage).Error
+func (s *DefaultCacheService) CreateTierTokenBudgetDB(budget *models.TierTokenBudget) error {
+	return s.db.Create(budget).Error
 }
 
-func (s *DefaultCacheService) DeleteCacheUsageDB(userID uuid.UUID) error {
-	return s.db.Where("user_id = ?", userID).Delete(&models.CacheUsage{}).Error
+func (s *DefaultCacheService) UpdateTierTokenBudgetDB(budget *models.TierTokenBudget) error {
+	return s.db.Save(budget).Error
+}
+
+func (s *DefaultCacheService) GetAllTierTokenBudgetsDB(userID uuid.UUID) ([]models.TierTokenBudget, error) {
+	var budgets []models.TierTokenBudget
+	err := s.db.Where("user_id = ?", userID).Find(&budgets).Error
+	if err != nil {
+		return nil, err
+	}
+	return budgets, nil
 }
