@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"nexus_scholar_go_backend/internal/services"
 	"nexus_scholar_go_backend/internal/wsocket"
 
+	"cloud.google.com/go/storage"
 	"github.com/gorilla/websocket"
 
 	"github.com/gin-contrib/cors"
@@ -91,6 +93,11 @@ func main() {
 		log.Fatalf("Failed to create GCS service: %v", err)
 	}
 
+	// Check and create bucket if it doesn't exist
+	if err := checkAndCreateBucket(ctx, gcsBucketName); err != nil {
+		log.Fatalf("Failed to check/create GCS bucket: %v", err)
+	}
+
 	researchChatService := services.NewResearchChatService(
 		contentAggregationService,
 		cacheManagementService,
@@ -148,4 +155,26 @@ func main() {
 	if err := r.Run(":" + port); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
+}
+
+func checkAndCreateBucket(ctx context.Context, bucketName string) error {
+	client, err := storage.NewClient(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create storage client: %v", err)
+	}
+	defer client.Close()
+
+	bucket := client.Bucket(bucketName)
+	_, err = bucket.Attrs(ctx)
+	if err == storage.ErrBucketNotExist {
+		log.Printf("Bucket %s does not exist. Creating...", bucketName)
+		if err := bucket.Create(ctx, os.Getenv("GOOGLE_CLOUD_PROJECT"), nil); err != nil {
+			return fmt.Errorf("failed to create bucket: %v", err)
+		}
+		log.Printf("Bucket %s created successfully", bucketName)
+	} else if err != nil {
+		return fmt.Errorf("failed to get bucket attributes: %v", err)
+	}
+
+	return nil
 }

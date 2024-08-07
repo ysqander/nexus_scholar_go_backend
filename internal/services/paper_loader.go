@@ -119,6 +119,32 @@ func (pl *PaperLoader) ProcessPaper(arxivID string) (map[string]interface{}, err
 		return nil, fmt.Errorf("failed to create or update paper: %v", err)
 	}
 
+	// Add the main paper as a reference to itself
+	mainPaperRef := models.PaperReference{
+		ArxivID:            arxivID,
+		ParentArxivID:      arxivID,
+		Type:               "article",
+		Key:                arxivID,
+		Title:              paper.Title,
+		Author:             paper.Authors,
+		Year:               metadata["published_date"][:4], // Assuming the date is in YYYY-MM-DD format
+		Journal:            metadata["journal"],            // This might be empty for preprints
+		DOI:                metadata["doi"],                // This might be empty for preprints
+		URL:                metadata["abstract_url"],       // Using the abstract URL as the main URL
+		RawBibEntry:        "",                             // You might want to generate this if needed
+		FormattedText:      fmt.Sprintf("%s. (%s). %s. %s", paper.Authors, metadata["published_date"][:4], paper.Title, metadata["journal"]),
+		IsAvailableOnArxiv: true,
+	}
+
+	// If there's a DOI, add it to the formatted text
+	if metadata["doi"] != "" {
+		mainPaperRef.FormattedText += fmt.Sprintf(" DOI: %s", metadata["doi"])
+	}
+
+	if err := CreateOrUpdateReference(&mainPaperRef); err != nil {
+		return nil, fmt.Errorf("failed to save main paper as reference: %v", err)
+	}
+
 	result := map[string]interface{}{
 		"title":      paper.Title,
 		"authors":    strings.Split(paper.Authors, ", "),

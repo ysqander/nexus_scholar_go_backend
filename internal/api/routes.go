@@ -55,6 +55,7 @@ func getPaper(c *gin.Context) {
 
 func getPaperTitle(c *gin.Context) {
 	arxivID := c.Param("arxiv_id")
+	parentArxivID := c.Query("parent_arxiv_id")
 
 	paperLoader := services.NewPaperLoader()
 	metadata, err := paperLoader.GetPaperMetadata(arxivID)
@@ -63,7 +64,37 @@ func getPaperTitle(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"title": metadata["title"]})
+	// Create a PaperReference
+	paperRef := models.PaperReference{
+		ArxivID:            arxivID,
+		ParentArxivID:      parentArxivID,
+		Type:               "article",
+		Key:                arxivID,
+		Title:              metadata["title"],
+		Author:             metadata["authors"],
+		Year:               metadata["published_date"][:4], // Assuming the date is in YYYY-MM-DD format
+		Journal:            metadata["journal"],            // This might be empty for preprints
+		DOI:                metadata["doi"],                // This might be empty for preprints
+		URL:                metadata["abstract_url"],       // Using the abstract URL as the main URL
+		RawBibEntry:        "",                             // You might want to generate this if needed
+		FormattedText:      fmt.Sprintf("%s. (%s). %s. %s", metadata["authors"], metadata["published_date"][:4], metadata["title"], metadata["journal"]),
+		IsAvailableOnArxiv: true,
+	}
+
+	// If there's a DOI, add it to the formatted text
+	if metadata["doi"] != "" {
+		paperRef.FormattedText += fmt.Sprintf(" DOI: %s", metadata["doi"])
+	}
+
+	// Save the reference
+	if err := services.CreateOrUpdateReference(&paperRef); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to save reference: %v", err)})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"title": metadata["title"],
+	})
 }
 
 func privateRoute(c *gin.Context) {
