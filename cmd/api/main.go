@@ -94,7 +94,7 @@ func main() {
 	}
 
 	// Check and create bucket if it doesn't exist
-	if err := checkAndCreateBucket(ctx, gcsBucketName); err != nil {
+	if err := checkAndCreateBucket(ctx, gcsBucketName, gcsService.Client); err != nil {
 		log.Fatalf("Failed to check/create GCS bucket: %v", err)
 	}
 
@@ -157,15 +157,9 @@ func main() {
 	}
 }
 
-func checkAndCreateBucket(ctx context.Context, bucketName string) error {
-	client, err := storage.NewClient(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to create storage client: %v", err)
-	}
-	defer client.Close()
-
+func checkAndCreateBucket(ctx context.Context, bucketName string, client *storage.Client) error {
 	bucket := client.Bucket(bucketName)
-	_, err = bucket.Attrs(ctx)
+	_, err := bucket.Attrs(ctx)
 	if err == storage.ErrBucketNotExist {
 		log.Printf("Bucket %s does not exist. Creating...", bucketName)
 		if err := bucket.Create(ctx, os.Getenv("GOOGLE_CLOUD_PROJECT"), nil); err != nil {

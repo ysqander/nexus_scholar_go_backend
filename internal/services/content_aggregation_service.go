@@ -1,14 +1,14 @@
 package services
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
-
-	"github.com/ledongthuc/pdf"
 )
 
 // ContentAggregationService handles the aggregation of content from various sources
@@ -139,32 +139,25 @@ func (s *ContentAggregationService) ProcessUserPDF(pdfPath string) (string, stri
 // }
 
 func (s *ContentAggregationService) ExtractTextFromPDF(pdfPath string) (string, error) {
-	f, r, err := pdf.Open(pdfPath)
+	// Check if pdftotext is installed
+	_, err := exec.LookPath("pdftotext")
 	if err != nil {
-		return "", fmt.Errorf("failed to open PDF: %v", err)
-	}
-	defer f.Close()
-
-	var content strings.Builder
-	totalPage := r.NumPage()
-
-	for pageIndex := 1; pageIndex <= totalPage; pageIndex++ {
-		p := r.Page(pageIndex)
-		if p.V.IsNull() {
-			continue
-		}
-
-		text, err := p.GetPlainText(nil)
-		if err != nil {
-			continue
-		}
-		content.WriteString(text)
-		content.WriteString("\n\n") // Add separation between pages
+		return "", fmt.Errorf("pdftotext is not installed: %v", err)
 	}
 
-	if content.Len() == 0 {
+	// Run pdftotext command
+	cmd := exec.Command("pdftotext", "-layout", pdfPath, "-")
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	err = cmd.Run()
+	if err != nil {
+		return "", fmt.Errorf("failed to run pdftotext: %v", err)
+	}
+
+	content := out.String()
+	if content == "" {
 		return "", fmt.Errorf("no text content extracted from PDF")
 	}
 
-	return content.String(), nil
+	return content, nil
 }

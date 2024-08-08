@@ -1,54 +1,23 @@
  - set up the uuid extension script for postgres
- - Set up success and cancel stripe frontend pages 
+ - Set up success and cancel stripe frontend pages
 
 
- Fix the problems with the DB:
+ Dev and Deployment stpes:
 
- ERROR:  "model_usages_pkey" is an index
-LINE 1: SELECT * FROM public.model_usages_pkey
-                      ^ 
+ With this setup:
+For development:
+Use **docker-compose up --build** to start your development environment.
+The Go code is mounted as a volume, allowing you to make changes without rebuilding.
+The container runs go run cmd/api/main.go, which will reflect code changes on save.
 
-SQL state: 42809
-Character: 15ERROR:  "model_usages_pkey" is an index
-LINE 1: SELECT * FROM public.model_usages_pkey
-                      ^ 
+For production (e.g., Railway):
+The Dockerfile builds the application, which Railway can use directly.
+Railway will use the CMD ["./main"] to run your compiled application.
 
-SQL state: 42809
-Character: 15
+Set your environment variables in Railway's dashboard or configuration.
 
-ERROR:  "caches_pkey" is an index
-LINE 1: SELECT * FROM public.caches_pkey
-                      ^ 
-
-SQL state: 42809
-Character: 15ERROR:  "caches_pkey" is an index
-LINE 1: SELECT * FROM public.caches_pkey
-                      ^ 
-
-SQL state: 42809
-Character: 15
-
-
-Logs of creating a new user:
-
-
-2024/08/06 17:29:28 Server starting on port 3000
-[GIN-debug] [WARNING] You trusted all proxies, this is NOT safe. We recommend you to set a value.
-Please check https://pkg.go.dev/github.com/gin-gonic/gin#readme-don-t-trust-all-proxies for details.
-[GIN-debug] Listening and serving HTTP on :3000
-[GIN] 2024/08/06 - 17:30:04 | 204 |      87.667µs |             ::1 | OPTIONS  "/api/private"
-[GIN] 2024/08/06 - 17:30:04 | 204 |      52.375µs |             ::1 | OPTIONS  "/api/private"
-
-2024/08/06 17:30:04 /Users/alexanderadamov/Documents/Programming/nexus_scholar/nexus_scholar_go_backend/internal/services/user_service.go:26 record not found
-[3.061ms] [rows:0] SELECT * FROM "users" WHERE auth0_id = 'google-oauth2|115256130635963366238' AND "users"."deleted_at" IS NULL ORDER BY "users"."id" LIMIT 1
-
-2024/08/06 17:30:04 /Users/alexanderadamov/Documents/Programming/nexus_scholar/nexus_scholar_go_backend/internal/services/cache_service_db.go:71 record not found
-[1.962ms] [rows:0] SELECT * FROM "cache_usages" WHERE user_id = '05e7a12d-33a7-45f2-b36f-6c99af3823e9' AND "cache_usages"."deleted_at" IS NULL ORDER BY "cache_usages"."id" LIMIT 1
-2024/08/06 17:30:04 Initialized pro cache usage for user 05e7a12d-33a7-45f2-b36f-6c99af3823e9
-2024/08/06 17:30:04 Initialized base cache usage for user 05e7a12d-33a7-45f2-b36f-6c99af3823e9
-[GIN] 2024/08/06 - 17:30:04 | 200 |     324.021ms |             ::1 | GET      "/api/private"
-[GIN] 2024/08/06 - 17:30:04 | 200 |   28.840708ms |             ::1 | GET      "/api/private"
-[GIN] 2024/08/06 - 17:30:10 | 200 |   33.111375ms |             ::1 | GET      "/api/cache-usage"
-[GIN] 2024/08/06 - 17:30:10 | 200 |     27.6085ms |             ::1 | GET      "/api/cache-usage"
-[GIN] 2024/08/06 - 17:30:21 | 200 |  238.867791ms |             ::1 | GET      "/api/cache-usage"
-[GIN] 2024/08/06 - 17:30:21 | 200 |    26.77125ms |             ::1 | GET      "/api/cache-usage"
+To apply code changes during development:
+Make changes to your Go files.
+Save the files.
+Restart the Go application by running:
+   **docker-compose restart backend**

@@ -12,7 +12,6 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/joho/godotenv v1.5.1
 	github.com/jung-kurt/gofpdf v1.16.2
-	github.com/ledongthuc/pdf v0.0.0-20240201131950-da5b75280b06
 	github.com/nickng/bibtex v1.3.0
 	github.com/stretchr/testify v1.9.0
 	github.com/stripe/stripe-go/v79 v79.6.0

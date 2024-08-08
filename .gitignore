@@ -2,3 +2,4 @@
 nexus-scholar-key.json
 
 internal/services/tests/testPdfFiles/*
+.docker-compose.yml

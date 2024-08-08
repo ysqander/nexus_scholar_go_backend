@@ -1,0 +1,1516 @@
+                                         IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                                                  1
+
+
+
+
+                                                           Recommender Systems in the Era of
+                                                             Large Language Models (LLMs)
+                                                                 Zihuai Zhao, Wenqi Fan, Jiatong Li, Yunqing Liu, Xiaowei Mei, Yiqi Wang,
+                                                                      Zhen Wen, Fei Wang, Xiangyu Zhao, Jiliang Tang, and Qing Li
+
+                                               Abstract—With the prosperity of e-commerce and web applications, Recommender Systems (RecSys) have become an indispensable
+                                               and important component in our daily lives, providing personalized suggestions that cater to user preferences. While Deep Neural
+                                               Networks (DNNs) have achieved significant advancements in enhancing recommender systems by modeling user-item interactions and
+                                               incorporating their textual side information, these DNN-based methods still exhibit some limitations, such as difficulties in effectively
+                                               understanding users’ interests and capturing textual side information, inabilities in generalizing to various seen/unseen recommendation
+arXiv:2307.02046v6 [cs.IR] 29 Apr 2024
+
+
+
+
+                                               scenarios and reasoning on their predictions, etc. Meanwhile, the development of Large Language Models (LLMs), such as ChatGPT and
+                                               GPT-4, has revolutionized the fields of Natural Language Processing (NLP) and Artificial Intelligence (AI), due to their remarkable abilities
+                                               in fundamental responsibilities of language understanding and generation, as well as impressive generalization capabilities and reasoning
+                                               skills. As a result, recent studies have actively attempted to harness the power of LLMs to enhance recommender systems. Given the
+                                               rapid evolution of this research direction in recommender systems, there is a pressing need for a systematic overview that summarizes
+                                               existing LLM-empowered recommender systems, so as to provide researchers and practitioners in relevant fields with an in-depth
+                                               understanding. Therefore, in this survey, we conduct a comprehensive review of LLM-empowered recommender systems from various
+                                               aspects including pre-training, fine-tuning, and prompting paradigms. More specifically, we first introduce the representative methods to
+                                               harness the power of LLMs (as a feature encoder) for learning representations of users and items. Then, we systematically review the
+                                               emerging advanced techniques of LLMs for enhancing recommender systems from three paradigms, namely pre-training, fine-tuning, and
+                                               prompting. Finally, we comprehensively discuss the promising future directions in this emerging field.
+
+                                               Index Terms—Recommender Systems, Large Language Models (LLMs), Pre-training and Fine-tuning, Prompting, In-context Learning.
+
+                                                                                                                       ✦
+
+
+                                         1    I NTRODUCTION                                                                textual information like item descriptions, user profiles, and
+                                                                                                                           user reviews, to predict the matching score between users
+                                         R     E commender Systems (RecSys) play a vital role in
+                                              alleviating information overload for enriching users’
+                                         online experience (i.e., users need to filter overwhelming
+                                                                                                                           and items (i.e., the probability that the user would like the
+                                                                                                                           item) [5]. More specifically, collaborative behaviors between
+                                         information to locate their interested information) [1], [2].                     users and items have been leveraged to design various
+                                         They offer personalized suggestions toward candidate items                        recommendation models, which can be further used to learn
+                                         tailored to meet user preferences in various application                          the representations of users and items [6], [7]. In addition,
+                                         domains, such as entertainment [3], e-commerce [4], and job                       textual side information of users and items contains rich
+                                         matching [2]. For example, in movie recommendations (e.g.,                        knowledge that can assist in the calculation of the matching
+                                         IMDB and Netflix), the latest movies can be recommended to                        scores, which provides valuable insights into understanding
+                                         users based on the content of movies and the watch histories                      user preferences for advancing recommender systems [8].
+                                         of users, which assists users in discovering new movies that                          Due to the remarkable ability of representation learning
+                                         accord with their interests. The basic idea of recommender                        in various fields, Deep Neural Networks (DNNs) have been
+                                         systems is to make use of the interactions between users                          widely adopted to advance recommender systems [9], [10].
+                                         and items and their associated side information, especially                       DNNs demonstrate distinctive abilities in modeling user-
+                                                                                                                           item interactions with different architectures. For example,
+                                         •   W. Fan is with the Department of Computing (COMP) and Department              as particularly effective tools for sequential data, Recurrent
+                                             of Management and Marketing (MM), The Hong Kong Polytechnic                   Neural Networks (RNNs) have been adopted to capture high-
+                                             University. E-mail: wenqifan03@gmail.com.                                     order dependencies in user interaction sequences [11], [12].
+                                         •   Z. Zhao, J. Li, Y. Liu, and Q. Li are with the Department of Computing,
+                                             The Hong Kong Polytechnic University. E-mail: scofield.zzh@gmail.com,         Considering users’ online behaviors (e.g., chick, purchase, so-
+                                             {jiatong.li, yunqing617.liu}@connect.polyu.hk, csqli@comp.polyu.edu.hk.       cializing) as graph-structured data, Graph Neural Networks
+                                         •   X. Mei is with the Department of Management and Marketing, The Hong           (GNNs) have emerged as advanced representation learning
+                                             Kong Polytechnic University. E-mail: michael.mei@polyu.edu.hk.
+                                         •   Y. Wang is with National University of Defense Technology. E-mail:
+                                                                                                                           techniques to learn user and item representations [1], [6],
+                                             yiq@nudt.edu.cn. This work was done when Yiqi Wang was a PhD student          [13]. Meanwhile, DNNs have also demonstrated advantages
+                                             at Michigan State University.                                                 in encoding side information. For instance, a BERT-based
+                                         •   Z. Wen and F. Wang are with Amazon. E-mail: {zhenwen,                         method is proposed to extract and utilize textual reviews
+                                             feiww}@amazon.com.
+                                         •   X. Zhao is with City University of Hong Kong. E-mail:                         from users [14].
+                                             xy.zhao@cityu.edu.hk.                                                             Despite the aforementioned success, most existing ad-
+                                         •   J. Tang is with Michigan State University. E-mail: tangjili@msu.edu.          vanced recommender systems still face some intrinsic limita-
+                                         (Corresponding authors: Wenqi Fan and Qing Li.)                                   tions. First, due to the limitations on model scale and data
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                                                                             2
+
+                                                           Task-specific Prompts (LLMs Inputs)
+
+        Top-K Recommendation                       Rating Prediction                  Conversational Recommendation                             Explanation Generation
+
+     A user recently watched movies:        Here is the movie rating history           [User]: I just watched Interstellar.                  A new movie named The Godfather
+                                            of a user:                                 Please recommend ... to me.                           Part II is recommended to a user,
+
+
+     Based on the watch history, please
+     recommend 5 candidate movies            8.0 9.2 9.8 7.5                           ----------------------------------------------        who has recently watched movies:
+     that the user might be interested in   Based on the above rating history          [User]: ......
+     from the following list:               of this user, please rate a movie          ----------------------------------------------
+                                            named John Wick: Chapter 4 with a          [User]: But I don't like ... because
+                    ......    ......
+                                            range of 1-10 points.                      ... could you recommend other ...                     Please explain the reasons.
+
+
+
+
+                                                               Large Language Models (LLMs)
+                 ChatGPT                    LLaMA                                                                                       T5
+                                                                 for Recommender Systems
+
+
+
+     Based on the watch history, I          The movie John Wick: Chapter 4             [LLM]: Sure! Here are some                            The new movie is recommended
+     assume this user is interested in      has a similar ... to the movies ... in     recommendations for you ...                           to the user because it is the
+     movies of ... genres and ...           the rating history.                        ----------------------------------------------        sequel to the movie The Godfather
+     actors/actresses. Here are the top                                                [LLM]: ......                                         that was recently watched by this
+     5 candidate movies:                    Thus, the rating is likely to be 9.0.      ----------------------------------------------        user. Thus, the user might be
+                                                                                       [LLM]: My apologies! Here are                         interested in the recommended
+                                                                                       some new recommendations ...                          movie series.
+
+
+
+                                                   Task-specific Recommendations (LLMs Outputs)
+
+Figure 1: Examples of the application of LLMs for various recommendation tasks in the scenario of movie recommendations.
+In this workflow, LLMs directly act as recommenders through task-specific prompts, where textual information (or even
+multimodal data like images) are leveraged for recommendation tasks.
+
+
+size, previous DNN-based models (e.g., CNN and LSTM) and                                 Recently, as advanced natural language processing
+pre-trained language models (e.g., BERT) for recommender                             techniques, Large Language Models (LLMs) with billion
+systems cannot sufficiently capture textual knowledge                                parameters have generated large impacts on various research
+about users and items, demonstrating their inferior natural                          fields such as Natural Language Processing (NLP) [15],
+language understanding capability, which leads to sub-                               Computer Vision [16], and Molecule Discovery [17]. Tech-
+optimal prediction performance in various recommendation                             nically, most existing LLMs are transformer-based models
+scenarios. Second, most existing RecSys methods have been                            pre-trained on a vast amount of textual data from diverse
+specifically designed for their own tasks and have inadequate                        sources, such as articles, books, websites, and other publicly
+generalization ability to their unseen recommendation                                available written materials. As the parameter size of LLMs
+tasks. For example, a recommendation algorithm is well-                              continues to scale up with a larger training corpus, recent
+trained on a user-item rating matrix for predicting movies’                          studies indicated that LLMs can lead to the emergence of
+rating scores, while it is challenging for this algorithm to                         remarkable capabilities [18], [19]. More specifically, LLMs
+perform top-k movie recommendations along with certain                               have demonstrated the unprecedentedly powerful abilities of
+explanations. This is due to the fact that the design of                             their fundamental responsibilities in language understanding
+these recommendation architectures highly depends on                                 and generation. These improvements enable LLMs to better
+task-specific data and domain knowledge toward specific                              comprehend human intentions and generate language
+recommendation scenarios such as top-k recommendations,                              responses that are more human-like in nature. Moreover,
+rating predictions, and explainable recommendations. Third,                          recent studies indicated that LLMs exhibit impressive
+most existing DNN-based recommendation methods can                                   generalization and reasoning capabilities, making LLMs
+achieve promising performance on recommendation tasks                                better generalize to a variety of unseen tasks and domains.
+needing simple decisions (e.g., rating prediction, and top-                          To be specific, instead of requiring extensive fine-tuning on
+k recommendations). However, they face difficulties in                               each specific task, LLMs can apply their learned knowledge
+supporting complex and multi-step decisions that involve                             and reasoning skills to fit new tasks simply by providing
+multiple reasoning steps. For instance, multi-step reasoning                         appropriate instructions or a few task demonstrations.
+is crucial to trip planning recommendations, where RecSys                            Advanced techniques such as in-context learning can further
+should first consider popular tourist attractions based on the                       enhance such generalization performance of LLMs without
+destination, then arrange a suitable itinerary corresponding                         being fine-tuned on specific downstream tasks [19]. In
+to the tourist attractions, and finally recommend a journal                          addition, empowered by prompting strategies such as chain-
+plan according to specific user preferences (e.g., cost and time                     of-thought, LLMs can generate the outputs with step-by-
+for travel).                                                                         step reasoning in complicated decision-making processes.
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                           3
+
+Hence, given their powerful abilities, LLMs demonstrate          al. [32] introduce two orthogonal perspectives: where and
+great potential to revolutionize recommender systems.            how to adapt LLMs in recommender systems. In particular,
+    Very recently, initial efforts have been made to explore     this survey presents a pipeline of RecSys, reviewing the
+the potential of LLMs as a promising technique for the next-     various functionalities of LLMs through the procedure of
+generation RecSys. For example, Chat-Rec [3] is proposed         recommendations.
+to enhance the recommendation accuracy and explainability            Despite the aforementioned progress, existing surveys
+by leveraging ChatGPT to interact with users through             mainly emphasize the application aspects of LLMs in
+conversations and then refine the candidate sets generated       addressing their distinctive capabilities in RecSys, where
+by traditional RecSys for movie recommendations. Zhang et        the corresponding techniques proposed in the domain of
+al. [20] employ T5 as LLM-based RecSys, which enables            LLMs are not systematically reviewed. Therefore, our survey
+users to deliver their explicit preferences and intents in       comprehensively reviews such domain-specific techniques
+natural language as RecSys inputs, demonstrating better          for adapting LLMs to recommendations, which contributes
+recommendation performance than merely based on user-            to an in-depth understanding of developing LLM-based
+item interactions. Figure 1 demonstrates some examples of        methods tailored to RecSys for future research.
+applying LLMs for various movie recommendation tasks,
+including top-K recommendation, rating prediction, conver-
+sational recommendation, and explanation generation. Due         2     RELATED WORK
+to their rapid evolution, it is imperative to comprehensively    In this section, we briefly review some related works on
+review recent advances and challenges of LLMs-empowered          recommender systems, LLMs, and their combinations. As
+recommender systems.                                             illustrated in Figure 2, a timeline of milestones in the domains
+    Therefore, in this survey, we provide a systematic           of recommender systems and language models is provided,
+overview of LLM-empowered recommender systems in                 reviewing the development of the interdisciplinary field of
+terms of pre-training, fine-tuning, and prompting paradigms,     LLM-empowered recommender systems.
+which serve as three representative approaches to harness the
+power of LLMs [19], [21]. In particular, our survey is orga-
+nized as follows. First, we review the milestones in the field   2.1   Recommender Systems (RecSys)
+of RecSys and LLMs, respectively, and their combinations         To address the information overload problem, recommender
+in Section 2. Then, two basic types of recommender systems       systems have emerged as a crucial tool in various on-
+that take advantage of LLMs to learn the representation          line applications by providing personalized content and
+of users and items are illustrated in Section 3, namely the      services to individual users [33], [34]. Typically, most
+ID-based RecSys and the textual side information-enhanced        existing recommendation approaches can fall into two
+RecSys. Subsequently, we comprehensively summarize the           main categories: Collaborative Filtering (CF) and Content-
+advanced techniques for adapting LLMs to recommender             based recommendation. As the most common technique,
+systems in terms of pre-training & fine-tuning and prompting     CF-based recommendation methods aim to find similar
+paradigms in Section 4 and Section 5, respectively. Finally,     behavior patterns of users to predict the likelihood of future
+the emerging challenges posed by adapting LLMs to                interactions [12], which can be achieved by utilizing the
+recommendations and some potential future directions are         historical interaction behaviors between users and items,
+discussed in Section 6.                                          such as purchase history or rating data. For example, as one
+    Recapping existing surveys in the domain of recom-           of the most popular CF methods, Matrix Factorization (MF)
+mender systems, diverse focuses have been reviewed to            is introduced to learn representations of users and items by
+facilitate the performance of RecSys from the perspec-           using pure user-item interactions [7], [35]. In other words,
+tive of deep learning techniques [9], [22]–[24], evaluation      unique identities of users and items (i.e., discrete IDs) are
+methodology [25], [26], trustworthiness [27]–[29] and other      encoded to continue embedding vectors so that the matching
+aspects. In the era of LLMs, the integration of LLMs             score can be calculated easily for recommendations [36],
+into recommender systems has drawn increasing attention          [37]. Content-based recommendation methods generally
+from recent studies, which highlights the significance           take advantage of additional knowledge about users or
+and necessity of systematically reviewing the emerging           items, such as user demographics or item descriptions,
+trends and advanced techniques in this interdisciplinary         to enhance user and item representations for improving
+field of LLM-empowered recommender systems. Before               recommendation performance [38]. Note that as textual
+or concurrent to our survey, Liu et al. [30] review the          information is one of the most available contents for users
+training strategies and learning objectives of the language      and items, we mainly focus on text as content in this survey.
+modeling paradigm adaptations for recommender systems.               Due to the remarkable representation learning capabili-
+However, this work majorly examines early-stage language         ties, deep learning techniques have been effectively applied
+models for RecSys, such as BERT and GPT-2. Following the         to develop recommender systems [5], [34]. For instance,
+release of more advanced LLMs like ChatGPT and LLaMA,            NeuMF is proposed to model non-linear interactions between
+remarkable evolution has been brought to the adaption of         users and items by replacing the general inner product with
+LLMs in RecSys, which urges a more up-to-date review. More       DNNs [39]. Considering that data in RecSys can be naturally
+recently, Wu et al. [31] summarize LLMs for recommender          represented as graph-structured data, GNN techniques are
+systems from discriminative and generative perspectives,         treated as the main deep learning approaches for learning
+which compares the two styles of LLMs tailored to their          meaningful representations of nodes (i.e., users and items) via
+distinct abilities in recommendations. Meanwhile, Lin et         message propagation strategies for recommender systems [1],
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                                      4
+
+
+                      Traditional Models                  Pre-trained LMs (PLMs)               In the Era of LLMs
+                         N-gram Models
+
+       LMs
+                                                                    PLMs         model size > 10B      LLMs
+                    probability estimation, etc.
+                                                         BERT, RoBERTa, GPT, GPT-2,         T5, GPT-3, ChatGPT, Vicuna,
+                        Word2vec Models
+                                                          XLNet,UniLM, Grover, etc.         LLaMA, GPT-4, LLaMA2, etc.
+                   static word embedding, etc.
+
+                    Collaborative Filtering &                PLM-based RecSys                   LLM-based RecSys           Timeline
+                 Content-based Recommendation         BERT4Rec, UniMIND, GPT4Rec, etc.      P5, PALR, Chat-Rec, TALLRec,
+       RecSys
+
+
+
+
+                singular value decomposition (SVD),                                         POD, RecMind, RecAgent, etc.
+                                                             DNN-based Models
+                  matrix factorization (MF), etc.
+                                                      CNNs, RNNs, GNNs, GANs, DRL, etc.      (see Table 1/2/3 for more)
+
+                                                       Deep Learning-based Models
+
+Figure 2: A timeline of milestones in the domains of recommender systems (RecSys) and language models (LMs). In order to
+align RecSys and LMs domains, the timeline is organized regardless of the exact time period but according to three stages:
+traditional models, pre-trained language models/deep learning-based models, and the era of LLMs as highlighted in colors.
+
+
+[40]–[42]. In order to integrate textual knowledge about                    next-sentence prediction, thereby capturing the nuances of
+users and items, DeepCoNN is developed to use CNNs                          language and meaning in context. This process translates text
+to encode users’ reviews written for items with two parallel                into a vector space, facilitating nuanced and context-aware
+neural networks so as to contribute to rating predictions in                analyses. On the other hand, GPT, based on the transformer
+recommender systems [8]. Meanwhile, a neural attention                      decoder architecture, uses a self-attention mechanism for one-
+framework NARRE is introduced to simultaneously predict                     directional word sequence processing from left to right. GPT
+users’ ratings towards items and generate review-level                      is mainly adopted in language generation tasks, mapping
+explanations for the predictions [43].                                      embedding vectors back to text space, and generating
+    Recently, language models have been increasingly utilized               contextually relevant responses. At last, T5, an encoder-
+in recommender systems due to their capacity to comprehend                  decoder model, could handle any text-to-text task by
+and produce human natural language. These models are                        converting every natural language processing problem into
+designed to comprehend the semantics and syntax of human                    a text generation problem. For instance, it can re-frame a
+natural language, thereby enabling RecSys to provide more                   sentiment analysis task into a text sequence, like ’sentiment:
+personalized recommendations, such as news recommenda-                      I love this movie.’, which adds ’sentiment:’ before ’I love this
+tions [44], [45], and drug recommendations [46]. Specifically,              movie.’. Then it will get the answer ’positive’. By doing so, T5
+a sequential recommendation method called BERT4Rec is                       uses the same model, objective, and training procedure for
+proposed to adopt Bidirectional Encoder Representations                     all tasks, making it a versatile tool for various NLP tasks.
+from Transformers (i.e., BERT) to model the sequential nature                   Due to the increasing scale of models, LLMs have revolu-
+of user behaviors [47]. Furthermore, to take advantage of                   tionized the field of NLP by demonstrating unprecedented
+Transformer’s capability for language generation, Li et al. [48]            capabilities in understanding and generating human-like
+design a transformer-based framework to simultaneously                      textual knowledge [18], [53]. These models (e.g., GPT-3 [15],
+make item recommendations and generate explanations in                      LaMDA [54], PaLM [55], and Vicuna [56]) often based on
+recommender systems.                                                        transformer architectures, undergo training on extensive
+                                                                            volumes of text data. This process enables them to capture
+2.2 From Pre-trained Language Models (PLMs) to Large                        complex patterns and nuances in human language. Recently,
+Language Models (LLMs)                                                      LLMs have demonstrated remarkable capabilities of ICL, a
+As a type of advanced Artificial Intelligence (AI) techniques,              concept that is central to their design and functionality. ICL
+LLMs are trained on a large amount of textural data                         refers to the model’s capacity to comprehend and provide
+with billions of parameters to understand the patterns and                  answers based on the input context as opposed to merely
+structures of natural language. There are several classical                 relying on inside knowledge obtained through pre-training.
+types of pre-trained language models (PLMs) available, such                 Several works have explored the utilization of ICL in various
+as BERT (Bidirectional Encoder Representations from Trans-                  tasks, such as SG-ICL [57] and EPR [58]. These works show
+formers) [49], GPT (Generative Pre-trained Transformer) [50],               that ICL allows LLMs to adapt their responses based on input
+and T5 (Text-To-Text Transfer Transformer) [51]. Typically,                 context instead of generating generic responses. Another
+these language models fall into three main categories:                      technique that can enhance the reasoning abilities of LLMs
+encoder-only models, decoder-only models, and encoder-                      is chain-of-thought (CoT). This method involves supplying
+decoder models.                                                             multiple demonstrations to describe the chain of thought as
+    BERT, GPT, and T5 are distinct models based on the                      examples within the prompt, guiding the model’s reasoning
+Transformer architecture [52]. More specifically, BERT, an                  process [59]. An extension of the CoT is the concept of self-
+encoder-only model, uses bi-directional attention to process                consistency, which operates by implementing a majority
+token sequences, considering both the left and right context                voting mechanism on answers [60]. Current researches
+of each token. It is pre-trained based on massive amounts                   continue to delve into the application of CoT in LLMs, such
+of text data using tasks like masked language modeling and                  as STaR [61], THOR [62], and Tab-CoT [63]. By offering a
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                              5
+
+set of prompts to direct the model’s thought process, CoT           are generally represented as user-item interactions, where
+enables the model to reason more effectively and deliver            users and items are denoted as discrete IDs. Modern
+more accurate responses.                                            recommendation approaches are proposed to model these
+    With the powerful abilities mentioned above, LLMs               behaviors by learning embedding vectors of each ID
+have shown remarkable potential in various fields, such as          representation. Generally, in LLM-based recommendation
+chemistry [17], education [64], and finance [65]. These models,     systems, an item or a user can be represented by a short
+such as ChatGPT, have also been instrumental in enhancing           phrase in the format of “[pref ix] [ID]”, where the prefix
+the functionality and user experience of RecSys. One of the         denotes its type (i.e., item or user) and the ID number helps
+key applications of LLMs in RecSys is the prediction of user        identify its uniqueness.
+ratings for items. This is achieved by analyzing historical             As the early exploration of LLM-based methods, a unified
+user interactions and preferences, which in turn enhances           paradigm called P5 is proposed to facilitate the transfer of
+the accuracy of the recommendations [66], [67]. LLMs have           various recommendation data formats [71], such as user-
+also been employed in sequential recommendations, which             item interactions, user profiles, item descriptions, and user
+analyze the sequence of user interactions to predict their next     reviews, into natural language sequences by mapping users
+preference, such as TALLRec [68], M6-Rec [69], PALR [70],           and items into indexes. Note that the pre-trained T5 backbone
+and P5 [71]. Moreover, LLMs, particularly ChatGPT, have             is used to train the P5 with personalized prompts. Meanwhile,
+been utilized to generate explainable recommendations. One          P5 incorporates the normal index phrase with a pair of
+such example is Chat-Rec [3], which leverages ChatGPT               angle brackets to treat these indexes as special tokens in
+to provide clear and comprehensible reasoning behind its            the vocabulary of LLMs (e.g., < item 6637 >), avoiding
+suggestions, thereby fostering trust and user engagement.           tokenizing the phrases into separate tokens.
+Furthermore, the interactive and conversational capabilities            Based on P5, Hua et al. put forward four straightforward
+of LLMs have been harnessed to create a more dynamic                but effective indexing solutions [74]: sequential indexing,
+recommendation experience. For instance, UniCRS [72] de-            collaborative indexing, semantic (content-based) indexing,
+velops a knowledge-enhanced prompt learning framework to            and hybrid indexing, underscoring the significance of
+fulfill both conversation and recommendation subtasks based         indexing methods. Different from P5’s randomly assigning
+on a pre-trained language model. UniMIND [73] proposes              numerical IDs to each user or item, Semantic IDs, a tuple
+a unified multi-task learning framework by using prompt-            of codewords with semantic meanings for each user or
+based learning strategies in conversational recommender             item, is proposed to serve as unique identifiers, each
+systems. Furthermore, it is worth noting that to investigate        carrying semantic meaning for a particular user or item
+the potential of LLMs in learning on graphs, Chen et al. [18]       [75]. Meanwhile, to generate these codewords, a hierarchical
+introduce two possible pipelines: LLMs-as-Enhancers (e.g.,          method called RQ-VAE is also proposed [75] to leverage
+LLMs enhance the textual information of node attributes)            Semantic IDs, where recommendation data formats can be
+and LLMs-as-Predictors (e.g., LLMs serve as independent             effectively transformed into natural language sequences for
+predictor in graph learning like link prediction problems),         transformer-based models.
+which provide guidance on the design of LLMs for graph-
+based recommendations.
+                                                                    3.2 Textual Side Information-enhanced Recommender
+                                                                    Systems
+3  D EEP R EPRESENTATION L EARNING FOR LLM- Despite the aforementioned success, ID-based methods suffer
+BASED R ECOMMENDER S YSTEMS                 from intrinsic limitations. That is due to the fact that pure
+Users and items are atomic units of recommender systems.            ID indexing of users and items is naturally discrete, which
+To denote items and users in recommender systems, the               cannot provide sufficient semantic information to capture
+straightforward method assigns each item or user a unique           representations of users and items for recommendations.
+index (i.e., discrete IDs). To capture users’ preferences           As a result, it is very challenging to perform relevance
+towards items, ID-based recommender systems are proposed            calculations based on index representations among users and
+to learn representations of users and items from user-item          items, especially when user-item interactions are severely
+interactions. In addition, since textual side information about     sparse. Meanwhile, ID indexing usually requires modifying
+users and items provides rich knowledge to understand               the vocabularies and altering the parameters of LLMs, which
+users’ interests, textual side information-enhanced recom-          brings additional computation costs.
+mendation methods are developed to enhance user and item                To address these limitations, a promising alternative
+representation learning in an end-to-end training manner            solution is to leverage textual side information of users and
+for recommender systems. In this section, we will introduce         items, which includes user profiles, user reviews for items,
+these two categories that take advantage of language models         and item titles or descriptions. Specifically, given the textual
+in recommender systems. These two kinds of recommender              side information of an item or a user, language models like
+systems are illustrated in Figure 3.                                BERT can serve as the text encoder to map the item or user
+                                                                    into the semantic space, where we can group similar items
+                                                                    or users and figure out their differences in a more fine-
+3.1   ID-based Recommender Systems                                  grained granularity. For instance, Li et al. have investigated
+Recommender systems are commonly used to affect users’              the performance comparison between ID and modality-based
+behaviors for making decisions from a range of candidate            recommender systems, showing that ID-based recommender
+items. These user behaviors (e.g., click, like, and subscription)   systems might be challenged by recommender systems
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                                       6
+
+                           ID-based Representation                          Textual Side Information-enhanced Representation
+
+                                                                             Textual side
+     Discrete user IDs:   <user_0999>   <user_1000>   <user_1024>            information:
+                                                                          (e.g., user reviews)
+     User-item interactions:
+     (e.g., watch history)
+     Discrete item IDs:   <item_1001>   <item_1002>   <item_1997>                                          Encoder (e.g., BERT)
+
+                                                                            Semantic space
+                                                                              of users:          <embeddings_A>   <embeddings_B>   <...>
+
+
+
+Figure 3: An illustration of two methods for representing users and items in LLM-based recommender systems: ID-
+based Representation which denotes user-item interactions with discrete identities, and Textual Side Information-enhanced
+Representation which leverages textual side information of users and items, such as user reviews of items.
+
+
+that can better utilize side information [76]. Meanwhile,           More specifically, we will focus on the specific pre-training
+Unisec [77] is one such approach that takes advantage               tasks applied in LLMs for recommender systems and fine-
+of item descriptions to learn transferable representations          tuning strategies for better performance in downstream
+from various recommendation scenarios. More specifically,           recommendation tasks. Note that the works mentioned below
+Unisec also introduces a lightweight item encoder to                are summarized in Table 1 and Table 2.
+encode universal item representations by using parametric
+whitening and a mixture-of-experts (MoE) enhanced adaptor.          4.1      Pre-training Paradigm for Recommender Systems
+Besides, text-based collaborative filtering (TCF) is also
+explored by prompting LLMs like GPT-3 [78]. Compared to             Pre-training is an important step in developing LLMs,
+the previous ID-based collaborative filtering, TCF methods          which inherits the idea of transfer learning. It involves
+demonstrate positive performance, proving the potential of          training LLMs on a vast amount of corpus consisting of
+textual side information-enhanced recommender systems.              diverse and unlabeled text data. This strategy enables LLMs
+    However, solely relying on language models to encode            to acquire a broad understanding of various linguistic
+item descriptions might excessively emphasize text features.        aspects, including grammar, syntax, semantics, and even
+To mitigate this issue, VQ-Rec [79] proposes to learn               common sense reasoning. Through pre-training, LLMs can
+vector-quantized item representations, which can map item           learn to recognize and generate coherent and contextually
+text into a vector of discrete indices (i.e., item codes)           appropriate responses. In general, there are two mainstream
+and use them to retrieve item representations from a                paradigms to pre-train LLMs from the view of Natural
+code embedding table in recommendations. Beyond text                Language Processing, while the selection of the pre-training
+features, Fan et al. [80] propose a novel method for the            strategy depends on the specific model structure. For
+Zero-Shot Item-based Recommendation (ZSIR), focusing on             encoder-only or encoder-decoder Transformer structures,
+introducing a Product Knowledge Graph (PKG) to LLMs                 Masked Language Modeling (MLM) is widely adopted, which
+to refine item features. More specifically, user and item           randomly masks tokens or spans in the sequence and requires
+embeddings are learned via multiple pre-training tasks              LLMs to generate the masked tokens or spans based on
+upon the PKG. Moreover, ShopperBERT [81] investigates               the remaining context [91]. At the same time, Next Token
+modeling user behaviors to denote user representations              Prediction (NTP) is deployed for pre-training decoder-only
+in e-commerce recommender systems, which pre-trains                 Transformer structures, which requires prediction for the
+user embedding through several pre-training tasks based             next token based on the given context [50]. Both the two
+on user purchase history. Furthermore, IDA-SR [81], an              pre-training tasks involve completing conditional sentences,
+ID-Agnostic User Behavior Pre-training framework for                but there are differences in their approaches. The Masked
+Sequential Recommendation, directly retains representations         Language Model (MLM) task predicts masked tokens in a bi-
+from text information using pre-trained language models             directional context, while the Next Sentence Prediction (NTP)
+like BERT. Specifically, given an item i and its description        task only considers the previous context. As a result, MLM
+with m tokens Di = {t1 , t2 , ..., tm }, an extra start-of-         could assist LLMs in better understanding the meanings of
+sequence token [CLS] is added to the description Di =               tokens, while NTP is more natural for language generation
+{[CLS], t1 , t2 , ..., tm }. Then, the description is fed as the    tasks.
+input to LLMs. Finally, the embedding of the token [CLS]                In recommender systems, most of the existing works
+could be used as the ID-agnostic item representation.               follow the two classical pre-training paradigms. Next, we
+                                                                    will introduce several representative methods. PTUM [82]
+                                                                    proposes two similar pre-training tasks, Masked Behavior
+4   P RE - TRAINING & F INE - TUNING LLM S FOR R EC -               Prediction (MBP) and Next K behavior Prediction (NBP),
+OMMENDER S YSTEMS                                                   to model user behaviors in recommender systems. Unlike
+In general, there are three key manners in developing               language tokens, user behaviors are more diverse and thus
+and deploying LLMs in recommendation tasks, namely,                 more difficult to predict. In this case, instead of masking a
+pre-training, fine-tuning, and prompting. In this section, we       span of tokens, PTUM only masks a single user behavior
+first introduce the pre-training and fine-tuning paradigms,         with the goal of predicting the masked behavior based on the
+which are shown in Figure 4 and Figure 5, respectively.             other behaviors in the interaction sequence of the target user.
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                                                                                7
+
+
+             Recommendation Datasets
+           user_id: 1024                                               Pre-training LLMs for Recommender Systems                                                        : tunable
+           purchase_history: 0961-> 0832 ->
+           1001 -> 0998 -> 1971 -> 1968
+           next_item: 1997                                                  Method 1: Masked Language Modeling                         Method 2: Next Token Prediction
+           candidate_item: 1980, 1997, 1866
+                                                  Large corpus          Probability of words 0.1% 3.0% ... 0.8%                                      0.6% 1.0%    ...    0.2%
+          Multi-task Pre-training Prompts        unlabeled data
+
+                Tok-k recommendation                                   [CLS]     w1     w2      ......    wpredict   wn   [SEP]             w1       w2      w3     ......
+           Please recommend the next item to
+           <user_id> based on the following                                                      LLMs                                                     LLMs
+           <purchase_history>.
+                                                                       [CLS]     w1     w2      ......    [MASK]     wn   [SEP]            [SEP]     w1      w2     ......
+                  Rating prediction
+            Based on the <rating_history>,
+
+
+                        ...
+            please rate item <next_item>.
+                                                                    e.g.,    [CLS]    Please      recommend ...... [MASK]         to    <user_id>    [SEP]
+
+
+
+Figure 4: A workflow of pre-training LLMs for recommender systems in terms of two representative methods: Masked
+Language Modeling which randomly masks tokens or spans in the sequence and requires LLMs to generate the masked
+tokens or spans based on the remaining context, and Next Token Prediction which requires prediction for the next token based
+on the given context.
+
+                                        Table 1: Pre-training methods for LLM-empowered RecSys.
+
+                      Paradigms              Methods               Pre-training Tasks                                     Code Availability
+                                                          Masked Behavior Prediction
+                                         PTUM [82]                                                           https://github.com/wuch15/PTUM
+                                                          Next K Behavior Prediction
+                     Pre-training
+                                             M6 [69]      Auto-regressive Generation                                     Not available
+                                             P5 [71]         Multi-task Modeling                              https://github.com/jeykigung/P5
+
+
+                                                                                                                                                                    : tunable
+                                                                        Fine-tuning LLMs for Recommender Systems
+             Recommendation Datasets                                                                                                                                : frozen
+           user_id: 1024
+           purchase_history: 0961-> 0832 ->        Small corpus         Method 1: Full-model Fine-tuning                          Method 2: Parameter-efficient
+           1001 -> 0998 -> 1971 -> 1968            task-specific                                                                           Fine-tuning
+           next_item: 1997                             data
+           candidate_item: 1980, 1997, 1866
+
+                                                                     Input       LLMs          Output         Loss            Input        LLMs       Output        Loss
+               Task-specific Prompts
+                Tok-k recommendation                                                                                                      Adapters
+           Please recommend the next item to                                                     Update                                                      Update
+           <user_id> based on the following
+           <purchase_history>.
+                                                                     e.g., Input <- [CLS] Please               recommend ...... [MASK]       to     <user_id>     [SEP]
+
+
+
+Figure 5: A workflow of fine-tuning LLMs for recommender systems in terms of two representative methods: Full-model
+Fine-tuning which involves changing the entire model weights, and Parameter-efficient Fine-tuning which involves fine-tuning
+a small proportion of model weights or a few extra trainable weights while fixing most of the parameters in LLMs.
+
+
+On the other side, NBP models the relevance between past                                 the auto-regressive language generation objective follows the
+and future behaviors, which is crucial for user modeling. The                            Next Token Prediction task in natural language pre-training,
+goal of NBP is to predict the next k behaviors based on the                              but it is slightly different as it predicts the unmasked sentence
+user-item interaction history. Considering the time sequence                             based on the masked sequence.
+of user behaviors, NBP could naturally simulate the users                                    Additionally, P5 adopts multi-mask modeling and mixes
+and thus demonstrate better performance.                                                 datasets of various recommendation tasks for pre-training.
+                                                                                         In this case, it can be generalized to various recommendation
+    M6 [69] also adopts two pre-training objectives motivated
+                                                                                         tasks and even unseen tasks with zero-shot generation ability
+by the two classical pre-training tasks, namely a text-
+                                                                                         [71]. Across different recommendation tasks, P5 applies a
+infilling objective and an auto-regressive language generation
+                                                                                         unified indexing method for representing users and items in
+objective, corresponding to the above two pre-training tasks,
+                                                                                         language sequence as stated in Section 3 so that the Masked
+respectively. To be more specific, the text-infilling objective
+                                                                                         Language Modelling task could be employed.
+exhibits the pre-training task of BART [92], which randomly
+masks a span with several tokens in the text sequence
+and predicts these masked spans as the pre-training target,                              4.2             Fine-tuning Paradigm for Recommender Systems
+providing the capability to assess the plausibility of a text or                         Fine-tuning is a crucial step in deploying pre-trained LLMs
+an event in the recommendation scoring tasks. Meanwhile,                                 for specific downstream tasks. Especially for recommen-
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                           8
+
+                                 Table 2: Fine-tuning methods for LLM-empowered RecSys.
+
+        Paradigms                 Methods                                            References
+                          Full-model Fine-tuning                     [83], [84], [85], [86], [87], [88], and [89]1
+        Fine-tuning
+                      Parameter-efficient Fine-tuning                           [68]2 , [90], and [69]
+        Code Availability: 1 https://github.com/veason-silverbullet/unitrec, 2 https://github.com/sai990323/tallrec
+
+
+dation tasks, LLMs require fine-tuning to grasp more              scores and candidate text perplexity as contrastive objectives
+domain knowledge. Particularly, the fine-tuning paradigm          to improve text-based recommendations.
+involves training the pre-trained model based on task-specific
+recommendation datasets that include user-item interaction
+behaviors (e.g., purchase, click, ratings) and side knowledge
+                                                                  4.2.2   Parameter-efficient Fine-tuning
+about users and items (e.g., users’ social relations and items’
+descriptions). This process allows the model to specialize
+its knowledge and parameters to improve performance               Full-model fine-tuning requires large computational re-
+in the recommendation domain. In general, fine-tuning             sources as the size of LLMs scales up. Currently, it is
+strategies can be divided into two categories according to        infeasible for a single consumption-level GPU to fine-tune
+the proportion of model weights changed to fit the given          the most advanced LLMs, which usually have more than
+task. One is full-model fine-tuning, which changes the entire     10 billion parameters. In this case, Parameter-efficient Fine-
+model weights in the fine-tuning process. By considering the      tuning (PEFT) targets fine-tuning LLMs efficiently with lower
+computation cost, the other is parameter-efficient fine-tuning,   requirements for computational resources. PEFT involves
+which aims to change only a small part of weights or develop      fine-tuning a small proportion of model weights or a few
+trainable adapters to fit specific tasks.                         extra trainable weights while fixing most of the parameters
+                                                                  in LLMs to achieve comparable performance with full-model
+                                                                  fine-tuning.
+4.2.1   Full-model Fine-tuning                                        Currently, the most popular PEFT methods lie in intro-
+As a straightforward strategy in deploying pre-trained LLMs       ducing extra trainable weights as adapters. The adapter
+to fit specific downstream recommendation tasks, full-model       structure is designed for embedding into the transformer
+fine-tuning involves changing the entire model weights. For       structure of LLMs [93]. For each Transformer layer, the
+example, RecLLM [83] is proposed to fine-tune LaMDA as            adapter module is added twice: the first module is added
+a Conversational Recommender System (CRS) for YouTube             after the projection following the multi-head attention, and
+video recommendation. Meanwhile, GIRL [87] leverages a            the other is added after the two feed-forward layers. During
+supervised fine-tuning strategy for instructing LLMs in job       fine-tuning, the original weights of pre-trained LLMs are
+recommendation. However, directly fine-tuning LLMs might          fixed, while the adapters and layer normalization layers are
+bring unintended bias into recommender systems, producing         fine-tuned to fit downstream tasks. Thus, adapters contribute
+serious harm toward specific groups or individuals based on       to the expansion and generalization of LLMs, relieving the
+sensitive attributes such as gender, race, and occupation.        problem of full-model fine-tuning and catastrophic forgetting.
+To mitigate such harmful effects, a simple LLMs-driven            Inspired by the idea of adapters and low intrinsic ranks of
+recommendation (LMRec) [84] is developed to alleviate the         weight matrices in LLMs, Low-Rank Adaptation of LLMs
+observed biases through train-side masking and test-side          (LoRA) [94] introduces low-rank decomposition to simulate
+neutralization of non-preferential entities, which achieves       the change of parameters. Basically, LoRA adds a new
+satisfying results without significant performance drops.         pathway to specific modules handling matrix multiplication
+TransRec [85] studies pre-trained recommender systems in          in the original structure of the LLMs. In the pathway,
+an end-to-end manner, by directly learning from the raw           two serial matrices first reduce the dimension to a pre-
+features of the mixture-of-modality items (i.e., texts and        defined dimension of the middle layer and then increase
+images). In this case, without relying on overlapped users        the dimension back. In this case, the dimension of the middle
+or items, TransRec can be effectively transferred to different    layer could simulate the intrinsic rank.
+scenarios. Additionally, Carranza et al. [86] propose privacy-        In recommender systems, PEFT can greatly reduce the
+preserving large-scale recommender systems by applying            computational cost of fine-tuning LLMs for recommendation
+differentially private (DP) LLMs, which relieves certain          tasks, which requires less update and maintains most of
+challenges and limitations in DP training.                        the model capabilities. TallRec [68] introduces an efficient
+    Contrastive learning has also emerged as a popular            and effective tuning framework on the LLaMA-7B model
+approach for fine-tuning LLMs in recommender systems.             and LoRA for aligning LLMs with recommendation tasks,
+Several methods have been proposed in this direction.             which can be executed on a single RTX 3090. GLRec [90] takes
+SBERT [88] introduces a triple loss function, where an            advantage of LoRA for fine-tuning and adapting LLMs as job
+intent sentence is paired with an anchor, and corresponding       recommenders. LLaRA [95] also utilizes LoRA for fine-tuning
+products are used as positive and negative examples in the        LLMs, enabling LLMs to fit different tasks. Moreover, M6 [69]
+e-commerce domain. Additionally, UniTRec [89] proposes a          applies LoRA fine-tuning, making it feasible to deploy LLMs
+unified framework that combines discriminative matching           in phone devices.
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                                                             9
+
+                                                                                                                                                     : tunable
+                                                                Prompting LLMs for Recommender Systems
+                                                                                                                                                     : frozen
+
+                                         Few-shot examples         Method 1: In-context Learning (ICL)
+                                         demonstrations:       task_description:                  task_description:
+                                                                                                   demonstrations:
+                                         <input_1, output_1>   e.g., <your task is to ...>        <your
+                                                                                                   <input_1,
+                                                                                                        task is
+                                                                                                             output_1>
+                                                                                                                 to ...>
+                                         <input_2, output_2>   prompt:                            prompt: ......                     LLMs         Ouput
+                                                 ......        <original_input, task_template>    <task_template>
+                                                                                                   <input_n, output_n>
+                                         <input_n, output_n>
+               Recommendation Datasets
+
+
+
+
+                                            Small corpus                  Method 2: Prompt Tuning
+                                          task-specific data
+                                                                                                 discrete or continuous       input layer only
+                                                                                              prompt_tokens:
+                                                               original_input:
+                                                               e.g., <purchase_history>   +      w1   w2   w3    ...   wn
+                                                                                                                                       LLMs      Output   Loss
+
+                                                                                                                                                    Update
+
+
+
+                                           Small corpus                 Method 3: Instruction Tuning
+                                                                                                                       <input, target> Sets
+                                           multi-task data
+                                                                     Task_1                      Task_n
+                                                                 instruction:             instruction:
+                                                                 <input, target>          <input, target>
+                                                                                                                            LLMs       Output     Loss
+                                                                                                                                                     Update
+
+
+Figure 6: A workflow of prompting LLMs for recommender systems in terms of three representative methods: In-context
+Learning (top) which requires no parameter update of LLMs, Prompt Tuning (middle) which adds new prompt tokens to
+LLMs and optimizes the prompt along with minimal parameter updates at the input layer of LLMs, and Instruction Tuning
+(bottom) which fine-tunes LLMs over multiple tasks-specific prompts, also known as instructions.
+
+
+5     P ROMPTING LLM S FOR R ECOMMENDER S YS - technique of prompting, by adding prompt tokens to
+TEMS                                                                                          LLMs and then updating them based on task-specific
+                                                                                              recommendation datasets. More recently, instruction tuning
+Apart from pre-training and fine-tuning paradigms, prompt-                                    that combines the pre-training & fine-tuning paradigm with
+ing serves as the latest paradigm for adapting LLMs to                                        prompting [123] is explored to fine-tune LLMs over multiple
+specific downstream tasks with the help of task-specific                                      recommendation tasks with instruction-based prompts,
+prompts. A prompt refers to a text template that can be                                       which enhances the zero-shot performance of LLMs on unseen
+applied to the input of LLMs. For example, a prompt “The                                      recommendation tasks. Figure 6 compares the representative
+relation between and is .” can be designed to deploy LLMs                                     methods corresponding to each of the aforementioned three
+for relation extraction tasks. Prompting enables LLMs to                                      prompting techniques of LLMs, in terms of the workflow
+unify different downstream tasks into language generation                                     of LLMs in recommender systems, input formation, and
+tasks, which are aligned to their objectives during pre-                                      parameter update of LLMs (i.e., either tunable or frozen). In
+training [122]. Compared to pre-training and fine-tuning                                      this section, we will discuss the prompting, prompt tuning,
+LLMs that require large task-specific datasets and costly                                     and instruction tuning techniques in detail, for improving
+parameter updates, prompting makes it possible to adapt                                       the performance of LLMs on recommendation tasks. In
+LLMs to recommendation tasks in more lightweight manners,                                     summary, Table 3 categorizes the existing works according to
+such as providing appropriate task instructions in natural                                    the aforementioned three techniques, including the specific
+language. For instance, the popular ChatGPT retrieval                                         recommendation tasks and the LLM backbones considered
+plugin1 serves as an API schema of prompting, which                                           in these works.
+retrieves customized documents as prompts to the input
+of ChatGPT. As highlighted in Table 3, we categorize the
+insights of prompting LLMs for recommendations into three                                     5.1     Prompting
+representative approaches, namely LLMs act as recommender,                                    The key idea of prompting is to keep LLMs frozen (i.e.,
+Bridge LLMs and RecSys, and LLM-based autonomous agent,                                       no parameters updates), and adapt LLMs to downstream
+along with each subclass of prompting methods.                                                tasks via task-specific prompts. To recap the development
+    Recent research has actively explored prompting to                                        of prompting strategies for adapting LLMs to downstream
+facilitate the performance of LLMs for recommendations,                                       tasks, early-stage conventional prompting methods mainly
+advanced techniques like In-context Learning (ICL) and                                        target unifying downstream tasks to language generation
+Chain-of-thought (CoT) are increasingly investigated to                                       manners, such as text summarization, relation extraction,
+manually design prompts for various recommendation                                            and sentiment analysis. Later on, ICL [15] emerges as a
+tasks. In addition, prompt tuning serves as an additive                                       powerful prompting strategy that allows LLMs to learn
+                                                                                              new tasks (i.e., tasks with knowledge demanding objectives)
+    1. https://github.com/openai/chatgpt-retrieval-plugin                                     based on contextual information. In addition, another up-
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                                                                             10
+
+Table 3: Prompting, prompt tuning, and instruction tuning methods for LLM-empowered RecSys. In particular, we categorize
+the integration of LLMs and RecSys into three representative approaches: ⟨ LLMs act as recommender ⟩ (e.g., LLMs directly
+perform recommendation tasks, such as Tok-K recommendation and explanation generation), ⟨ Bridge LLMs and RecSys ⟩
+(e.g., LLMs provide data augmentation for training recommendation models), and ⟨ LLM-based autonomous agent ⟩ (e.g.,
+LLMs simulate human-level user behaviors in RecSys & Manage complex recommendations into sub-tasks).
+
+         Paradigms               Methods                                     LLM Tasks                              LLM Backbones                 References
+                                                                       Text Summarization                             ChatGPT                           [48]
+                         Conventional Prompting
+                                                                      Relationship Extraction                         ChatGPT                            [4]
+                                                                                                                        GPT-4                          [96]1
+                                                                       Recommendation Tasks
+                                                                                                                      ChatGPT        [48], [67], [96]1 , [97]2 , [98]3 , [99]4
+                                                           (e.g., rating prediction, top-K recommendation,
+                                                                                                                         T5                       [100], [101]5
+                                                     conversational recommendation, explanation generation, etc.)
+                                                                                                                        PaLM                       [102], [103]
+                                                                                                                        GPT-4                          [104]
+                                                                  Data Augmentation of RecSys                         ChatGPT                [104], [105]6 , [106]7
+                                                                                                                        GPT-3                          [107]
+                         In-context Learning (ICL)                                                                    ChatGPT                       [3], [108]
+         Prompting
+                                                                                                                        GPT-3                          [109]
+                                                                    Data Refinement of RecSys
+                                                                                                                        GPT-2                          [110]
+                                                                                                                      ChatGLM                         [111]8
+                                                                    API Call of RecSys & Tools                        ChatGPT                     [112], [113]9
+                                                                                                                        GPT-4                          [114]
+                                                                     User Behavior Simulation
+                                                                                                                      ChatGPT                  [115]10 , [116]11
+                                                                          Task Planning                                LLaMA                           [117]
+                                                                      Recommendation Tasks                               T5                             [20]
+                          Chain-of-thought (CoT)                                                                        GPT-4                          [114]
+                                                                           Task Planning
+                                                                                                                      ChatGPT                          [112]
+                                                                      Recommendation Tasks                              GPT-2                          [118]
+                           Hard Prompt Tuning
+                                                     ICL can be regarded as a subclass of prompt tuning, namely hard prompt tuning (see Section 5.2.1 for explanations)
+
+                                                                                                                         T5                      [119], [120]
+        Prompt Tuning
+                                                                                                                        GPT-2                         [118]
+                            Soft Prompt Tuning                        Recommendation Tasks
+                                                                                                                        PaLM                          [102]
+                                                                                                                         M6                            [69]
+                            Full-model Tuning                                                                            T5                       [20], [66]
+                                                                      Recommendation Tasks
+                               with Prompt                                                                             LLaMA                      [70], [87]
+    Instruction Tuning   Parameter-efficient Model                                                                                           [68]12 , [90], [121]13
+                                                                      Recommendation Tasks                             LLaMA
+                           Tuning with Prompt
+    Code Availability: 1 https://github.com/AaronHeee/LLMs-as-Zero-Shot-Conversational-RecSys, 2 https://github.com/rainym00d/LLM4RS,
+    3 https://github.com/RUCAIBox/LLMRank, 4 https://github.com/RUCAIBox/iEvaLM-CRS, 5 https://github.com/JacksonWuxs/PromptRec,
+    6 https://github.com/Jyonn/GENRE-requests, 7 https://github.com/HKUDS/LLMRec,
+    8 https://github.com/YunjiaXi/Open-WorldKnowledge-Augmented-Recommendation, 9 https://github.com/jwzhanggy/Graph Toolformer,
+    10 https://github.com/RUC-GSAI/YuLan-Rec, 11 https://github.com/LehengTHU/Agent4Rec,
+    12 https://anonymous.4open.science/r/LLM4Rec-Recsys, 13 https://github.com/rutgerswiselab/GenRec.
+
+
+    Note: some references with pre-trained LM backbones (e.g., GPT-2) are included since the corresponding methods are compared with LLM-based baselines.
+
+
+
+
+to-date prompting strategy named CoT [59] serves as a                                    models to generate desired output for specific downstream
+particularly effective method for prompting LLMs to address                              tasks.
+downstream tasks with complex reasoning.                                                     Due to the huge gap between language generation
+                                                                                         tasks (i.e., the pre-training objectives of LLMs) and down-
+                                                                                         stream recommendation tasks, most conventional prompting
+5.1.1     Conventional Prompting                                                         methods have only shown limited applications in specific
+                                                                                         recommendation tasks that have similar nature to language
+There are two major approaches for prompting pre-trained
+                                                                                         generation tasks, such as the review summary of users [48]
+language models to improve the performance on specific
+                                                                                         and the relation labeling between items [4].
+downstream tasks. One approach is prompt engineering,
+which generates prompt by emulating text that language
+models encountered during pre-training (e.g., text in NLP                                5.1.2       In-context Learning (ICL)
+tasks). This allows pre-trained language models to unify                                 Alongside the introduction of GPT-3 [15], ICL is proposed
+downstream tasks with unseen objectives into language                                    as an advanced prompting strategy, which significantly
+generation tasks with known objectives. For instance, Liu et                             boosts the performance of LLMs on adapting to many
+al. [48] consider prompting ChatGPT to format the review                                 downstream tasks. Gao et al. [122] attribute the success of ICL
+summary task in recommendations into generic language                                    in prompting LLMs for downstream tasks to two designs:
+generation task of text summarization, using a prompt “Write                             prompt and in-context demonstrations. In other words, the
+a short sentence to summarize”. Another approach is few-shot                             key innovation of ICL is to elicit the in-context ability of
+prompting, where a few input-output examples (i.e., shots)                               LLMs for learning (new or unseen) downstream tasks from
+are provided to prompt and guide pre-trained language                                    context during the inference stage. In particular, two settings
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                                     11
+
+proposed in ICL are prevalently leveraged for prompting                           Few-shot ICL (with demonstrations)
+LLMs for RecSys. One is the few-shot setting, in which a few
+demonstrations with contexts and desired completions of the            Task Description               Demonstrations
+specific downstream tasks are provided along with prompts.
+                                                                      Your task is to recommend a    Below are some examples.
+The other is the zero-shot setting, where no demonstrations           new item based on ____.        ---------------------------------------
+will be given to LLMs but only natural language descriptions                                         User-item interactions:
+                                                                       Prompt
+of the specific downstream tasks are appended to the prompt.                                         [1] <item title a>
+                                                                      User-item interactions:        [2] <item title b>
+As shown in Figure 7, a brief template of zero-shot ICL and           [1] <item title 1>             Recommend the next item:
+few-shot ICL for recommendation tasks is provided.                    [2] <item title 2>             [3] <item title c>
+                                                                      [3] <item title 3>             ---------------------------------------
+     Many existing works consider both few-shot ICL and                                              ......
+                                                                      Recommend the next item:
+zero-shot ICL settings at the same time to compare their per-         ____.
+formance under the same recommendation tasks. Typically,
+few-shot ICL can outperform zero-shot ICL since additional
+in-context demonstrations are provided to LLMs. Despite             Zero-shot ICL (without demonstrations)
+the reduction in performance, zero-shot ICL entirely relieves
+the requirement of task-specific recommendation datasets Figure 7: A brief template of zero-shot ICL and few-shot ICL
+to form in-context demonstrations and can be suitable for for recommendation tasks.
+certain tasks like conversational recommendations, where
+users are not likely to provide any demonstration to LLMs.
+For example, Wang et al. [99] prompt ChatGPT for conver- and simulate user behaviors like chatting and posting.
+sational recommendations with a zero-shot ICL template
+containing two parts: a text description of conversational 5.1.3 Chain-of-thought (CoT) Prompting
+recommendation tasks (e.g., “Recommend items based on user Although ICL has shown great effectiveness in prompting
+queries in the dialogue.”), and a format guideline in natural LLMs for downstream tasks with in-context demonstrations,
+languages, such as “The output format should be ⟨no.⟩ ⟨item recent studies indicate that LLMs still have limited perfor-
+title⟩.”, making the recommendation results easier to parse.   mance in reasoning-heavy tasks [59]. More specifically, by
+     To adapt LLMs to recommendation tasks via ICL, prompting LLMs with in-context examples of input-output
+a straightforward approach is to teach LLMs to act as pairs, the answers directly generated by LLMs often suffer
+recommenders. For instance, Liu et al. [48] employ ChatGPT from missing one or a few intermediate reasoning steps in
+and propose separate task descriptions tailored to different multi-step problems like mathematical equations, leading to
+recommendation tasks, including top-K recommendation, a broken reasoning logic that causes errors in the subsequent
+rating prediction, and explanation generation, to perform reasoning steps (i.e., “one-step missing errors” [59]). Similar
+ICL based on corresponding input-output examples of multi-step problems also exist in RecSys, such as the multi-
+each recommendation task. For instance, the user rating step reasoning of user preferences based on the multi-turn
+history is given as an example for rating prediction tasks. dialogues in conversational recommendations. To address
+Similarly, other existing works propose their distinct in- such limitations, CoT offers a special prompting strategy
+sights into designing the in-context demonstrations for to enhance the reasoning ability of LLMs, by annotating
+better recommendation performance. For example, a text intermediate reasoning steps to prompt. This enables LLMs
+description of role injection, such as “You are a book rating to break down complicated decision-making processes and
+expert.”, is proposed in [67] to augment the in-context generate the final output with step-by-step reasoning.
+demonstrations, which prevents LLMs from refusing to              Considering the suitable prompting strategies for adapt-
+complete the recommendation tasks (e.g., LLMs sometimes ing LLMs to various downstream tasks with complex
+respond with “As a language model, I don’t have the ability to reasoning, Zhao et al. [19] discuss the combination of ICL
+recommend ...” for recommendation tasks).                      and CoT prompting under two major settings: zero-shot
+     Apart from teaching LLMs to directly act as RecSys, CoT and few-shot CoT. By inserting tricky texts such as
+ICL is also leveraged to bridge LLMs and conventional “Let’s think step by step” and “Therefore, the answer is” to
+recommendation models. For example, a framework named prompt, zero-shot CoT leads LLMs to generate task-specific
+Chat-Rec [3] is proposed to bridge ChatGPT and traditional reasoning steps independently, without providing any task-
+RecSys via ICL, where ChatGPT learns to receive candidate relevant instruction or grounding example. As for few-shot
+items from traditional RecSys and then refines the final CoT, task-specific reasoning steps are manually designed for
+recommendation results. What’s more, Zhang [113] designs each demonstration in ICL, where the original input-output
+a textual API call template for external graph reasoning tools examples are augmented to input-CoT-output manners.
+and successfully teaches ChatGPT to use those templates Besides, CoT can also augment the task descriptions in
+through ICL to access the graph-based recommendation ICL demonstrations, by adding interpretable descriptions of
+results generated by the external tools. More recently, LLM- reasoning steps based on task-specific knowledge.
+based autonomous agents have been explored to simulate            In practice, the design of appropriate CoT reasoning
+user behaviors in RecSys, such as InteRecAgent [114], steps highly depends on the contexts and objectives of
+RecAgent [115], and Agent4Rec [116], by equipping LLMs the specific recommendation tasks. For example, a simple
+with memory and action modules. In particular, few-show CoT template “Please infer the preference of the user and
+ICL methods are designed to connect LLMs with these recommend suitable items.” is proposed to guide LLMs to
+external modules, enabling LLMs to interact with RecSys first infer the user’s explicit preference and then generate
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                          12
+
+final recommendations [20]. Below, we present a preliminary        in order to find suitable prompts for specific recommendation
+idea of CoT prompting, through an example in the context           tasks.
+of e-commerce recommendations.
+    [CoT Prompting] Based on the user purchase history,            5.2.2    Soft Prompt Tuning
+    let’s think step-by-step. First, please infer the user’s       In contrast to discrete prompt, soft prompt tuning employs
+    high-level shopping intent. Second, what items are usually     continuous vectors as prompt (e.g., text embeddings), and
+    bought together with the purchased items? Finally, please      optimizes the prompt based on task-specific datasets, such as
+    select the most relevant items based on the shopping intent    using gradient methods to update the prompt with respect
+    and recommend them to the user.                                to a recommendation loss. In LLMs, soft prompt tokens are
+More recently, studies like InteRecAgent [114] and Rec-            often concatenated to the original input tokens at the input
+Mind [112] have employed CoT prompting, enabling LLMs              layer (e.g., tokenizer). During soft prompt tuning, only the
+to act as agents and manage complex recommendations into           soft prompt and minimal parameters at the input layer of
+sub-tasks by generating plans for utilizing external tools.        LLMs will be updated.
+    Beyond the RecSys field, a recent research [124] has               To improve the recommendation performance of LLMs,
+revealed the great effectiveness of adopting CoT prompting         some existing works combine advanced feature extraction
+to facilitate the graph reasoning ability of LLMs (T5              and representation learning methods to better capture and
+particularly) by modeling the reasoning steps as nodes             embed task-specific information in RecSys into soft prompts.
+and connecting the reasoning paths as edges instead of             For instance, Wu et al. [127] apply contrastive learning to
+a sequential chain. We believe that similar ideas can be           capture user representations and encode them into prompt
+potentially transferred and contribute to the CoT prompting        tokens, and Wang et al. [72] and Guo et al. [128] share the
+for RecSys, based on the fact that recommendation tasks can        similar idea of encoding mutual information in cross-domain
+be considered as a special case of link prediction problems        recommendations into soft prompt. In addition to directly
+in graph learning.                                                 embedding task-specific information into soft prompts, soft
+                                                                   prompts can also be learned based on task-specific datasets.
+5.2   Prompt Tuning                                                For example, randomly initialized soft prompts are adopted
+In contrast to manually prompting LLMs for downstream              to guide T5 to generate desired recommendation results [119],
+tasks (e.g., manually generate task-specific prompt in natural     where the soft prompt is optimized in an end-to-end manner
+language), prompt tuning serves as an additive technique           with respect to a recommendation loss based on the T5
+of prompting, which adds new prompt tokens to LLMs                 output. Compared to the hard prompt, the soft prompt is
+and optimizes the prompt based on the task-specific dataset.       more feasible for tuning on continuous space but at a cost
+Generally, prompt tuning requires less task-specific knowl-        of explainability [119]. In other words, compared to task-
+edge and human effort than manually designing prompts for          specific hard prompt in a natural language like “Your task
+specific tasks and only involves minimal parameter updates         is to recommend ...”, the relationships between the specific
+of the tunable prompt and the input layer of LLMs. For             downstream tasks and the soft prompt written in continuous
+example, AutoPrompt [125] takes the step of decomposing            vectors are not interpretable to humans.
+prompt into a set of vocabulary tokens, and finding the
+suitable tokens to language models via gradient-based search       5.3     Instruction Tuning
+with respect to the performance on specific tasks.
+     According to the definition, prompts can be either discreteAlthough prompting LLMs has demonstrated remarkable
+(i.e., hard) or continuous (i.e., soft) that guide LLMs to      few-shot performance on unseen downstream tasks, recent
+generate the expected output [126]. Thus, we categorize         studies demonstrated that prompting strategies have much
+prompt tuning strategies for prompting LLMs for RecSys into     poorer zero-shot ability [123]. To address the limitations,
+hard prompt tuning and soft prompt tuning, as illustrated       instruction tuning is proposed to fine-tune LLMs over
+below.                                                          multiple task-specific prompts. In other words, instruction
+                                                                tuning possesses features of both prompting and pre-training
+5.2.1 Hard Prompt Tuning                                        & fine-tuning paradigms. This helps LLMs gain better
+Hard prompt tuning is to generate and update discrete text capabilities of exactly following prompts as instructions for
+templates of prompt (e.g., in natural language), for prompting diverse downstream tasks, which hence contributes to the
+LLMs to specific downstream tasks. Dong et al. [126] argue enhanced zero-shot performance of LLMs on unseen tasks by
+that ICL can be considered as a subclass of hard prompt accurately following new task instructions. The key insight of
+tuning and regard the in-context demonstrations in ICL as instruction tuning is to train LLMs to follow prompts as task
+a part of the prompt. From this perspective, ICL performs instructions, rather than to solve specific downstream tasks.
+hard prompt tuning for prompting LLMs to downstream More specifically, instruction tuning can be divided into two
+recommendation tasks by refining prompts in natural stages: “instruction” (i.e., prompt) generation and model
+language based on task-specific recommendation datasets. “tuning”, since the straightforward idea of instruction tuning
+Despite the effectiveness and convenience of generating is the combination of prompting and fine-tuning LLMs.
+or refining natural language prompts for downstream                • Instruction (Prompt) Generation Stage. Formally, in-
+recommendation tasks, hard prompt tuning inevitably faces            struction tuning introduces a format of instruction-
+the challenge of discrete optimization, which requires               based prompt in natural language, which consists of
+laborious trial and error to discover the vast vocabulary space      task-oriented input (i.e., task descriptions based on
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                           13
+
+      task-specific dataset) and desired target (i.e., corre-       is promising to mitigate the hallucination problem. In
+      sponding output based on task-specific dataset) pairs.        addition, the model’s output stage can be scrutinized to
+      Considering the instruction tuning of LLMs for down-          verify the accuracy and factuality of the produced content.
+      stream recommendation tasks, Zhang et al. [20] pro-
+      pose a recommendation-oriented instruction template,          6.2 Trustworthy Large Language Models for Recom-
+      including user preferences, intentions, and task forms,       mender Systems
+      which serves as a common template for generating
+      instructions for various recommendation tasks. More           The development of LLMs for RecSys has brought significant
+      directly, three-part instruction templates in the form        benefits to humans, including economic value creation, time
+      of ”task description-input-output” are used in [68],          and effort savings, and social benefits. However, these data-
+      [70] to generate instructions based on task-specific          driven LLMs for RecSys might also pose serious threats
+      recommendation datasets.                                      to users and society [5], [132], [133], due to unreliable
+   • Model Tuning Stage. The second stage is to fine-tune
+                                                                    decision-making, unequal treatment of various consumers
+      LLMs over multiple aforementioned instructions for            or producers, a lack of transparency and explainability,
+      downstream tasks, where we categorize the existing            and privacy issues stemming from the extensive use of
+      works on RecSys, as shown in Table 3, according to            personal data for customization, among other concerns. As
+      the LLMs fine-tuning manners: full-model tuning and           a result, there is an increasing concern about the issue of
+      parameter-efficient model tuning (see Section 4.2 for         trustworthiness in LLMs for RecSys to mitigate the negative
+      explanations), since basically the same principles of fine-   impacts and enhance public trust in LLM-based RecSys
+      tuning LLMs are adopted in this stage. For example,           techniques. Thus, it is desired to achieve trustworthiness
+      Bao et al. [68] utilize LoRA to make the instruction          in LLMs for RecSys from four of the most crucial dimensions,
+      tuning of LLaMA more lightweight for downstream               including Safety&Robustness, Non-discrimination&Fairness,
+      recommendation tasks.                                         Explainability, and Privacy.
+    In addition to textual data in RecSys, instruction tuning
+                                                                    6.2.1 Safety&Robustness
+has recently been explored to enhance the graph understand-
+ing ability of LLMs for recommendation tasks. In particular,        LLMs have been proven to advance recommender systems
+Wu et al. [90] propose an LLM-based prompt constructor to           in various aspects, but they are also highly vulnerable
+encode the paths of nodes (e.g., candidate items) and edges         to adversarial perturbations (i.e., minor changes in the
+(e.g., relationships between items) in behavior graphs into         input) that can compromise the safety and robustness of
+natural language descriptions, which is subsequently used           their uses in safety-critical applications [53], [132]. These
+for instruction tuning an LLM-based recommender based on            vulnerabilities towards noisy inputs are frequently carried
+task-specific datasets.                                             out with malicious intent, such as to gain unlawful profits
+                                                                    and manipulate markets for specific products [134]–[137].
+                                                                    Therefore, it is crucial to ensure that the output of LLMs
+6     F UTURE D IRECTIONS                                           for recommender systems is stable given small changes in
+In this survey, we have comprehensively reviewed the                the LLMs’ input. In order to enhance model safety and
+recent advanced techniques for LLM-enhanced recommender             robustness, GPT-4 integrates safety-related prompts during
+systems. Since the adaption of LLMs to recommender                  reinforcement learning from human feedback (RLHF) [138].
+systems is still in an early stage, there are still many            However, the RLHF method requires a significant number of
+challenges, which are also the opportunities. In this section,      experts for manual labeling, which might not be feasible in
+we discuss some potential future directions in this field.          practice. An alternative solution might involve the automatic
+                                                                    pre-processing of prompts designed for recommender tasks
+                                                                    before input to LLMs. This could include pre-processing for
+6.1   Hallucination Mitigation                                      malicious prompts or standardizing prompts with similar
+Although LLMs are used in various fields, a significant chal-       purposes to have the same final input, thus potentially
+lenge is the phenomenon of ’hallucination’, where language          improving safety and robustness. In addition, as one of the
+models generate outputs that are plausible-sounding but             representative techniques, adversarial training [139] can be
+factually incorrect or not referable in the input data [129],       used to improve the robustness of LLM-based recommender
+[130]. For instance, considering a scenario where you               systems.
+are seeking today’s news events, the LLMs erroneously
+recommend/generate news that, in fact, does not exist. The          6.2.2 Non-discrimination&Fairness
+causes of this problem are manifold such as source-reference        LLMs, trained on vast datasets, often inadvertently learn and
+divergence existing in the dataset, and training&modeling           perpetuate biases and stereotypes in the human data that
+choices of neural network models [131]. Moreover, the               will later reveal themselves in the recommendation results.
+hallucination issue poses severe threats to users and society,      This phenomenon can lead to a range of adverse outcomes,
+especially in high-stakes recommendation scenarios such             from the propagation of stereotypes to the unfair treatment
+as medical recommendations or legal advice, where the               of certain user groups [2], [140], [141]. For instance, in the
+dissemination of incorrect information can have severe real         context of recommender systems, these biases can manifest
+consequences. To address such issues, employing factual             as discriminatory recommendations, where certain items
+knowledge graphs as supplementary factual knowledge                 are unfairly promoted or demoted based on these learned
+during the training and inference stages of LLMs for RecSys         biases. More recently, a few studies such as FaiRLLM [142]
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                           14
+
+and UP5 [119] explore the fairness problem in recommender         distributed data sources, which guarantees more privacy-
+systems brought by LLMs, which only focus on user-side            preserving recommender systems by enabling localized
+and item generation task. Concurrently, Hou et al. [98] guide     learning and data privacy in a decentralized manner.
+LLMs with prompts to formalize the recommendation task
+as a conditional ranking task to improve item-side fairness.      6.3 Vertical Domain-Specific LLMs for Recommender
+However, studies on non-discrimination and fairness in            Systems
+LLMs for RecSys are at a preliminary stage, further research
+                                                                  General LLMs, such as ChatGPT, whose powerful generation
+is still needed.
+                                                                  and inference capabilities make them a universal tool in
+                                                                  various areas. Vertical domain-specific LLMs are LLMs that
+6.2.3   Explainability                                            have been trained and optimized for a specific domain or
+Owing to privacy and security considerations, certain             industry, such as health [151] and finance [65]. Compared
+companies and organizations choose not to open-source their       to general LLMs for RecSys, vertical domain-specific LLM-
+advanced LLMs, such as ChatGPT and GPT-4, indicating that         empowered RecSys are more focused on the knowledge and
+the architectures and parameters of these LLMs for RecSys         skills of a particular domain and have a higher degree of
+are not publicly available for the public to understand their     domain expertise and practicality. Instead of sifting through
+complex internal working mechanisms. Consequently, LLMs           irrelevant information, users can focus on content that is
+for RecSys can be treated as the ’black box’, complicating        directly aligned with their work or personalized preferences.
+the process for users trying to comprehend why a specific         By providing tailored recommendations, vertical domain-
+output or recommendation was produced. Recently, Bills            specific LLMs for RecSys can save professionals a significant
+et al. [143] try to use GPT-4 to generate natural language        amount of time. More recently, existing works have presented
+descriptions to explain the neuronal behavior in the GPT-2        vertical domain-specific LLMs that cover a wide range of
+model. While this study is foundational, it also introduces       areas, such as medical care [152], [153], law [154], [155],
+fresh perspectives for comprehending the workings of LLMs.        and finance [156]. Due to trained specifically, these vertical
+Neurons exhibit intricate behaviors that may not be easily        domain-specific LLMs can better understand and process
+encapsulated through simple natural language. To this end,        domain-specific knowledge, terminology and context. Yet the
+efforts should be made to understand how LLMs for RecSys          requirement for vast amounts of domain-specific data to train
+function, so as to enhance the explainability of LLM-based        these models poses significant challenges in data collection
+recommender systems.                                              and annotation. As such, constructing high-quality domain
+                                                                  datasets and using suitable tuning strategies for specific
+6.2.4   Privacy                                                   domains are necessary steps in the development of vertical
+                                                                  domain-specific LLMs for RecSys. In particular, Jin et al. [157]
+Privacy is a paramount concern when it comes to LLMs
+                                                                  propose a multilingual dataset named Amazon-M2 as a new
+for RecSys. The reasons for this are multifold. On the
+                                                                  setting of session-based recommendations from Amazon (i.e.,
+one hand, the success of LLMs for recommender systems
+                                                                  sessions containing the interacted items of users) and inspire
+highly depends on large quantities of data that are collected
+                                                                  the opportunities to leverage LLMs as RecSys to learn on
+from a variety of sources, such as social media and
+                                                                  session graphs with multilingual and textual data, such as
+books. Users’ sensitive information (e.g., email and gender)
+                                                                  item (node) attributes including product titles, prices, and
+contained in data is likely to be used to train modern
+                                                                  descriptions across session graphs of users from different
+LLMs for enhancing prediction performance and providing
+                                                                  locales (multilingual).
+personalized experiences, leading to the risk of leaking users’
+private information. On the other hand, these systems often
+handle sensitive user data, including personal preferences,       6.4   Users&Items Indexing
+online behaviors, and other identifiable information. If not      Recent research suggests that LLMs may not perform well
+properly protected, this data could be exploited, leading to      when dealing with long texts in RecSys, as it can be difficult
+breaches of privacy. Therefore, ensuring the privacy and          to effectively capture user-item interaction information in
+security of this data is crucial. Carlini et al. [144] show       long texts [98]. On the other hand, user-item interactions
+that LLMs might reveal some uses’ real identity or private        (e.g., click, like, and subscription) with unique identities
+information when generating text. Recently, Li et al. [145]       (i.e., discrete IDs) in recommender systems contain rich
+introduce RAPT that allows users to customize LLMs with           collaborative knowledge and make great contributions to
+their private data based on prompt tuning. It provides a          understanding and predicting user preferences, encompass-
+direction on how to protect user privacy at LLMs for RecSys.      ing both explicit actions like ratings and reviews, as well
+    Notably, concurrent to the recent advancement of fed-         as implicit behaviors like browsing history or purchase
+erated learning [146] for facilitating data privacy in recom-     data. Several studies, including InstructRec [20], PALR [70],
+mender systems [147], [148], LLMs have brought distinctive        GPT4Rec [110] and UP5 [119], have attempted to utilize
+opportunities to the interplay between data privacy and           user-item history interaction information as text prompts
+federated learning [149]. For instance, Zhuang et al. [150]       inputted into LLMs (e.g., ChatGPT) in order to make
+systematically review the remarkable capabilities of LLMs as      recommendations. To address the long text problem, one
+foundation models for federated learning, where LLMs are          possible solution is to perform user and item indexing for
+leveraged as controllers to seamlessly connect distributed        learning collaborative knowledge by incorporating user-item
+devices. In particular, such scalable frameworks empowered        interactions. Therefore, rather than merely using text formats
+by LLMs support the availability of federated learning on         to represent users and items, advanced methods for indexing
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                                      15
+
+users&items are desired to build LLM-based recommender           have been made to revolutionize recommender systems
+systems.                                                         with LLMs, so as to provide high-quality and personalized
+                                                                 suggestion services. Given the rapid evolution of this
+6.5   Fine-tuning Efficiency                                     research topic in recommender systems, there is a pressing
+                                                                 need for a systematic overview that comprehensively
+In the application of LLMs to RecSys, fine-tuning refers         summarizes the existing LLM-empowered recommender
+to the process of adapting a pre-trained LLM to a specific       systems. To fill the gap, in this survey, we have provided a
+task or domain, such as recommending movies [70] or              comprehensive overview of LLM-empowered RecSys from
+books [68]. This process allows the model to leverage            pre-training&fine-tuning and prompting paradigms, so as
+the general language understanding capabilities learned          to provide researchers and practitioners in relevant fields
+during pre-training while specializing its knowledge to the      with an in-depth understanding. Nevertheless, the current
+task at hand. However, fine-tuning can be computationally        research on LLMs for RecSys is still in its early stage which
+expensive, particularly for very large models and large          calls for more systematic and comprehensive studies of LLMs
+datasets in recommender systems. Therefore, improving the        in this field. Therefore, we also discussed some potential
+efficiency of fine-tuning is a key challenge. In this case, Fu   future directions in this field.
+et al. [158] use adapter modules, which are small, plug-in
+neural networks that can be optimized separately from the
+main model, to achieve parameter-efficient transfer learning.    ACKNOWLEDGMENTS
+However, the current adapter tuning techniques for RecSys        The research described in this paper has been partly
+fall slightly behind full-model fine-tuning when it comes to     supported by NSFC (project no. 62102335), General Research
+cross-platform image recommendation. The exploration of          Funds from the Hong Kong Research Grants Council
+adapter tuning effects for multi-modal (i.e., both text and      (Project No.: PolyU 15200021, 15207322, and 15200023),
+image) RecSys is a potential future direction. In addition,      internal research funds from The Hong Kong Polytech-
+given that most typical adapter tuning does not help to          nic University (project no. P0036200, P0042693, P0048625,
+speed up the training process in practice, it is important       P0048752), Research Collaborative Project No. P0041282, and
+to explore effective optimization techniques to reduce the       SHTM Interdisciplinary Large Grant (project no. P0043302).
+computational cost and time for RecSys through end-to-end        Xiangyu Zhao was supported by APRC-CityU New Research
+training.                                                        Initiatives (No.9610565, Start-up Grant for New Faculty
+                                                                 of City University of Hong Kong), SIRG-CityU Strategic
+6.6   Data Augmentation                                          Interdisciplinary Research Grant (No.7020046, No.7020074),
+Most conventional studies in the recommender systems             HKIDS Early Career Research Grant (No.9360163), and Ant
+domain rely on real data-driven research, founded on             Group (CCF-Ant Research Fund, Ant Group Research Fund).
+the collection of user behavior data via user interac-
+tion in digital platforms or through the recruitment of
+                                                                 R EFERENCES
+annotators. Nonetheless, these approaches appear to be
+resource-intensive and may not be sustainable in the long        [1]   W. Fan, Y. Ma, Q. Li, J. Wang, G. Cai, J. Tang, and D. Yin, “A graph
+                                                                       neural network framework for social recommendations,” IEEE
+term. The quality and variety of the input data directly               Transactions on Knowledge and Data Engineering, 2020.
+influence the performance and versatility of the models.         [2]   X. Chen, W. Fan, J. Chen, H. Liu, Z. Liu, Z. Zhang, and Q. Li,
+With the aim to overcome the shortcomings of real data-                “Fairly adaptive negative sampling for recommendations,” in
+centric studies, Wang et al. [115] introduce RecAgent, a               Proceedings of the ACM Web Conference 2023, 2023, pp. 3723–3733.
+                                                                 [3]   Y. Gao, T. Sheng, Y. Xiang, Y. Xiong, H. Wang, and J. Zhang,
+simulation paradigm for recommender systems based on                   “Chat-rec: Towards interactive and explainable llms-augmented
+LLMs, which includes a user module for browsing and                    recommender system,” arXiv preprint arXiv:2303.14524, 2023.
+communication on the social media, and a recommender             [4]   J. Chen, L. Ma, X. Li, N. Thakurdesai, J. Xu, J. H. Cho, K. Nag,
+                                                                       E. Korpeoglu, S. Kumar, and K. Achan, “Knowledge graph
+module for providing search or recommendation lists.                   completion models are few-shot learners: An empirical study
+Additionally, LLM-Rec [109] incorporates four prompting                of relation labeling in e-commerce with llms,” arXiv preprint
+strategies to improve personalized content recommendations,            arXiv:2305.09858, 2023.
+which demonstrates through experiments that diverse              [5]   W. Fan, X. Zhao, X. Chen, J. Su, J. Gao, L. Wang, Q. Liu, Y. Wang,
+                                                                       H. Xu, L. Chen et al., “A comprehensive survey on trustworthy
+prompts and input augmentation techniques can enhance                  recommender systems,” arXiv preprint arXiv:2209.10117, 2022.
+recommendation performance. Therefore, rather than solely        [6]   X. He, K. Deng, X. Wang, Y. Li, Y. Zhang, and M. Wang,
+deploying LLMs as recommender systems, utilizing them for              “Lightgcn: Simplifying and powering graph convolution network
+                                                                       for recommendation,” in Proceedings of the 43rd International ACM
+data augmentation to bolster recommendations emerges as a              SIGIR conference on research and development in Information Retrieval,
+promising strategy in the future.                                      2020, pp. 639–648.
+                                                                 [7]   W. Fan, T. Derr, Y. Ma, J. Wang, J. Tang, and Q. Li, “Deep
+                                                                       adversarial social recommendation,” in 28th International Joint
+7     C ONCLUSION                                                      Conference on Artificial Intelligence (IJCAI-19). International Joint
+                                                                       Conferences on Artificial Intelligence, 2019, pp. 1351–1357.
+As one of the most advanced AI techniques, LLMs have             [8]   L. Zheng, V. Noroozi, and P. S. Yu, “Joint deep modeling of users
+achieved great success in various applications, such as                and items using reviews for recommendation,” in Proceedings of
+molecule discovery and finance, owing to their remarkable              the tenth ACM international conference on web search and data mining,
+abilities in language understanding and generation, powerful           2017, pp. 425–434.
+                                                                 [9]   S. Zhang, L. Yao, A. Sun, and Y. Tay, “Deep learning based
+generalization and reasoning skills, and prompt adaptation to          recommender system: A survey and new perspectives,” ACM
+new tasks and diverse domains. Similarly, increasing efforts           computing surveys (CSUR), vol. 52, no. 1, pp. 1–38, 2019.
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                                                        16
+
+[10]   W. Fan, C. Liu, Y. Liu, J. Li, H. Li, H. Liu, J. Tang, and                  [32]   J. Lin, X. Dai, Y. Xi, W. Liu, B. Chen, X. Li, C. Zhu, H. Guo, Y. Yu,
+       Q. Li, “Generative diffusion models on graphs: Methods and                         R. Tang et al., “How can recommender systems benefit from large
+       applications,” arXiv preprint arXiv:2302.02591, 2023.                              language models: A survey,” arXiv preprint arXiv:2306.05817, 2023.
+[11]   B. Hidasi, A. Karatzoglou, L. Baltrunas, and D. Tikk, “Session-             [33]   J. Wu, W. Fan, J. Chen, S. Liu, Q. Li, and K. Tang, “Disentangled
+       based recommendations with recurrent neural networks,” arXiv                       contrastive learning for social recommendation,” in Proceedings of
+       preprint arXiv:1511.06939, 2015.                                                   the 31st ACM International Conference on Information & Knowledge
+[12]   W. Fan, Y. Ma, D. Yin, J. Wang, J. Tang, and Q. Li, “Deep social                   Management, 2022, pp. 4570–4574.
+       collaborative filtering,” in Proceedings of the 13th ACM Conference         [34]   W. Fan, X. Liu, W. Jin, X. Zhao, J. Tang, and Q. Li, “Graph trend
+       on Recommender Systems, 2019, pp. 305–313.                                         filtering networks for recommendation,” in Proceedings of the 45th
+[13]   W. Fan, Y. Ma, Q. Li, Y. He, E. Zhao, J. Tang, and D. Yin, “Graph                  International ACM SIGIR Conference on Research and Development in
+       neural networks for social recommendation,” in The world wide                      Information Retrieval, 2022, pp. 112–121.
+       web conference, 2019, pp. 417–426.                                          [35]   W. Fan, Q. Li, and M. Cheng, “Deep modeling of social relations
+[14]   Z. Qiu, X. Wu, J. Gao, and W. Fan, “U-bert: Pre-training user                      for recommendation,” in Proceedings of the AAAI Conference on
+       representations for improved recommendation,” in Proceedings of                    Artificial Intelligence, vol. 32, no. 1, 2018.
+       the AAAI Conference on Artificial Intelligence, vol. 35, no. 5, 2021, pp.   [36]   X. Zhao, H. Liu, W. Fan, H. Liu, J. Tang, and C. Wang,
+       4320–4327.                                                                         “Autoloss: Automated loss function search in recommendations,”
+[15]   T. Brown, B. Mann, N. Ryder, M. Subbiah, J. D. Kaplan,                             in Proceedings of the 27th ACM SIGKDD Conference on Knowledge
+       P. Dhariwal, A. Neelakantan, P. Shyam, G. Sastry, A. Askell et al.,                Discovery & Data Mining, 2021, pp. 3959–3967.
+       “Language models are few-shot learners,” NeurIPS, 2020.
+                                                                                   [37]   X. Zhao, H. Liu, W. Fan, H. Liu, J. Tang, C. Wang, M. Chen,
+[16]   L. Zhou, H. Palangi, L. Zhang, H. Hu, J. Corso, and J. Gao,
+                                                                                          X. Zheng, X. Liu, and X. Yang, “Autoemb: Automated embedding
+       “Unified vision-language pre-training for image captioning and
+                                                                                          dimensionality search in streaming recommendations,” in 2021
+       vqa,” in Proceedings of the AAAI conference on artificial intelligence,
+                                                                                          IEEE International Conference on Data Mining (ICDM). IEEE, 2021,
+       vol. 34, no. 07, 2020, pp. 13 041–13 049.
+                                                                                          pp. 896–905.
+[17]   J. Li, Y. Liu, W. Fan, X.-Y. Wei, H. Liu, J. Tang, and Q. Li,
+       “Empowering molecule discovery for molecule-caption translation             [38]   F. Vasile, E. Smirnova, and A. Conneau, “Meta-prod2vec: Product
+       with large language models: A chatgpt perspective,” arXiv preprint                 embeddings using side-information for recommendation,” in
+       arXiv:2306.06615, 2023.                                                            Proceedings of the 10th ACM conference on recommender systems,
+                                                                                          2016, pp. 225–232.
+[18]   Z. Chen, H. Mao, H. Li, W. Jin, H. Wen, X. Wei, S. Wang,
+       D. Yin, W. Fan, H. Liu et al., “Exploring the potential of large            [39]   X. He, L. Liao, H. Zhang, L. Nie, X. Hu, and T.-S. Chua, “Neural
+       language models (llms) in learning on graphs,” arXiv preprint                      collaborative filtering,” in Proceedings of the 26th international
+       arXiv:2307.03393, 2023.                                                            conference on world wide web, 2017, pp. 173–182.
+[19]   W. X. Zhao, K. Zhou, J. Li, T. Tang, X. Wang, Y. Hou, Y. Min,               [40]   R. Ying, R. He, K. Chen, P. Eksombatchai, W. L. Hamilton, and
+       B. Zhang, J. Zhang, Z. Dong et al., “A survey of large language                    J. Leskovec, “Graph convolutional neural networks for web-scale
+       models,” arXiv preprint arXiv:2303.18223, 2023.                                    recommender systems,” in Proceedings of the 24th ACM SIGKDD
+[20]   J. Zhang, R. Xie, Y. Hou, W. X. Zhao, L. Lin, and J.-R. Wen,                       international conference on knowledge discovery & data mining, 2018,
+       “Recommendation as instruction following: A large language                         pp. 974–983.
+       model empowered recommendation approach,” arXiv preprint                    [41]   Y. Ma and J. Tang, Deep learning on graphs. Cambridge University
+       arXiv:2305.07001, 2023.                                                            Press, 2021.
+[21]   B. Min, H. Ross, E. Sulem, A. P. B. Veyseh, T. H. Nguyen, O. Sainz,         [42]   T. Derr, Y. Ma, W. Fan, X. Liu, C. Aggarwal, and J. Tang,
+       E. Agirre, I. Heintz, and D. Roth, “Recent advances in natural                     “Epidemic graph convolutional network,” in Proceedings of the 13th
+       language processing via large pre-trained language models: A                       International Conference on Web Search and Data Mining (WSDM),
+       survey,” ACM Computing Surveys, vol. 56, no. 2, pp. 1–40, 2023.                    2020, pp. 160–168.
+[22]   C. Gao, Y. Zheng, N. Li, Y. Li, Y. Qin, J. Piao, Y. Quan, J. Chang,         [43]   C. Chen, M. Zhang, Y. Liu, and S. Ma, “Neural attentional rating
+       D. Jin, X. He et al., “A survey of graph neural networks for                       regression with review-level explanations,” in Proceedings of the
+       recommender systems: Challenges, methods, and directions,”                         2018 world wide web conference, 2018, pp. 1583–1592.
+       ACM Transactions on Recommender Systems, vol. 1, no. 1, pp. 1–              [44]   F. Wu, Y. Qiao, J.-H. Chen, C. Wu, T. Qi, J. Lian, D. Liu, X. Xie,
+       51, 2023.                                                                          J. Gao, W. Wu et al., “Mind: A large-scale dataset for news
+[23]   M. M. Afsar, T. Crump, and B. Far, “Reinforcement learning                         recommendation,” in Proceedings of the 58th Annual Meeting of
+       based recommender systems: A survey,” ACM Computing Surveys,                       the Association for Computational Linguistics, 2020, pp. 3597–3606.
+       vol. 55, no. 7, pp. 1–38, 2022.                                             [45]   C. Wu, F. Wu, Y. Huang, and X. Xie, “Personalized news
+[24]   S. Wu, F. Sun, W. Zhang, X. Xie, and B. Cui, “Graph neural                         recommendation: Methods and challenges,” ACM Transactions
+       networks in recommender systems: a survey,” ACM Computing                          on Information Systems, vol. 41, no. 1, pp. 1–50, 2023.
+       Surveys, 2022.                                                              [46]   S. Dongre and J. Agrawal, “Deep learning-based drug
+[25]   B. Alhijawi, A. Awajan, and S. Fraihat, “Survey on the objectives                  recommendation and adr detection healthcare model on social
+       of recommender systems: measures, solutions, evaluation                            media,” IEEE Transactions on Computational Social Systems, 2023.
+       methodology, and new perspectives,” ACM Computing Surveys,
+                                                                                   [47]   F. Sun, J. Liu, J. Wu, C. Pei, X. Lin, W. Ou, and P. Jiang,
+       vol. 55, no. 5, pp. 1–38, 2022.
+                                                                                          “Bert4rec: Sequential recommendation with bidirectional encoder
+[26]   E. Zangerle and C. Bauer, “Evaluating recommender systems:
+                                                                                          representations from transformer,” in Proceedings of the 28th ACM
+       survey and framework,” ACM Computing Surveys, vol. 55, no. 8,
+                                                                                          international conference on information and knowledge management,
+       pp. 1–38, 2022.
+                                                                                          2019, pp. 1441–1450.
+[27]   M. Zehlike, K. Yang, and J. Stoyanovich, “Fairness in ranking, part
+       ii: Learning-to-rank and recommender systems,” ACM Computing                [48]   J. Liu, C. Liu, R. Lv, K. Zhou, and Y. Zhang, “Is chatgpt
+       Surveys, vol. 55, no. 6, pp. 1–41, 2022.                                           a good recommender? a preliminary study,” arXiv preprint
+                                                                                          arXiv:2304.10149, 2023.
+[28]   J. Chen, H. Dong, X. Wang, F. Feng, M. Wang, and X. He, “Bias and
+       debias in recommender system: A survey and future directions,”              [49]   J. Devlin, M.-W. Chang, K. Lee, and K. Toutanova, “Bert:
+       ACM Transactions on Information Systems, vol. 41, no. 3, pp. 1–39,                 Pre-training of deep bidirectional transformers for language
+       2023.                                                                              understanding,” arXiv preprint arXiv:1810.04805, 2018.
+[29]   Y. Wang, W. Ma, M. Zhang, Y. Liu, and S. Ma, “A survey on                   [50]   A. Radford, K. Narasimhan, T. Salimans, I. Sutskever et al.,
+       the fairness of recommender systems,” ACM Transactions on                          “Improving language understanding by generative pre-training,”
+       Information Systems, vol. 41, no. 3, pp. 1–43, 2023.                               2018.
+[30]   P. Liu, L. Zhang, and J. A. Gulla, “Pre-train, prompt and                   [51]   C. Raffel, N. Shazeer, A. Roberts, K. Lee, S. Narang, M. Matena,
+       recommendation: A comprehensive survey of language modelling                       Y. Zhou, W. Li, and P. J. Liu, “Exploring the limits of transfer
+       paradigm adaptations in recommender systems,” arXiv preprint                       learning with a unified text-to-text transformer,” The Journal of
+       arXiv:2302.03735, 2023.                                                            Machine Learning Research, vol. 21, no. 1, pp. 5485–5551, 2020.
+[31]   L. Wu, Z. Zheng, Z. Qiu, H. Wang, H. Gu, T. Shen, C. Qin, C. Zhu,           [52]   A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, L. Jones, A. N.
+       H. Zhu, Q. Liu et al., “A survey on large language models for                      Gomez, Ł. Kaiser, and I. Polosukhin, “Attention is all you need,”
+       recommendation,” arXiv preprint arXiv:2305.19860, 2023.                            Advances in neural information processing systems, vol. 30, 2017.
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                                                     17
+
+[53]   Z. Zhang, G. Zhang, B. Hou, W. Fan, Q. Li, S. Liu, Y. Zhang, and        [75]   S. Rajput, N. Mehta, A. Singh, R. H. Keshavan, T. Vu, L. Heldt,
+       S. Chang, “Certified robustness for large language models with                 L. Hong, Y. Tay, V. Q. Tran, J. Samost et al., “Recommender systems
+       self-denoising,” arXiv preprint arXiv:2307.07171, 2023.                        with generative retrieval,” arXiv preprint arXiv:2305.05065, 2023.
+[54]   R. Thoppilan, D. De Freitas, J. Hall, N. Shazeer, A. Kulshreshtha,      [76]   Z. Yuan, F. Yuan, Y. Song, Y. Li, J. Fu, F. Yang, Y. Pan, and
+       H.-T. Cheng, A. Jin, T. Bos, L. Baker, Y. Du et al., “Lamda: Language          Y. Ni, “Where to go next for recommender systems? id-vs.
+       models for dialog applications,” arXiv preprint arXiv:2201.08239,              modality-based recommender models revisited,” arXiv preprint
+       2022.                                                                          arXiv:2303.13835, 2023.
+[55]   A. Chowdhery, S. Narang, J. Devlin, M. Bosma, G. Mishra,                [77]   Y. Hou, S. Mu, W. X. Zhao, Y. Li, B. Ding, and J.-R. Wen, “Towards
+       A. Roberts, P. Barham, H. W. Chung, C. Sutton, S. Gehrmann                     universal sequence representation learning for recommender
+       et al., “Palm: Scaling language modeling with pathways,” arXiv                 systems,” in Proceedings of the 28th ACM SIGKDD Conference on
+       preprint arXiv:2204.02311, 2022.                                               Knowledge Discovery and Data Mining, 2022, pp. 585–593.
+[56]   W.-L. Chiang, Z. Li, Z. Lin, Y. Sheng, Z. Wu, H. Zhang, L. Zheng,       [78]   R. Li, W. Deng, Y. Cheng, Z. Yuan, J. Zhang, and F. Yuan,
+       S. Zhuang, Y. Zhuang, J. E. Gonzalez et al., “Vicuna: An open-                 “Exploring the upper limits of text-based collaborative filtering
+       source chatbot impressing gpt-4 with 90%* chatgpt quality,” See                using large language models: Discoveries and insights,” arXiv
+       https://vicuna. lmsys. org (accessed 14 April 2023), 2023.                     preprint arXiv:2305.11700, 2023.
+[57]   H. J. Kim, H. Cho, J. Kim, T. Kim, K. M. Yoo, and S.-g. Lee,            [79]   Y. Hou, Z. He, J. McAuley, and W. X. Zhao, “Learning
+       “Self-generated in-context learning: Leveraging auto-regressive                vector-quantized item representation for transferable sequential
+       language models as a demonstration generator,” arXiv preprint                  recommenders,” in Proceedings of the ACM Web Conference 2023,
+       arXiv:2206.08082, 2022.                                                        2023, pp. 1162–1171.
+[58]   O. Rubin, J. Herzig, and J. Berant, “Learning to retrieve prompts       [80]   Z. Fan, Z. Liu, S. Heinecke, J. Zhang, H. Wang, C. Xiong, and P. S.
+       for in-context learning,” arXiv preprint arXiv:2112.08633, 2021.               Yu, “Zero-shot item-based recommendation via multi-task product
+[59]   J. Wei, X. Wang, D. Schuurmans, M. Bosma, E. Chi, Q. Le, and                   knowledge graph pre-training,” arXiv preprint arXiv:2305.07633,
+       D. Zhou, “Chain of thought prompting elicits reasoning in large                2023.
+       language models,” arXiv preprint arXiv:2201.11903, 2022.                [81]   K. Shin, H. Kwak, K.-M. Kim, M. Kim, Y.-J. Park, J. Jeong, and
+[60]   X. Wang, J. Wei, D. Schuurmans, Q. Le, E. Chi, S. Narang,                      S. Jung, “One4all user representation for recommender systems in
+       A. Chowdhery, and D. Zhou, “Self-consistency improves chain                    e-commerce,” arXiv preprint arXiv:2106.00573, 2021.
+       of thought reasoning in language models,” arXiv preprint                [82]   C. Wu, F. Wu, T. Qi, J. Lian, Y. Huang, and X. Xie, “Ptum:
+       arXiv:2203.11171, 2022.                                                        Pre-training user model from unlabeled user behaviors via self-
+[61]   E. Zelikman, Y. Wu, J. Mu, and N. Goodman, “Star: Bootstrapping                supervision,” arXiv preprint arXiv:2010.01494, 2020.
+       reasoning with reasoning,” Advances in Neural Information
+                                                                               [83]   L. Friedman, S. Ahuja, D. Allen, T. Tan, H. Sidahmed, C. Long,
+       Processing Systems, vol. 35, pp. 15 476–15 488, 2022.
+                                                                                      J. Xie, G. Schubiner, A. Patel, H. Lara et al., “Leveraging large
+[62]   H. Fei, B. Li, Q. Liu, L. Bing, F. Li, and T.-S. Chua, “Reasoning              language models in conversational recommender systems,” arXiv
+       implicit sentiment with chain-of-thought prompting,” arXiv                     preprint arXiv:2305.07961, 2023.
+       preprint arXiv:2305.11255, 2023.
+                                                                               [84]   T. Shen, J. Li, M. R. Bouadjenek, Z. Mai, and S. Sanner,
+[63]   Z. Jin and W. Lu, “Tab-cot: Zero-shot tabular chain of thought,”
+                                                                                      “Towards understanding and mitigating unintended biases
+       arXiv preprint arXiv:2305.17812, 2023.
+                                                                                      in language model-driven conversational recommendation,”
+[64]   E. Kasneci, K. Seßler, S. Küchemann, M. Bannert, D. Dementieva,               Information Processing & Management, vol. 60, no. 1, p. 103139,
+       F. Fischer, U. Gasser, G. Groh, S. Günnemann, E. Hüllermeier                 2023.
+       et al., “Chatgpt for good? on opportunities and challenges of large
+                                                                               [85]   J. Wang, F. Yuan, M. Cheng, J. M. Jose, C. Yu, B. Kong,
+       language models for education,” Learning and Individual Differences,
+                                                                                      Z. Wang, B. Hu, and Z. Li, “Transrec: Learning transferable
+       vol. 103, p. 102274, 2023.
+                                                                                      recommendation from mixture-of-modality feedback,” arXiv
+[65]   S. Wu, O. Irsoy, S. Lu, V. Dabravolski, M. Dredze, S. Gehrmann,
+                                                                                      preprint arXiv:2206.06190, 2022.
+       P. Kambadur, D. Rosenberg, and G. Mann, “Bloomberggpt: A
+       large language model for finance,” arXiv preprint arXiv:2303.17564,     [86]   A. G. Carranza, R. Farahani, N. Ponomareva, A. Kurakin,
+       2023.                                                                          M. Jagielski, and M. Nasr, “Privacy-preserving recommender
+                                                                                      systems with synthetic query generation using differentially
+[66]   W.-C. Kang, J. Ni, N. Mehta, M. Sathiamoorthy, L. Hong,
+                                                                                      private large language models,” arXiv preprint arXiv:2305.05973,
+       E. Chi, and D. Z. Cheng, “Do llms understand user preferences?
+                                                                                      2023.
+       evaluating llms on user rating prediction,” arXiv preprint
+       arXiv:2305.06474, 2023.                                                 [87]   Z. Zheng, Z. Qiu, X. Hu, L. Wu, H. Zhu, and H. Xiong, “Generative
+[67]   A. Zhiyuli, Y. Chen, X. Zhang, and X. Liang, “Bookgpt: A                       job recommendations with large language model,” arXiv preprint
+       general framework for book recommendation empowered by                         arXiv:2307.02157, 2023.
+       large language model,” arXiv preprint arXiv:2305.15673, 2023.           [88]   H. Kim, J. Jeong, K.-M. Kim, D. Lee, H. D. Lee, D. Seo, J. Han,
+[68]   K. Bao, J. Zhang, Y. Zhang, W. Wang, F. Feng, and X. He,                       D. W. Park, J. A. Heo, and R. Y. Kim, “Intent-based product
+       “Tallrec: An effective and efficient tuning framework to align                 collections for e-commerce using pretrained language models,” in
+       large language model with recommendation,” arXiv preprint                      2021 International Conference on Data Mining Workshops (ICDMW).
+       arXiv:2305.00447, 2023.                                                        IEEE, 2021, pp. 228–237.
+[69]   Z. Cui, J. Ma, C. Zhou, J. Zhou, and H. Yang, “M6-rec: Generative       [89]   Z. Mao, H. Wang, Y. Du, and K.-f. Wong, “Unitrec: A unified
+       pretrained language models are open-ended recommender                          text-to-text transformer and joint contrastive learning framework
+       systems,” arXiv preprint arXiv:2205.08084, 2022.                               for text-based recommendation,” arXiv preprint arXiv:2305.15756,
+[70]   Z. Chen, “Palr: Personalization aware llms for recommendation,”                2023.
+       arXiv preprint arXiv:2305.07622, 2023.                                  [90]   L. Wu, Z. Qiu, Z. Zheng, H. Zhu, and E. Chen, “Exploring
+[71]   S. Geng, S. Liu, Z. Fu, Y. Ge, and Y. Zhang, “Recommendation                   large language model for graph data understanding in online
+       as language processing (rlp): A unified pretrain, personalized                 job recommendations,” arXiv preprint arXiv:2307.05722, 2023.
+       prompt & predict paradigm (p5),” in Proceedings of the 16th ACM         [91]   J. D. M.-W. C. Kenton and L. K. Toutanova, “Bert: Pre-training of
+       Conference on Recommender Systems, 2022, pp. 299–315.                          deep bidirectional transformers for language understanding,” in
+[72]   X. Wang, K. Zhou, J.-R. Wen, and W. X. Zhao, “Towards unified                  Proceedings of NAACL-HLT, 2019.
+       conversational recommender systems via knowledge-enhanced               [92]   M. Lewis, Y. Liu, N. Goyal, M. Ghazvininejad, A. Mohamed,
+       prompt learning,” in Proceedings of the 28th ACM SIGKDD                        O. Levy, V. Stoyanov, and L. Zettlemoyer, “Bart: Denoising
+       Conference on Knowledge Discovery and Data Mining, 2022, pp. 1929–             sequence-to-sequence pre-training for natural language gener-
+       1937.                                                                          ation, translation, and comprehension,” in Proceedings of the 58th
+[73]   Y. Deng, W. Zhang, W. Xu, W. Lei, T.-S. Chua, and W. Lam,                      Annual Meeting of the Association for Computational Linguistics, 2020,
+       “A unified multi-task learning framework for multi-goal                        pp. 7871–7880.
+       conversational recommender systems,” ACM Transactions on                [93]   N. Houlsby, A. Giurgiu, S. Jastrzebski, B. Morrone, Q. De Larous-
+       Information Systems, vol. 41, no. 3, pp. 1–25, 2023.                           silhe, A. Gesmundo, M. Attariyan, and S. Gelly, “Parameter-
+[74]   W. Hua, S. Xu, Y. Ge, and Y. Zhang, “How to index item                         efficient transfer learning for nlp,” in International Conference on
+       ids for recommendation foundation models,” arXiv preprint                      Machine Learning. PMLR, 2019, pp. 2790–2799.
+       arXiv:2305.06569, 2023.                                                 [94]   E. J. Hu, Y. Shen, P. Wallis, Z. Allen-Zhu, Y. Li, S. Wang, L. Wang,
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                                                  18
+
+      and W. Chen, “Lora: Low-rank adaptation of large language               [116] A. Zhang, L. Sheng, Y. Chen, H. Li, Y. Deng, X. Wang, and T.-S.
+      models,” arXiv preprint arXiv:2106.09685, 2021.                               Chua, “On generative agents in recommendation,” arXiv preprint
+[95] J. Liao, S. Li, Z. Yang, J. Wu, Y. Yuan, X. Wang, and X. He, “Llara:           arXiv:2310.10108, 2023.
+      Aligning large language models with sequential recommenders,”           [117] Y. Feng, S. Liu, Z. Xue, Q. Cai, L. Hu, P. Jiang, K. Gai, and F. Sun,
+      arXiv preprint arXiv:2312.02445, 2023.                                        “A large language model enhanced conversational recommender
+[96] Z. He, Z. Xie, R. Jha, H. Steck, D. Liang, Y. Feng, B. P. Majumder,            system,” arXiv preprint arXiv:2308.06212, 2023.
+      N. Kallus, and J. McAuley, “Large language models as zero-shot          [118] L. Li, Y. Zhang, and L. Chen, “Personalized prompt learning for
+      conversational recommenders,” in Proceedings of the 32nd ACM                  explainable recommendation,” ACM Transactions on Information
+      international conference on information and knowledge management,             Systems, vol. 41, no. 4, pp. 1–26, 2023.
+      2023, pp. 720–730.                                                      [119] W. Hua, Y. Ge, S. Xu, J. Ji, and Y. Zhang, “Up5: Unbiased
+[97] S. Dai, N. Shao, H. Zhao, W. Yu, Z. Si, C. Xu, Z. Sun, X. Zhang,               foundation model for fairness-aware recommendation,” arXiv
+      and J. Xu, “Uncovering chatgpt’s capabilities in recommender                  preprint arXiv:2305.12090, 2023.
+      systems,” arXiv preprint arXiv:2305.02182, 2023.                        [120] L. Li, Y. Zhang, and L. Chen, “Prompt distillation for efficient
+[98] Y. Hou, J. Zhang, Z. Lin, H. Lu, R. Xie, J. McAuley, and W. X. Zhao,           llm-based recommendation,” in Proceedings of the 32nd ACM
+      “Large language models are zero-shot rankers for recommender                  International Conference on Information and Knowledge Management,
+      systems,” arXiv preprint arXiv:2305.08845, 2023.                              2023, pp. 1348–1357.
+[99] X. Wang, X. Tang, W. X. Zhao, J. Wang, and J.-R. Wen, “Rethinking        [121] J. Ji, Z. Li, S. Xu, W. Hua, Y. Ge, J. Tan, and Y. Zhang, “Genrec:
+      the evaluation for conversational recommendation in the era of                Large language model for generative recommendation,” arXiv
+      large language models,” arXiv preprint arXiv:2305.13112, 2023.                e-prints, pp. arXiv–2307, 2023.
+[100] M. Leszczynski, R. Ganti, S. Zhang, K. Balog, F. Radlinski,             [122] T. Gao, A. Fisch, and D. Chen, “Making pre-trained language
+      F. Pereira, and A. T. Chaganty, “Generating synthetic data for                models better few-shot learners,” arXiv preprint arXiv:2012.15723,
+      conversational music recommendation using random walks and                    2020.
+      language models,” arXiv preprint arXiv:2301.11489, 2023.                [123] J. Wei, M. Bosma, V. Y. Zhao, K. Guu, A. W. Yu, B. Lester, N. Du,
+[101] X. Wu, H. Zhou, W. Yao, X. Huang, and N. Liu, “Towards                        A. M. Dai, and Q. V. Le, “Finetuned language models are zero-shot
+      personalized cold-start recommendation with prompts,” arXiv                   learners,” arXiv preprint arXiv:2109.01652, 2021.
+      preprint arXiv:2306.17256, 2023.                                        [124] Y. Yao, Z. Li, and H. Zhao, “Beyond chain-of-thought, effective
+                                                                                    graph-of-thought reasoning in large language models,” arXiv
+[102] K. Christakopoulou, A. Lalama, C. Adams, I. Qu, Y. Amir,
+                                                                                    preprint arXiv:2305.16582, 2023.
+      S. Chucri, P. Vollucci, F. Soldo, D. Bseiso, S. Scodel et al.,
+      “Large language models for user interest journeys,” arXiv preprint      [125] T. Shin, Y. Razeghi, R. L. Logan IV, E. Wallace, and S. Singh,
+      arXiv:2305.15498, 2023.                                                       “Autoprompt: Eliciting knowledge from language models with
+                                                                                    automatically generated prompts,” arXiv preprint arXiv:2010.15980,
+[103] S. Sanner, K. Balog, F. Radlinski, B. Wedin, and L. Dixon, “Large
+                                                                                    2020.
+      language models are competitive near cold-start recommenders
+      for language-and item-based preferences,” arXiv preprint                [126] Q. Dong, L. Li, D. Dai, C. Zheng, Z. Wu, B. Chang, X. Sun, J. Xu,
+      arXiv:2307.14225, 2023.                                                       and Z. Sui, “A survey for in-context learning,” arXiv preprint
+                                                                                    arXiv:2301.00234, 2022.
+[104] Y. Wang, Z. Chu, X. Ouyang, S. Wang, H. Hao, Y. Shen, J. Gu,
+                                                                              [127] Y. Wu, R. Xie, Y. Zhu, F. Zhuang, X. Zhang, L. Lin, and Q. He,
+      S. Xue, J. Y. Zhang, Q. Cui et al., “Enhancing recommender systems
+                                                                                    “Personalized prompts for sequential recommendation,” arXiv
+      with large language model reasoning graphs,” arXiv preprint
+                                                                                    preprint arXiv:2205.09666, 2022.
+      arXiv:2308.10835, 2023.
+                                                                              [128] L. Guo, C. Wang, X. Wang, L. Zhu, and H. Yin, “Automated
+[105] Q. Liu, N. Chen, T. Sakai, and X.-M. Wu, “A first look at
+                                                                                    prompting for non-overlapping cross-domain sequential recom-
+      llm-powered generative news recommendation,” arXiv preprint
+                                                                                    mendation,” arXiv preprint arXiv:2304.04218, 2023.
+      arXiv:2305.06566, 2023.
+                                                                              [129] P. Manakul, A. Liusie, and M. J. Gales, “Selfcheckgpt: Zero-
+[106] W. Wei, X. Ren, J. Tang, Q. Wang, L. Su, S. Cheng, J. Wang,                   resource black-box hallucination detection for generative large
+      D. Yin, and C. Huang, “Llmrec: Large language models                          language models,” arXiv preprint arXiv:2303.08896, 2023.
+      with graph augmentation for recommendation,” arXiv preprint
+                                                                              [130] N. McKenna, T. Li, L. Cheng, M. J. Hosseini, M. Johnson, and
+      arXiv:2311.00423, 2023.
+                                                                                    M. Steedman, “Sources of hallucination by large language models
+[107] S. Mysore, A. McCallum, and H. Zamani, “Large language model                  on inference tasks,” arXiv preprint arXiv:2305.14552, 2023.
+      augmented narrative driven recommendations,” arXiv preprint
+                                                                              [131] Z. Ji, N. Lee, R. Frieske, T. Yu, D. Su, Y. Xu, E. Ishii, Y. J. Bang,
+      arXiv:2306.02250, 2023.
+                                                                                    A. Madotto, and P. Fung, “Survey of hallucination in natural
+[108] Y. Du, D. Luo, R. Yan, H. Liu, Y. Song, H. Zhu, and J. Zhang,                 language generation,” ACM Computing Surveys, vol. 55, no. 12, pp.
+      “Enhancing job recommendation through llm-based generative                    1–38, 2023.
+      adversarial networks,” arXiv preprint arXiv:2307.10747, 2023.           [132] T. Y. Zhuo, Y. Huang, C. Chen, and Z. Xing, “Exploring ai ethics
+[109] H. Lyu, S. Jiang, H. Zeng, Y. Xia, and J. Luo, “Llm-rec: Personalized         of chatgpt: A diagnostic analysis,” arXiv preprint arXiv:2301.12867,
+      recommendation via prompting large language models,” arXiv                    2023.
+      preprint arXiv:2307.15780, 2023.                                        [133] H. Liu, Y. Wang, W. Fan, X. Liu, Y. Li, S. Jain, Y. Liu, A. Jain,
+[110] J. Li, W. Zhang, T. Wang, G. Xiong, A. Lu, and G. Medioni,                    and J. Tang, “Trustworthy ai: A computational perspective,” ACM
+      “Gpt4rec: A generative framework for personalized recom-                      Transactions on Intelligent Systems and Technology, 2022.
+      mendation and user interests interpretation,” arXiv preprint            [134] W. Fan, T. Derr, X. Zhao, Y. Ma, H. Liu, J. Wang, J. Tang, and Q. Li,
+      arXiv:2304.03879, 2023.                                                       “Attacking black-box recommendations via copying cross-domain
+[111] Y. Xi, W. Liu, J. Lin, J. Zhu, B. Chen, R. Tang, W. Zhang,                    user profiles,” in 2021 IEEE 37th International Conference on Data
+      R. Zhang, and Y. Yu, “Towards open-world recommendation with                  Engineering (ICDE). IEEE, 2021, pp. 1583–1594.
+      knowledge augmentation from large language models,” arXiv               [135] J. Chen, W. Fan, G. Zhu, X. Zhao, C. Yuan, Q. Li, and Y. Huang,
+      preprint arXiv:2306.10933, 2023.                                              “Knowledge-enhanced black-box attacks for recommendations,”
+[112] Y. Wang, Z. Jiang, Z. Chen, F. Yang, Y. Zhou, E. Cho, X. Fan,                 in Proceedings of the 28th ACM SIGKDD Conference on Knowledge
+      X. Huang, Y. Lu, and Y. Yang, “Recmind: Large language                        Discovery and Data Mining, 2022, pp. 108–117.
+      model powered agent for recommendation,” arXiv preprint                 [136] W. Fan, X. Zhao, Q. Li, T. Derr, Y. Ma, H. Liu, J. Wang,
+      arXiv:2308.14296, 2023.                                                       and J. Tang, “Adversarial attacks for black-box recommender
+[113] J. Zhang, “Graph-toolformer: To empower llms with graph                       systems via copying transferable cross-domain user profiles,” IEEE
+      reasoning ability via prompt augmented by chatgpt,” arXiv                     Transactions on Knowledge and Data Engineering, 2023.
+      preprint arXiv:2304.11116, 2023.                                        [137] W. Fan, W. Jin, X. Liu, H. Xu, X. Tang, S. Wang, Q. Li, J. Tang,
+[114] X. Huang, J. Lian, Y. Lei, J. Yao, D. Lian, and X. Xie, “Recommender          J. Wang, and C. Aggarwal, “Jointly attacking graph neural network
+      ai agent: Integrating large language models for interactive                   and its explanations,” in 2023 IEEE 39th International Conference on
+      recommendations,” arXiv preprint arXiv:2308.16505, 2023.                      Data Engineering (ICDE). IEEE, 2023.
+[115] L. Wang, J. Zhang, X. Chen, Y. Lin, R. Song, W. X. Zhao, and J.-R.      [138] OpenAI, “Gpt-4 technical report,” OpenAI, 2023.
+      Wen, “Recagent: A novel simulation paradigm for recommender             [139] J. Tang, X. Du, X. He, F. Yuan, Q. Tian, and T.-S. Chua, “Adversarial
+      systems,” arXiv preprint arXiv:2306.02552, 2023.                              training towards robust multimedia recommender system,” IEEE
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                                                 19
+
+      Transactions on Knowledge and Data Engineering, vol. 32, no. 5, pp.                             Zihuai Zhao is currently a PhD student of
+      855–867, 2019.                                                                                  the Department of Computing (COMP), Hong
+[140] G. Zhang, Y. Zhang, Y. Zhang, W. Fan, Q. Li, S. Liu, and S. Chang,                              Kong Polytechnic University (PolyU), under the
+      “Fairness reprogramming,” in Thirty-sixth Conference on Neural                                  supervision of Prof. Qing Li and Dr. Wenqi Fan.
+      Information Processing Systems, 2022.                                                           Before joining the PolyU, he received both a
+[141] H. Liu, J. Dacon, W. Fan, H. Liu, Z. Liu, and J. Tang, “Does gender                             Master’s degree (MPhil in Electrical Engineering)
+      matter? towards fairness in dialogue systems,” in Proceedings of                                and a Bachelor’s degree (B.Eng. (Hons) in Elec-
+      the 28th International Conference on Computational Linguistics, 2020,                           trical Engineering) from the University of Sydney
+      pp. 4403–4416.                                                                                  in 2023 and 2020, respectively. His research
+[142] J. Zhang, K. Bao, Y. Zhang, W. Wang, F. Feng, and X. He,                                        interest covers Recommender Systems, Natural
+      “Is chatgpt fair for recommendation? evaluating fairness                                        Language Processing, and Deep Reinforcement
+      in large language model recommendation,” arXiv preprint                  Learning. He has published innovative works in top-tier journals such as
+      arXiv:2305.07609, 2023.                                                  IoT-J. For more information, please visit https://scofizz.github.io/.
+[143] S. Bills, N. Cammarata, D. Mossing, H. Tillman, L. Gao, G. Goh,
+      I. Sutskever, J. Leike, J. Wu, and W. Saunders, “Language models
+      can explain neurons in language models,” URL https://openaipublic.
+      blob. core. windows. net/neuron-explainer/paper/index. html.(Date
+      accessed: 14.05. 2023), 2023.
+[144] N. Carlini, F. Tramer, E. Wallace, M. Jagielski, A. Herbert-Voss,
+      K. Lee, A. Roberts, T. B. Brown, D. Song, U. Erlingsson et al.,
+      “Extracting training data from large language models.” in USENIX                                 Wenqi Fan is an assistant professor of the
+      Security Symposium, vol. 6, 2021.                                                                Department of Computing (COMP) and the De-
+[145] Y. Li, Z. Tan, and Y. Liu, “Privacy-preserving prompt tuning for                                 partment of Management and Marketing (MM) at
+      large language model services,” arXiv preprint arXiv:2305.06212,                                 The Hong Kong Polytechnic University (PolyU).
+      2023.                                                                                            He received his Ph.D. degree from the City
+[146] Y. Tong, Y. Zeng, Z. Zhou, B. Liu, Y. Shi, S. Li, K. Xu, and W. Lv,                              University of Hong Kong (CityU) in 2020. From
+      “Federated computing: Query, learning, and beyond,” 2023.                                        2018 to 2020, he was a visiting research scholar
+[147] L. Yang, B. Tan, V. W. Zheng, K. Chen, and Q. Yang,                                              at Michigan State University (MSU). His research
+      “Federated recommendation systems,” Federated Learning: Privacy                                  interests are in the broad areas of machine
+      and Incentive, pp. 225–239, 2020.                                                                learning and data mining, with a particular focus
+[148] Y. Zhang, Y. Shi, Z. Zhou, C. Xue, Y. Xu, K. Xu, and J. Du, “Efficient                           on Recommender Systems, Graph Neural Net-
+      and secure skyline queries over vertical data federation,” IEEE          works, and Trustworthy Recommendations. He has published innovative
+      Transactions on Knowledge and Data Engineering, 2022.                    papers in top-tier journals and conferences such as TKDE, TIST, KDD,
+[149] X. L. Dong, S. Moon, Y. E. Xu, K. Malik, and Z. Yu, “Towards             WWW, ICDE, NeurIPS, ICLR, SIGIR, IJCAI, AAAI, RecSys, WSDM,
+      next-generation intelligent assistants leveraging llm techniques,”       etc. He serves as top-tier conference (Area/Senior) Program Committee
+      in Proceedings of the 29th ACM SIGKDD Conference on Knowledge            members and session chairs (e.g., ICML, ICLR, NeurIPS, KDD, WWW,
+      Discovery and Data Mining, 2023, pp. 5792–5793.                          AAAI, IJCAI, WSDM, EMNLP, ACL, etc.), and journal reviewers (e.g.,
+[150] W. Zhuang, C. Chen, and L. Lyu, “When foundation model meets             TKDE, TIST, TKDD, TOIS, TAI, etc.). More information about him can be
+      federated learning: Motivations, challenges, and future directions,”     found at https://wenqifan03.github.io.
+      arXiv preprint arXiv:2306.15546, 2023.
+[151] A. J. Nastasi, K. R. Courtright, S. D. Halpern, and G. E.
+      Weissman, “Does chatgpt provide appropriate and equitable
+      medical advice?: A vignette-based, clinical evaluation across care
+      contexts,” medRxiv, pp. 2023–02, 2023.                                                          Jiatong Li is currently a PhD student of the
+[152] H. Zhang, J. Chen, F. Jiang, F. Yu, Z. Chen, J. Li, G. Chen, X. Wu,                             Department of Computing (COMP), The Hong
+      Z. Zhang, Q. Xiao et al., “Huatuogpt, towards taming language                                   Kong Polytechnic University (funded by HKPFS).
+      model to be a doctor,” arXiv preprint arXiv:2305.15075, 2023.                                   Before joining the PolyU, he received my Master’s
+[153] H. Xiong, S. Wang, Y. Zhu, Z. Zhao, Y. Liu, Q. Wang, and D. Shen,                               degree of Information Technology (with Distinc-
+      “Doctorglm: Fine-tuning your chinese doctor is not a herculean                                  tion) from the University of Melbourne, under the
+      task,” arXiv preprint arXiv:2304.01097, 2023.                                                   supervision of Dr. Lea Frermann. In 2021, he got
+[154] H.-T. Nguyen, “A brief report on lawgpt 1.0: A virtual legal                                    his bachelor’s degree in Information Security from
+      assistant based on gpt-3,” arXiv preprint arXiv:2302.05729, 2023.                               Shanghai Jiao Tong University. His interest lies
+[155] Q. Huang, M. Tao, Z. An, C. Zhang, C. Jiang, Z. Chen, Z. Wu,                                    in Natural Language Processing, Drug Discovery,
+      and Y. Feng, “Lawyer llama technical report,” arXiv preprint                                    and Recommender Systems. He has published
+      arXiv:2305.15062, 2023.                                                  innovative works in top-tier conferences such as IJCAI and ACL. For
+[156] H. Yang, X.-Y. Liu, and C. D. Wang, “Fingpt: Open-source financial       more information, please visit https://phenixace.github.io/.
+      large language models,” arXiv preprint arXiv:2306.06031, 2023.
+[157] W. Jin, H. Mao, Z. Li, H. Jiang, C. Luo, H. Wen, H. Han, H. Lu,
+      Z. Wang, R. Li et al., “Amazon-m2: A multilingual multi-locale
+      shopping session dataset for recommendation and text generation,”
+      arXiv preprint arXiv:2307.09688, 2023.                                                          Yunqing Liu is currently a PhD student of
+[158] J. Fu, F. Yuan, Y. Song, Z. Yuan, M. Cheng, S. Cheng, J. Zhang,                                 the Department of Computing (COMP), Hong
+      J. Wang, and Y. Pan, “Exploring adapter-based transfer learning for                             Kong Polytechnic University (PolyU), under the
+      recommender systems: Empirical studies and practical insights,”                                 supervision of Dr. Wenqi Fan. Before joining
+      arXiv preprint arXiv:2305.15036, 2023.                                                          the PolyU, he received his Master’s degree in
+                                                                                                      Computer Science from the University of Edin-
+                                                                                                      burgh (M.Sc. in Computer Science), under the
+                                                                                                      supervision of Dr. Elizabeth Polgreen. In 2020, he
+                                                                                                      got his bachelor’s degrees from Wuhan University
+                                                                                                      (B.Sc. in Chemistry and B.Eng. in Computer
+                                                                                                      Science and Technology). His research interest
+                                                                               includes Drug Discovery, Graph Neural Networks, and Natural Language
+                                                                               Processing. He has published innovative works in top-tier conferences
+                                                                               and journals such as IJCAI, EACL, EurJOC and Organic Letters. For
+                                                                               more information, please visit https://liuyunqing.github.io/.
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                                                  20
+
+                       Xiaowei Mei received his PhD in Information                                    Xiangyu Zhao is an assistant professor of the
+                       Systems and Operations Management from the                                     school of data science at City University of Hong
+                       University of Florida. His current research aims to                            Kong (CityU). Before CityU, he completed his
+                       extend standard economic models of information                                 Ph.D. at Michigan State University. His current re-
+                       systems in two directions: differentiating various                             search interests include data mining and machine
+                       forms of social contagion or peer effects in online                            learning, especially on Reinforcement Learning
+                       and offline networks using empirical methods and                               and its applications in Information Retrieval. He
+                       big data analytic skills; and designing optimal                                has published papers in top conferences (e.g.,
+                       market mechanisms in information systems using                                 KDD, WWW, AAAI, SIGIR, ICDE, CIKM, ICDM,
+                       game theory, statistics and simulations methods.                               WSDM, RecSys, ICLR) and journals (e.g., TOIS,
+                       His work has been accepted by leading journals                                 SIGKDD, SIGWeb, EPL, APS). His research
+such as the Journal of Management Information Systems.                        received ICDM’21 Best-ranked Papers, Global Top 100 Chinese New
+                                                                              Stars in AI, CCF-Tencent Open Fund, Criteo Research Award, and
+                                                                              Bytedance Research Award. He serves as top data science conference
+                                                                              (senior) program committee members and session chairs (e.g., KDD,
+                                                                              AAAI, IJCAI, ICML, ICLR, CIKM), and journal reviewers (e.g., TKDE,
+                                                                              TKDD, TOIS, CSUR). He is the organizer of DRL4KDD@KDD’19,
+                                                                              DRL4IR@SIGIR’20, 2nd DRL4KD@WWW’21, 2nd DRL4IR@SIGIR’21,
+                                                                              and a lead tutor at WWW’21 and IJCAI’21. More information about him
+                      Yiqi Wang is an assistant professor at College          can be found at https://zhaoxyai.github.io/.
+                      of Computer, National University of Defense
+                      Technology (NUDT). She is currently working
+                      on graph neural networks including fundamental
+                      algorithms, robustness and their applications.
+                      She has published innovative works in top-tier
+                      conferences such as ICML, KDD, WWW, EMNLP,
+                      WSDM, and AAAI. She serves as top-tier confer-
+                      ence program committee members (e.g., WWW,                                      Jiliang Tang is a University Foundation Profes-
+                      AAAI, IJCAI, CIKM, and WSDM) and journal                                        sor in the computer science and engineering
+                      reviewers (e.g., TIST, TKDD, TKDE and TOIS).                                    department at Michigan State University since
+She also serves as the leading tutor of tutorials in top-tier conferences                             2022. He was an associate professor (2021-
+(e.g., KDD 2020, AAAI2021, SDM 2021, KDD 2021 and ICAPS 2021).                                        2022) and an assistant professor (2016-2021)
+                                                                                                      in the same department. Before that, he was a
+                                                                                                      research scientist in Yahoo Research and got
+                                                                                                      his PhD from Arizona State University in 2015
+                                                                                                      under Dr. Huan Liu. His research interests include
+                                                                                                      graph machine learning, trustworthy AI and their
+                                                                                                      applications in education and biology. He was
+                                                                              the recipient of various awards including 2022 AI’s 10 to Watch, 2022
+                        Zhen Wen is a Sr. Applied Science Manager at          IAPR J. K. AGGARWAL Award, 2022 SIAM/IBM Early Career Research
+                        Amazon Prime Video, leading science efforts in        Award, 2021 IEEE ICDM Tao Li Award, 2021 IEEE Big Data Security
+                        video search, recommendation and promotions.          Junior Research Award, 2020 ACM SIGKDD Rising Star Award, 2020
+                        chief scientist of Tencent news feeds product,        Distinguished Withrow Research Award, 2019 NSF Career Award, and 8
+                        serving more than 200 million users each day. Dr.     best paper awards (or runner-ups). His dissertation won the 2015 KDD
+                        Wen directs a team of AI scientists and engineers     Best Dissertation runner up and Dean’s Dissertation Award. He serves as
+                        aiming at deep content understanding, to source       conference organizers (e.g., KDD, SIGIR, WSDM and SDM) and journal
+                        and push content users find most relevant and         editors (e.g., TKDD, TOIS and TKDE). He has published his research
+                        interesting. Prior to his current role, he directed   in highly ranked journals and top conference proceedings, which have
+                        a team of AI scientists and engineers aiming          received tens of thousands of citations with h-index 82 (Google Scholar)
+                        at deep content understanding for short-form          and extensive media coverage. More details about him can be found at
+video recommendation at Tencent. He also held various science and             https://www.cse.msu.edu/∼tangjili/.
+technology roles at Alibaba Cloud, Google and IBM Research. Dr. Wen
+received PhD from University of Illinois at Urbana-Champaign. His work
+received best paper awards at International Conference On Information
+Systems and ACM Conference on Intelligent User Interfaces. Dr. Wen
+also received multiple Tencent Outstanding RD Award, IBM Outstanding                                 Qing Li received the B.Eng. degree from Hunan
+Innovation Award, IBM Research Accomplishment Award, IBM invention                                   University, Changsha, China, and the M.Sc. and
+achievement award. Dr. Wen served as an Associate Editor of IEEE                                     Ph.D. degrees from the University of Southern
+Transactions on Multimedia.                                                                          California, Los Angeles, all in computer science.
+                                                                                                     He is currently a Chair Professor (Data Science)
+                                                                                                     and the Head of the Department of Computing,
+                                                                                                     the Hong Kong Polytechnic University. He is
+                                                                                                     a Fellow of IEEE and IET, a member of ACM
+                       Fei Wang is head of personalization science at                                SIGMOD and IEEE Technical Committee on Data
+                       Amazon Prime Video responsible for improving                                  Engineering. His research interests include object
+                       user’s experience and engagement by devel-                                    modeling, multimedia databases, social media,
+                       oping a deep understanding of our customers            and recommender systems. He has been actively involved in the research
+                       and providing relevant, personalized and timely        community by serving as an associate editor and reviewer for technical
+                       recommendations. Previously, he was a senior           journals, and as an organizer/co-organizer of numerous international
+                       director with Visa Research leading a group of         conferences. He is the chairperson of the Hong Kong Web Society, and
+                       AI researchers to work on projects ranging from        also served/is serving as an executive committee (EXCO) member of
+                       personalized restaurant recommendations, and           IEEE-Hong Kong Computer Chapter and ACM Hong Kong Chapter. In
+                       fraud reduction, to credit risk prevention. With       addition, he serves as a councilor of the Database Society of Chinese
+                       50+ patents and 50+ research articles, he is           Computer Federation (CCF), a member of the Big Data Expert Committee
+also known for research on financial data mining, mobile healthcare,          of CCF, and is a Steering Committee member of DASFAA, ER, ICWL,
+social computing and multimodal information retrieval. He has received a      UMEDIA, and WISE Society.
+number of best paper awards from conferences like RecSys, Multimedia
+Information Retrieval and Computers in Cardiology.
+

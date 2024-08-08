@@ -3,25 +3,34 @@ package services
 import (
 	"context"
 	"io"
+	"os"
 
 	"cloud.google.com/go/storage"
 	"google.golang.org/api/iterator"
+	"google.golang.org/api/option"
 )
 
 type GCSService struct {
-	client *storage.Client
+	Client *storage.Client
 }
 
 func NewGCSService(ctx context.Context) (*GCSService, error) {
-	client, err := storage.NewClient(ctx)
+	client, err := initGCSClient(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return &GCSService{client: client}, nil
+	return &GCSService{Client: client}, nil
+}
+
+func initGCSClient(ctx context.Context) (*storage.Client, error) {
+	if credJSON := os.Getenv("GOOGLE_CREDENTIALS_JSON"); credJSON != "" {
+		return storage.NewClient(ctx, option.WithCredentialsJSON([]byte(credJSON)))
+	}
+	return storage.NewClient(ctx, option.WithCredentialsFile("/app/nexus-scholar-key.json"))
 }
 
 func (s *GCSService) UploadFile(ctx context.Context, bucketName, objectName string, content io.Reader) error {
-	bucket := s.client.Bucket(bucketName)
+	bucket := s.Client.Bucket(bucketName)
 	obj := bucket.Object(objectName)
 	writer := obj.NewWriter(ctx)
 	if _, err := io.Copy(writer, content); err != nil {
@@ -31,7 +40,7 @@ func (s *GCSService) UploadFile(ctx context.Context, bucketName, objectName stri
 }
 
 func (s *GCSService) DownloadFile(ctx context.Context, bucketName, objectName string) ([]byte, error) {
-	bucket := s.client.Bucket(bucketName)
+	bucket := s.Client.Bucket(bucketName)
 	obj := bucket.Object(objectName)
 	reader, err := obj.NewReader(ctx)
 	if err != nil {
@@ -42,14 +51,14 @@ func (s *GCSService) DownloadFile(ctx context.Context, bucketName, objectName st
 }
 
 func (s *GCSService) DeleteFile(ctx context.Context, bucketName, objectName string) error {
-	bucket := s.client.Bucket(bucketName)
+	bucket := s.Client.Bucket(bucketName)
 	obj := bucket.Object(objectName)
 	return obj.Delete(ctx)
 }
 
 func (s *GCSService) ListFiles(ctx context.Context, bucketName string) ([]string, error) {
 	var fileNames []string
-	bucket := s.client.Bucket(bucketName)
+	bucket := s.Client.Bucket(bucketName)
 	it := bucket.Objects(ctx, nil)
 	for {
 		attrs, err := it.Next()
