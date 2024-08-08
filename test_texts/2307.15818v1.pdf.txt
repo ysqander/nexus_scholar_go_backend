@@ -56,7 +56,7 @@ arXiv:2307.15818v1 [cs.RO] 28 Jul 2023
 
                                          Corresponding author(s): chebotar@google.com, tianheyu@google.com, karolhausman@google.com
                                          © 2023 Google DeepMind. All rights reserved
-                                    RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
+                                    RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
 
 
        Internet-Scale VQA + Robot Action Data              Vision-Language-Action Models for Robot Control                                             Closed-Loop
@@ -132,7 +132,7 @@ Hence we refer to our model as RT-2 (Robotics Transformer 2). We provide an over
 
 
                                                                                                                                                                                    2
-                    RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
+                    RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
 
 
 
@@ -187,7 +187,7 @@ et al., 2021; Jiang et al., 2022; Liu et al., 2022; Mees et al., 2022; Nair et a
 
 
                                                                                                      3
-                     RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
+                     RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
 
 
 
@@ -244,7 +244,7 @@ Huang et al., 2023). Representing the knowledge necessary to perform such a wide
 
 
                                                                                                           4
-                    RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
+                    RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
 
 
 
@@ -277,7 +277,7 @@ associate tokens from the model’s existing tokenization with the discrete acti
 
 
                                                                                                          5
-                    RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
+                    RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
 
 
 
@@ -331,7 +331,7 @@ answer the following questions:
 
 
                                                                                                       6
-                     RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
+                     RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
 
 
 
@@ -387,7 +387,7 @@ skills to generalize to realistic variability in the environment.
 
 
                                                                                                                   7
-                      RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
+                      RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
 
 
 
@@ -438,7 +438,7 @@ to evaluate the degree to which such models can enable new capabilities beyond t
 
 
                                                                                                               8
-                     RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
+                     RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
 
 
 
@@ -496,7 +496,7 @@ than the mostly visually pre-trained PaLI-X.
 
 
                                                                                                                          9
-                       RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
+                       RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
 
 
 
@@ -545,7 +545,7 @@ model. Rollouts of RT-2 with chain-of-thought reasoning are shown in Figure 7 an
 
 
                                                                                                                       10
-                     RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
+                     RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
 
 
 
@@ -603,7 +603,7 @@ leads to a significantly better generalization performance and emergent capabili
 
 
                                                                                                                     11
-                   RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
+                   RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
 
 
 
@@ -623,7 +623,7 @@ their feedback and contributions.
 
 
                                                                                                    12
-                     RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
+                     RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
 
 
 
@@ -683,7 +683,7 @@ S. Dasari, F. Ebert, S. Tian, S. Nair, B. Bucher, K. Schmeckpeper, S. Singh, S. 
 
 
                                                                                                          13
-                     RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
+                     RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
 
 
 
@@ -732,7 +732,7 @@ Y. Hao, H. Song, L. Dong, S. Huang, Z. Chi, W. Wang, S. Ma, and F. Wei. Language
 
 
                                                                                                          14
-                    RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
+                    RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
 
 
 
@@ -794,7 +794,7 @@ H. Liu, L. Lee, K. Lee, and P. Abbeel. Instruction-following agents with jointly
 
 
                                                                                                        15
-                     RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
+                     RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
 
 
 
@@ -857,7 +857,7 @@ S. Polu, J. M. Han, K. Zheng, M. Baksys, I. Babuschkin, and I. Sutskever. Formal
 
 
                                                                                                         16
-                     RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
+                     RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
 
 
 
@@ -919,7 +919,7 @@ J. Wei, X. Wang, D. Schuurmans, M. Bosma, E. Chi, Q. Le, and D. Zhou. Chain of t
 
 
                                                                                                          17
-                    RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
+                    RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
 
 
 
@@ -957,7 +957,7 @@ X. Zhang, Y. Ding, S. Amiri, H. Yang, A. Kaminski, C. Esselink, and S. Zhang. Gr
 
 
                                                                                                       18
-                    RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
+                    RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
 
 
 
@@ -1011,7 +1011,7 @@ be found in Brohan et al. (2022).
 
 
                                                                                                     19
-                    RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
+                    RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
 
 
 
@@ -1066,7 +1066,7 @@ text and images as embeddings to generate output tokens in an auto-regressive ma
 
 
                                                                                                         20
-                    RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
+                    RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
 
 
 
@@ -1116,7 +1116,7 @@ quantitative emergent evals. Each instruction was run 5 times.
 
 
                                                                                                        21
-                               RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
+                               RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
 
 
 
@@ -1177,7 +1177,7 @@ Table 3 | Natural language instructions used for quantitative emergent evalution
 
 
                                                                                                                                         22
-                        RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
+                        RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
 
 
 
@@ -1234,7 +1234,7 @@ unseen evaluations measuring generalization to novel objects, novel backgrounds,
 
 
                                                                                                                             23
-                                   RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
+                                   RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
 
 
 
@@ -1290,7 +1290,7 @@ those training examples include low-level actions that are evaluated in this exp
 
 
                                                                                                                                                                                  24
-                          RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
+                          RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
 
 
 
@@ -1340,7 +1340,7 @@ Figure 10 | Additional examples of RT-2 with chain-of-thought reasoning
 
 
                                                                                                           25
-                       RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
+                       RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control
 
 
 
@@ -1401,4 +1401,3 @@ dimension of novel objects, novel environments, and novel backgrounds. For each 
 evaluation settings with smaller distribution shifts as well as larger distribution shifts. A visualization of these
 scenarios if shown in Figure 3.
                                                                                                                  26
-

@@ -146,7 +146,15 @@ func (s *ContentAggregationService) ExtractTextFromPDF(pdfPath string) (string, 
 	}
 
 	// Run pdftotext command
-	cmd := exec.Command("pdftotext", "-layout", pdfPath, "-")
+	cmd := exec.Command("pdftotext",
+		"-layout",      // Maintains basic layout
+		"-nopgbrk",     // Removes page breaks
+		"-eol", "unix", // Consistent line endings
+		"-enc", "UTF-8", // Ensures proper character encoding
+		"-q",    // Quiet mode, suppresses errors
+		pdfPath, // Input PDF file
+		"-",     // Output to stdout
+	)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	err = cmd.Run()

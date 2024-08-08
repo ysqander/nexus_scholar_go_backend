@@ -62,7 +62,7 @@ arXiv:2206.07682v2 [cs.CL] 26 Oct 2022
 
 
                                                                                                          1
-Published in Transactions on Machine Learning Research (08/2022)
+Published in Transactions on Machine Learning Research (08/2022)
 
 
 
@@ -122,7 +122,7 @@ go back to Miller et al. (2004), Liang (2005), or earlier.
 
 
                                                             2
-Published in Transactions on Machine Learning Research (08/2022)
+Published in Transactions on Machine Learning Research (08/2022)
 
 
 
@@ -193,7 +193,7 @@ or access to external memory).
 
 
                                                            3
-Published in Transactions on Machine Learning Research (08/2022)
+Published in Transactions on Machine Learning Research (08/2022)
 
 
 
@@ -289,7 +289,7 @@ technique an emergent ability.
 
 
                                                                                                        4
-Published in Transactions on Machine Learning Research (08/2022)
+Published in Transactions on Machine Learning Research (08/2022)
 
 
 
@@ -375,7 +375,7 @@ model scale of ∼3 · 1023 training FLOPs (52B parameters).
 
 
                                                                                                       5
-Published in Transactions on Machine Learning Research (08/2022)
+Published in Transactions on Machine Learning Research (08/2022)
 
 
 
@@ -439,7 +439,7 @@ but this above-random performance did not appear to be a result of scale and did
 
 
                                                              6
-Published in Transactions on Machine Learning Research (08/2022)
+Published in Transactions on Machine Learning Research (08/2022)
 
 
 
@@ -503,7 +503,7 @@ Borgeaud et al., 2021).
 
 
                                                             7
-Published in Transactions on Machine Learning Research (08/2022)
+Published in Transactions on Machine Learning Research (08/2022)
 
 
 
@@ -565,7 +565,7 @@ scenarios, do increase with model scale (see the Inverse Scaling Prize6 ). Since
 
 
                                                        8
-Published in Transactions on Machine Learning Research (08/2022)
+Published in Transactions on Machine Learning Research (08/2022)
 
 
 
@@ -654,7 +654,7 @@ Steinhardt (2021); Bommasani et al. (2021); Ganguli et al. (2022).
 
 
                                                                                                           9
-Published in Transactions on Machine Learning Research (08/2022)
+Published in Transactions on Machine Learning Research (08/2022)
 
 
 
@@ -718,7 +718,7 @@ language models to acquire syntactic, semantic, and other world knowledge (Zhang
 
 
                                                       10
-Published in Transactions on Machine Learning Research (08/2022)
+Published in Transactions on Machine Learning Research (08/2022)
 
 
 
@@ -781,7 +781,7 @@ Dale Schuurmans, and Xavier Garcia for useful discussions and feedback on the ma
 
 
                                                       11
-Published in Transactions on Machine Learning Research (08/2022)
+Published in Transactions on Machine Learning Research (08/2022)
 
 
 
@@ -844,7 +844,7 @@ Tom Brown, Benjamin Mann, Nick Ryder, Melanie Subbiah, Jared D. Kaplan, Prafulla
 
 
                                                     12
-Published in Transactions on Machine Learning Research (08/2022)
+Published in Transactions on Machine Learning Research (08/2022)
 
 
 
@@ -911,7 +911,7 @@ Tianyu Gao, Adam Fisch, and Danqi Chen. Making pre-trained language models bette
 
 
                                                     13
-Published in Transactions on Machine Learning Research (08/2022)
+Published in Transactions on Machine Learning Research (08/2022)
 
 
 
@@ -976,7 +976,7 @@ Nikhil Kandpal, Eric Wallace, and Colin Raffel. Deduplicating training data miti
 
 
                                                       14
-Published in Transactions on Machine Learning Research (08/2022)
+Published in Transactions on Machine Learning Research (08/2022)
 
 
 
@@ -1029,7 +1029,7 @@ Maxwell Nye, Anders Johan Andreassen, Guy Gur-Ari, Henryk Michalewski, Jacob Aus
 
 
                                                      15
-Published in Transactions on Machine Learning Research (08/2022)
+Published in Transactions on Machine Learning Research (08/2022)
 
 
 
@@ -1083,7 +1083,7 @@ Victor Sanh, Albert Webson, Colin Raffel, Stephen Bach, Lintang Sutawika, Zaid A
 
 
                                                      16
-Published in Transactions on Machine Learning Research (08/2022)
+Published in Transactions on Machine Learning Research (08/2022)
 
 
 
@@ -1149,7 +1149,7 @@ Colin Wei, Sang Michael Xie, and Tengyu Ma. Why do pretrained language models he
 
 
                                                    17
-Published in Transactions on Machine Learning Research (08/2022)
+Published in Transactions on Machine Learning Research (08/2022)
 
 
 
@@ -1198,7 +1198,7 @@ Barret Zoph, Irwan Bello, Sameer Kumar, Nan Du, Yanping Huang, Jeff Dean, Noam S
 
 
                                                     18
-Published in Transactions on Machine Learning Research (08/2022)
+Published in Transactions on Machine Learning Research (08/2022)
 
 
 
@@ -1259,7 +1259,7 @@ probabilities (i.e., values approaching 0 or 1) and therefore the average log-pr
 
 
                                                       19
-Published in Transactions on Machine Learning Research (08/2022)
+Published in Transactions on Machine Learning Research (08/2022)
 
 
 
@@ -1305,7 +1305,7 @@ increases substantially.
 
 
                                                                                 20
-Published in Transactions on Machine Learning Research (08/2022)
+Published in Transactions on Machine Learning Research (08/2022)
 
 
 
@@ -1364,7 +1364,7 @@ Logical arguments only has 32 samples, which may contribute to noise. Error rate
 
 
                                                                                 21
-Published in Transactions on Machine Learning Research (08/2022)
+Published in Transactions on Machine Learning Research (08/2022)
 
 
 
@@ -1442,7 +1442,7 @@ the top five tasks were reasoning and other keyword tags like logical reasoning 
 
 
                                                                                                      22
-Published in Transactions on Machine Learning Research (08/2022)
+Published in Transactions on Machine Learning Research (08/2022)
 
 
 
@@ -1771,7 +1771,7 @@ models, until using a PaLM model (8B, 62B, or 540B). Flat: no model performs bet
 
 
                                                       23
-Published in Transactions on Machine Learning Research (08/2022)
+Published in Transactions on Machine Learning Research (08/2022)
 
 
 
@@ -1822,7 +1822,7 @@ Mathematics) improved the least.
 
 
                                                                       24
-Published in Transactions on Machine Learning Research (08/2022)
+Published in Transactions on Machine Learning Research (08/2022)
 
 
 
@@ -1895,7 +1895,7 @@ STEM was the least emergent.
 
 
                                                                            25
-Published in Transactions on Machine Learning Research (08/2022)
+Published in Transactions on Machine Learning Research (08/2022)
 
 
 
@@ -1951,7 +1951,7 @@ budget of GPT-3.
 
 
                                                      26
-Published in Transactions on Machine Learning Research (08/2022)
+Published in Transactions on Machine Learning Research (08/2022)
 
 
 
@@ -2034,7 +2034,7 @@ Chowdhery et al. (2022) on the WiC benchmark (Pilehvar & Camacho-Collados, 2019)
 
 
                                                                                                  27
-Published in Transactions on Machine Learning Research (08/2022)
+Published in Transactions on Machine Learning Research (08/2022)
 
 
 
@@ -2132,7 +2132,7 @@ state-of-the-art performance held by a task-specific model. A & B: Brown et al. 
 
 
                                                                                                                                   28
-Published in Transactions on Machine Learning Research (08/2022)
+Published in Transactions on Machine Learning Research (08/2022)
 
 
 
@@ -2194,7 +2194,7 @@ winowhy, word problems on sets and graphs
 
 
                                                         29
-Published in Transactions on Machine Learning Research (08/2022)
+Published in Transactions on Machine Learning Research (08/2022)
 
 
 
@@ -2227,4 +2227,3 @@ metaphor boolean, metaphor understanding, odd one out, parsinlu qa.
 
 
                                                          30
-

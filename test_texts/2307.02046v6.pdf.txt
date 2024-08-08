@@ -72,7 +72,7 @@ arXiv:2307.02046v6 [cs.IR] 29 Apr 2024
                                              xy.zhao@cityu.edu.hk.                                                             Despite the aforementioned success, most existing ad-
                                          •   J. Tang is with Michigan State University. E-mail: tangjili@msu.edu.          vanced recommender systems still face some intrinsic limita-
                                          (Corresponding authors: Wenqi Fan and Qing Li.)                                   tions. First, due to the limitations on model scale and data
-IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                                                                             2
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                                                                             2
 
                                                            Task-specific Prompts (LLMs Inputs)
 
@@ -146,7 +146,7 @@ destination, then arrange a suitable itinerary corresponding                    
 to the tourist attractions, and finally recommend a journal                          addition, empowered by prompting strategies such as chain-
 plan according to specific user preferences (e.g., cost and time                     of-thought, LLMs can generate the outputs with step-by-
 for travel).                                                                         step reasoning in complicated decision-making processes.
-IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                           3
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                           3
 
 Hence, given their powerful abilities, LLMs demonstrate          al. [32] introduce two orthogonal perspectives: where and
 great potential to revolutionize recommender systems.            how to adapt LLMs in recommender systems. In particular,
@@ -209,7 +209,7 @@ recently, Wu et al. [31] summarize LLMs for recommender          represented as 
 systems from discriminative and generative perspectives,         treated as the main deep learning approaches for learning
 which compares the two styles of LLMs tailored to their          meaningful representations of nodes (i.e., users and items) via
 distinct abilities in recommendations. Meanwhile, Lin et         message propagation strategies for recommender systems [1],
-IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                                      4
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                                      4
 
 
                       Traditional Models                  Pre-trained LMs (PLMs)               In the Era of LLMs
@@ -285,7 +285,7 @@ encoder-only model, uses bi-directional attention to process                cons
 token sequences, considering both the left and right context                voting mechanism on answers [60]. Current researches
 of each token. It is pre-trained based on massive amounts                   continue to delve into the application of CoT in LLMs, such
 of text data using tasks like masked language modeling and                  as STaR [61], THOR [62], and Tab-CoT [63]. By offering a
-IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                              5
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                              5
 
 set of prompts to direct the model’s thought process, CoT           are generally represented as user-item interactions, where
 enables the model to reason more effectively and deliver            users and items are denoted as discrete IDs. Modern
@@ -348,7 +348,7 @@ systems are illustrated in Figure 3.                                BERT can ser
 Recommender systems are commonly used to affect users’              the performance comparison between ID and modality-based
 behaviors for making decisions from a range of candidate            recommender systems, showing that ID-based recommender
 items. These user behaviors (e.g., click, like, and subscription)   systems might be challenged by recommender systems
-IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                                       6
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                                       6
 
                            ID-based Representation                          Textual Side Information-enhanced Representation
 
@@ -416,7 +416,7 @@ and deploying LLMs in recommendation tasks, namely,                 more difficu
 pre-training, fine-tuning, and prompting. In this section, we       span of tokens, PTUM only masks a single user behavior
 first introduce the pre-training and fine-tuning paradigms,         with the goal of predicting the masked behavior based on the
 which are shown in Figure 4 and Figure 5, respectively.             other behaviors in the interaction sequence of the target user.
-IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                                                                                7
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                                                                                7
 
 
              Recommendation Datasets
@@ -505,7 +505,7 @@ masks a span with several tokens in the text sequence
 and predicts these masked spans as the pre-training target,                              4.2             Fine-tuning Paradigm for Recommender Systems
 providing the capability to assess the plausibility of a text or                         Fine-tuning is a crucial step in deploying pre-trained LLMs
 an event in the recommendation scoring tasks. Meanwhile,                                 for specific downstream tasks. Especially for recommen-
-IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                           8
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                           8
 
                                  Table 2: Fine-tuning methods for LLM-empowered RecSys.
 
@@ -569,7 +569,7 @@ intent sentence is paired with an anchor, and corresponding       recommenders. 
 products are used as positive and negative examples in the        LLMs, enabling LLMs to fit different tasks. Moreover, M6 [69]
 e-commerce domain. Additionally, UniTRec [89] proposes a          applies LoRA fine-tuning, making it feasible to deploy LLMs
 unified framework that combines discriminative matching           in phone devices.
-IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                                                             9
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                                                             9
 
                                                                                                                                                      : tunable
                                                                 Prompting LLMs for Recommender Systems
@@ -653,7 +653,7 @@ manually design prompts for various recommendation                              
 tasks. In addition, prompt tuning serves as an additive                                       powerful prompting strategy that allows LLMs to learn
                                                                                               new tasks (i.e., tasks with knowledge demanding objectives)
     1. https://github.com/openai/chatgpt-retrieval-plugin                                     based on contextual information. In addition, another up-
-IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                                                                             10
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                                                                             10
 
 Table 3: Prompting, prompt tuning, and instruction tuning methods for LLM-empowered RecSys. In particular, we categorize
 the integration of LLMs and RecSys into three representative approaches: ⟨ LLMs act as recommender ⟩ (e.g., LLMs directly
@@ -742,7 +742,7 @@ generation task of text summarization, using a prompt “Write                  
 a short sentence to summarize”. Another approach is few-shot                             key innovation of ICL is to elicit the in-context ability of
 prompting, where a few input-output examples (i.e., shots)                               LLMs for learning (new or unseen) downstream tasks from
 are provided to prompt and guide pre-trained language                                    context during the inference stage. In particular, two settings
-IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                                     11
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                                     11
 
 proposed in ICL are prevalently leveraged for prompting                           Few-shot ICL (with demonstrations)
 LLMs for RecSys. One is the few-shot setting, in which a few
@@ -810,7 +810,7 @@ RecAgent [115], and Agent4Rec [116], by equipping LLMs the specific recommendati
 with memory and action modules. In particular, few-show CoT template “Please infer the preference of the user and
 ICL methods are designed to connect LLMs with these recommend suitable items.” is proposed to guide LLMs to
 external modules, enabling LLMs to interact with RecSys first infer the user’s explicit preference and then generate
-IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                          12
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                          12
 
 final recommendations [20]. Below, we present a preliminary        in order to find suitable prompts for specific recommendation
 idea of CoT prompting, through an example in the context           tasks.
@@ -872,7 +872,7 @@ or refining natural language prompts for downstream                • Instructi
 recommendation tasks, hard prompt tuning inevitably faces            struction tuning introduces a format of instruction-
 the challenge of discrete optimization, which requires               based prompt in natural language, which consists of
 laborious trial and error to discover the vast vocabulary space      task-oriented input (i.e., task descriptions based on
-IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                           13
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                           13
 
       task-specific dataset) and desired target (i.e., corre-       is promising to mitigate the hallucination problem. In
       sponding output based on task-specific dataset) pairs.        addition, the model’s output stage can be scrutinized to
@@ -937,7 +937,7 @@ dissemination of incorrect information can have severe real         context of r
 consequences. To address such issues, employing factual             as discriminatory recommendations, where certain items
 knowledge graphs as supplementary factual knowledge                 are unfairly promoted or demoted based on these learned
 during the training and inference stages of LLMs for RecSys         biases. More recently, a few studies such as FaiRLLM [142]
-IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                           14
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                           14
 
 and UP5 [119] explore the fairness problem in recommender         distributed data sources, which guarantees more privacy-
 systems brought by LLMs, which only focus on user-side            preserving recommender systems by enabling localized
@@ -1010,7 +1010,7 @@ foundation models for federated learning, where LLMs are          possible solut
 leveraged as controllers to seamlessly connect distributed        learning collaborative knowledge by incorporating user-item
 devices. In particular, such scalable frameworks empowered        interactions. Therefore, rather than merely using text formats
 by LLMs support the availability of federated learning on         to represent users and items, advanced methods for indexing
-IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                                      15
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                                      15
 
 users&items are desired to build LLM-based recommender           have been made to revolutionize recommender systems
 systems.                                                         with LLMs, so as to provide high-quality and personalized
@@ -1081,7 +1081,7 @@ abilities in language understanding and generation, powerful           2017, pp.
                                                                  [9]   S. Zhang, L. Yao, A. Sun, and Y. Tay, “Deep learning based
 generalization and reasoning skills, and prompt adaptation to          recommender system: A survey and new perspectives,” ACM
 new tasks and diverse domains. Similarly, increasing efforts           computing surveys (CSUR), vol. 52, no. 1, pp. 1–38, 2019.
-IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                                                        16
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                                                        16
 
 [10]   W. Fan, C. Liu, Y. Liu, J. Li, H. Li, H. Liu, J. Tang, and                  [32]   J. Lin, X. Dai, Y. Xi, W. Liu, B. Chen, X. Li, C. Zhu, H. Guo, Y. Yu,
        Q. Li, “Generative diffusion models on graphs: Methods and                         R. Tang et al., “How can recommender systems benefit from large
@@ -1172,7 +1172,7 @@ new tasks and diverse domains. Similarly, increasing efforts           computing
 [31]   L. Wu, Z. Zheng, Z. Qiu, H. Wang, H. Gu, T. Shen, C. Qin, C. Zhu,           [52]   A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, L. Jones, A. N.
        H. Zhu, Q. Liu et al., “A survey on large language models for                      Gomez, Ł. Kaiser, and I. Polosukhin, “Attention is all you need,”
        recommendation,” arXiv preprint arXiv:2305.19860, 2023.                            Advances in neural information processing systems, vol. 30, 2017.
-IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                                                     17
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                                                     17
 
 [53]   Z. Zhang, G. Zhang, B. Hou, W. Fan, Q. Li, S. Liu, Y. Zhang, and        [75]   S. Rajput, N. Mehta, A. Singh, R. H. Keshavan, T. Vu, L. Heldt,
        S. Chang, “Certified robustness for large language models with                 L. Hong, Y. Tay, V. Q. Tran, J. Samost et al., “Recommender systems
@@ -1263,7 +1263,7 @@ new tasks and diverse domains. Similarly, increasing efforts           computing
 [74]   W. Hua, S. Xu, Y. Ge, and Y. Zhang, “How to index item                         efficient transfer learning for nlp,” in International Conference on
        ids for recommendation foundation models,” arXiv preprint                      Machine Learning. PMLR, 2019, pp. 2790–2799.
        arXiv:2305.06569, 2023.                                                 [94]   E. J. Hu, Y. Shen, P. Wallis, Z. Allen-Zhu, Y. Li, S. Wang, L. Wang,
-IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                                                  18
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                                                  18
 
       and W. Chen, “Lora: Low-rank adaptation of large language               [116] A. Zhang, L. Sheng, Y. Chen, H. Li, Y. Deng, X. Wang, and T.-S.
       models,” arXiv preprint arXiv:2106.09685, 2021.                               Chua, “On generative agents in recommendation,” arXiv preprint
@@ -1356,7 +1356,7 @@ new tasks and diverse domains. Similarly, increasing efforts           computing
 [115] L. Wang, J. Zhang, X. Chen, Y. Lin, R. Song, W. X. Zhao, and J.-R.      [138] OpenAI, “Gpt-4 technical report,” OpenAI, 2023.
       Wen, “Recagent: A novel simulation paradigm for recommender             [139] J. Tang, X. Du, X. He, F. Yuan, Q. Tian, and T.-S. Chua, “Adversarial
       systems,” arXiv preprint arXiv:2306.02552, 2023.                              training towards robust multimedia recommender system,” IEEE
-IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                                                 19
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                                                 19
 
       Transactions on Knowledge and Data Engineering, vol. 32, no. 5, pp.                             Zihuai Zhao is currently a PhD student of
       855–867, 2019.                                                                                  the Department of Computing (COMP), Hong
@@ -1433,7 +1433,7 @@ new tasks and diverse domains. Similarly, increasing efforts           computing
                                                                                Processing. He has published innovative works in top-tier conferences
                                                                                and journals such as IJCAI, EACL, EurJOC and Organic Letters. For
                                                                                more information, please visit https://liuyunqing.github.io/.
-IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                                                  20
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, SUBMISSION 2023                                                                                  20
 
                        Xiaowei Mei received his PhD in Information                                    Xiangyu Zhao is an assistant professor of the
                        Systems and Operations Management from the                                     school of data science at City University of Hong
@@ -1513,4 +1513,3 @@ also known for research on financial data mining, mobile healthcare,          of
 social computing and multimodal information retrieval. He has received a      UMEDIA, and WISE Society.
 number of best paper awards from conferences like RecSys, Multimedia
 Information Retrieval and Computers in Cardiology.
-
