@@ -305,13 +305,21 @@ func purchaseCacheVolume(stripeService *services.StripeService) gin.HandlerFunc 
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid token_hours value"})
 			return
 		}
-
+		priceTier := request.PriceTier
 		user, _ := c.Get("user")
 		userModel := user.(*models.User)
 
 		// Calculate amount based on your pricing strategy
-		priceID := "random"
-		priceTier := "random"
+		var priceID string
+		switch priceTier {
+		case "base":
+			priceID = os.Getenv("STRIPE_BASE_PRICE_ID")
+		case "pro":
+			priceID = os.Getenv("STRIPE_PRO_PRICE_ID")
+		default:
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid price tier"})
+			return
+		}
 
 		session, err := stripeService.CreateCheckoutSession(userModel.ID.String(), priceID, tokenHours, priceTier)
 		if err != nil {

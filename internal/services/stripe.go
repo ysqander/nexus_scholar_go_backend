@@ -27,6 +27,13 @@ func (s *StripeService) CreateCheckoutSession(userID string, priceID string, tok
 	if frontendURL == "" {
 		return nil, fmt.Errorf("FRONTEND_URL is not set")
 	}
+
+	// Get the webhook endpoint secret from environment variable
+	webhookEndpoint := os.Getenv("STRIPE_WEBHOOK_ENDPOINT")
+	if webhookEndpoint == "" {
+		return nil, fmt.Errorf("STRIPE_WEBHOOK_ENDPOINT is not set")
+	}
+
 	params := &stripe.CheckoutSessionParams{
 		PaymentMethodTypes: stripe.StringSlice([]string{
 			"card",
@@ -45,8 +52,20 @@ func (s *StripeService) CreateCheckoutSession(userID string, priceID string, tok
 			"token_hours": fmt.Sprintf("%.2f", tokenHours),
 			"price_tier":  priceTier,
 		},
+		// Add this line to specify the webhook endpoint
+		PaymentIntentData: &stripe.CheckoutSessionPaymentIntentDataParams{
+			SetupFutureUsage: stripe.String(string(stripe.PaymentIntentSetupFutureUsageOffSession)),
+		},
 	}
-	return session.New(params)
+	// Add this line to specify the webhook endpoint
+	params.AddExpand("payment_intent")
+
+	session, err := session.New(params)
+	if err != nil {
+		return nil, err
+	}
+
+	return session, nil
 }
 
 func (s *StripeService) HandleWebhook(payload []byte, signatureHeader string) (stripe.Event, error) {
