@@ -17,7 +17,7 @@ type ChatSessionInfo struct {
 	LastAccessed      time.Time
 	LastHeartbeat     time.Time
 	HeartbeatsMissed  int
-	LastCacheExtend   time.Time
+	CacheExpiresAt    time.Time
 	UserID            uuid.UUID
 }
 
@@ -35,6 +35,7 @@ type ChatSessionService struct {
 	CacheManager      CacheManager
 	heartbeatTimeout  time.Duration
 	sessionTimeout    time.Duration
+	heartbeatInterval time.Duration
 	cacheExtendPeriod time.Duration
 }
 
@@ -44,19 +45,23 @@ func NewChatSessionService(
 	CacheManager CacheManager,
 	heartbeatTimeout,
 	sessionTimeout time.Duration,
+	heartbeatInterval time.Duration,
+	cacheExtendPeriod time.Duration,
 ) *ChatSessionService {
 	css := &ChatSessionService{
-		genAIClient:      genAIClient,
-		chatService:      chatService,
-		CacheManager:     CacheManager,
-		heartbeatTimeout: heartbeatTimeout,
-		sessionTimeout:   sessionTimeout,
+		genAIClient:       genAIClient,
+		chatService:       chatService,
+		CacheManager:      CacheManager,
+		heartbeatTimeout:  heartbeatTimeout,
+		sessionTimeout:    sessionTimeout,
+		heartbeatInterval: heartbeatInterval,
+		cacheExtendPeriod: cacheExtendPeriod,
 	}
 	go css.periodicCleanup()
 	return css
 }
 
-func (css *ChatSessionService) StartChatSession(ctx context.Context, userID uuid.UUID, cachedContentName string, sessionID string) error {
+func (css *ChatSessionService) StartChatSession(ctx context.Context, userID uuid.UUID, cachedContentName string, sessionID string, cacheCreateTime time.Time) error {
 	// Get the GenerativeModel using the CacheManagementService
 	model, err := css.CacheManager.GetGenerativeModel(ctx, cachedContentName)
 	if err != nil {
@@ -78,7 +83,7 @@ func (css *ChatSessionService) StartChatSession(ctx context.Context, userID uuid
 		LastAccessed:      time.Now(),
 		LastHeartbeat:     time.Now(),
 		HeartbeatsMissed:  0,
-		LastCacheExtend:   time.Now(),
+		CacheExpiresAt:    cacheCreateTime,
 		UserID:            userID,
 	})
 
@@ -100,13 +105,19 @@ func (css *ChatSessionService) UpdateSessionHeartbeat(ctx context.Context, sessi
 	sessionInfo.HeartbeatsMissed = 0
 	sessionInfo.LastAccessed = now
 
+	// Calculate the time until cache expiration
+	timeUntilExpiration := sessionInfo.CacheExpiresAt.Sub(now)
+
 	// Check if it's time to extend the cache
-	if now.Sub(sessionInfo.LastCacheExtend) >= css.cacheExtendPeriod {
-		if err := css.CacheManager.ExtendCacheLifetime(ctx, sessionInfo.CachedContentName); err != nil {
+	// Extend if expiration is between 2 and 3 heartbeat intervals away
+	if timeUntilExpiration > 2*css.heartbeatInterval && timeUntilExpiration <= 3*css.heartbeatInterval {
+		newExpirationTime := sessionInfo.CacheExpiresAt.Add(css.cacheExtendPeriod)
+		if err := css.CacheManager.ExtendCacheLifetime(ctx, sessionInfo.CachedContentName, newExpirationTime); err != nil {
 			// Log the error, but don't fail the heartbeat update
-			// You might want to add proper logging here
+			log.Printf("Failed to extend cache lifetime for session %s: %v", sessionID, err)
 		} else {
-			sessionInfo.LastCacheExtend = now
+			sessionInfo.CacheExpiresAt = newExpirationTime
+			log.Printf("Extended cache lifetime for session %s to %v", sessionID, newExpirationTime)
 		}
 	}
 
@@ -186,7 +197,7 @@ func (css *ChatSessionService) formatMessage(message string) string {
 }
 
 func (css *ChatSessionService) periodicCleanup() {
-	ticker := time.NewTicker(3 * time.Minute)
+	ticker := time.NewTicker(1 * time.Minute)
 	for range ticker.C {
 		css.CleanupExpiredSessions()
 	}

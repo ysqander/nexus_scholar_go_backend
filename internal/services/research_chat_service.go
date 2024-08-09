@@ -75,7 +75,7 @@ func (s *ResearchChatService) StartResearchSession(c *gin.Context, arxivIDs []st
 
 	fmt.Printf("DEBUG: Creating content cache for user ID: %s, session ID: %s, price tier: %s\n", userModel.ID, sessionID, priceTier)
 	// Create cache
-	cacheName, err := s.cacheManagement.CreateContentCache(c.Request.Context(), userModel.ID, sessionID, priceTier, aggregatedContent)
+	cacheName, cacheCreateTime, err := s.cacheManagement.CreateContentCache(c.Request.Context(), userModel.ID, sessionID, priceTier, aggregatedContent)
 	if err != nil {
 		fmt.Printf("DEBUG: Failed to create content cache: %v\n", err)
 		return "", "", fmt.Errorf("failed to create content cache: %w", err)
@@ -83,7 +83,7 @@ func (s *ResearchChatService) StartResearchSession(c *gin.Context, arxivIDs []st
 
 	fmt.Printf("DEBUG: Starting chat session for user ID: %s, cache name: %s, session ID: %s\n", userModel.ID, cacheName, sessionID)
 	// Start chat session
-	err = s.chatSession.StartChatSession(c.Request.Context(), userModel.ID, cacheName, sessionID)
+	err = s.chatSession.StartChatSession(c.Request.Context(), userModel.ID, cacheName, sessionID, cacheCreateTime)
 	if err != nil {
 		fmt.Printf("DEBUG: Failed to start chat session: %v\n", err)
 		// Clean up cache if session start fails

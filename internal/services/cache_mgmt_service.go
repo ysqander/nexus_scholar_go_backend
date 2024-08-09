@@ -63,7 +63,7 @@ func NewCacheManagementService(
 	}
 }
 
-func (cms *CacheManagementService) CreateContentCache(ctx context.Context, userID uuid.UUID, sessionID string, priceTier, aggregatedContent string) (string, error) {
+func (cms *CacheManagementService) CreateContentCache(ctx context.Context, userID uuid.UUID, sessionID string, priceTier, aggregatedContent string) (string, time.Time, error) {
 	var modelName string
 	if priceTier == "pro" {
 		modelName = "gemini-1.5-pro-001"
@@ -82,29 +82,30 @@ func (cms *CacheManagementService) CreateContentCache(ctx context.Context, userI
 
 	cachedContent, err := cms.genAIClient.CreateCachedContent(ctx, cc)
 	if err != nil {
-		return "", fmt.Errorf("failed to create cached content: %v", err)
+		return "", time.Time{}, fmt.Errorf("failed to create cached content: %v", err)
 	}
 
-	// Get the token count from the usage metadata
+	// Get the token count, name and creation time from the usage metadata
 	tokenCount := cachedContent.UsageMetadata.TotalTokenCount
 	createTime := cachedContent.CreateTime
+	cacheName := cachedContent.Name
 
 	// Save the cache data to the database
-	err = cms.cacheServiceDB.CreateCacheDB(userID, sessionID, cachedContent.Name, tokenCount, createTime)
+	err = cms.cacheServiceDB.CreateCacheDB(userID, sessionID, cacheName, tokenCount, createTime)
 	if err != nil {
-		return "", fmt.Errorf("failed to save cache data: %v", err)
+		return "", time.Time{}, fmt.Errorf("failed to save cache data: %v", err)
 	}
 
-	return cachedContent.Name, nil
+	return cacheName, createTime, nil
 }
 
-func (cms *CacheManagementService) ExtendCacheLifetime(ctx context.Context, cachedContentName string) error {
+func (cms *CacheManagementService) ExtendCacheLifetime(ctx context.Context, cachedContentName string, newExpirationTime time.Time) error {
 	cachedContent := &genai.CachedContent{
 		Name: cachedContentName,
 	}
 
 	newExpiration := genai.ExpireTimeOrTTL{
-		TTL: cms.expirationTime,
+		ExpireTime: newExpirationTime,
 	}
 
 	updateContent := &genai.CachedContentToUpdate{

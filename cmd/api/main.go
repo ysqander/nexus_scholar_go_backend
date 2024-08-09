@@ -61,6 +61,7 @@ func main() {
 	cacheExtendPeriod := 5 * time.Minute
 	heartbeatTimeout := 1 * time.Minute
 	sessionTimeout := 10 * time.Minute
+	heartbeatInterval := 30 * time.Second
 	gcsBucketName := os.Getenv("GCS_BUCKET_NAME")
 	if gcsBucketName == "" {
 		log.Fatal("GCS_BUCKET_NAME environment variable is not set")
@@ -86,6 +87,8 @@ func main() {
 		cacheManagementService,
 		heartbeatTimeout,
 		sessionTimeout,
+		heartbeatInterval,
+		cacheExtendPeriod,
 	)
 	// Initialize GCS service
 	gcsService, err := services.NewGCSService(ctx)
