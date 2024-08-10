@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"nexus_scholar_go_backend/cmd/api/config"
 	"nexus_scholar_go_backend/internal/api"
 	"nexus_scholar_go_backend/internal/auth"
 	"nexus_scholar_go_backend/internal/database"
@@ -56,12 +57,11 @@ func main() {
 	defer genaiClient.Close()
 
 	// Initial paramters for services
+	cfg := config.NewConfig()
 	arxivBaseURL := "https://arxiv.org/pdf/"
 	cacheExpirationTime := 10 * time.Minute
-	cacheExtendPeriod := 5 * time.Minute
-	heartbeatTimeout := 1 * time.Minute
-	sessionTimeout := 10 * time.Minute
-	heartbeatInterval := 30 * time.Second
+	cacheExtendPeriod := 10 * time.Minute
+
 	gcsBucketName := os.Getenv("GCS_BUCKET_NAME")
 	if gcsBucketName == "" {
 		log.Fatal("GCS_BUCKET_NAME environment variable is not set")
@@ -85,10 +85,7 @@ func main() {
 		genaiClient,
 		chatServiceDB,
 		cacheManagementService,
-		heartbeatTimeout,
-		sessionTimeout,
-		heartbeatInterval,
-		cacheExtendPeriod,
+		cfg,
 	)
 	// Initialize GCS service
 	gcsService, err := services.NewGCSService(ctx)
@@ -138,7 +135,7 @@ func main() {
 	}
 
 	// Create WebSocket handler
-	wsHandler := wsocket.NewHandler(researchChatService, upgrader)
+	wsHandler := wsocket.NewHandler(researchChatService, upgrader, cfg.SessionCheckInterval)
 
 	api.SetupRoutes(r, researchChatService, chatServiceDB, stripeService, cacheManagementService, userService)
 	auth.SetupRoutes(r, userService)

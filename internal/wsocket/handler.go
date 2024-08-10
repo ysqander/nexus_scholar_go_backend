@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"nexus_scholar_go_backend/internal/services"
 
@@ -15,8 +17,9 @@ import (
 )
 
 type Handler struct {
-	researchChatService *services.ResearchChatService
-	upgrader            websocket.Upgrader
+	researchChatService  *services.ResearchChatService
+	upgrader             websocket.Upgrader
+	sessionCheckInterval time.Duration
 }
 
 type Message struct {
@@ -26,10 +29,11 @@ type Message struct {
 	CachedContentName string `json:"cachedContentName,omitempty"`
 }
 
-func NewHandler(researchChatService *services.ResearchChatService, upgrader websocket.Upgrader) *Handler {
+func NewHandler(researchChatService *services.ResearchChatService, upgrader websocket.Upgrader, sessionCheckInterval time.Duration) *Handler {
 	return &Handler{
-		researchChatService: researchChatService,
-		upgrader:            upgrader,
+		researchChatService:  researchChatService,
+		upgrader:             upgrader,
+		sessionCheckInterval: sessionCheckInterval,
 	}
 }
 
@@ -44,6 +48,45 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request, user i
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 
+	var sessionID string
+
+	// Start a goroutine to check session status periodically
+	go func() {
+		ticker := time.NewTicker(h.sessionCheckInterval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if sessionID != "" {
+					status, err := h.researchChatService.CheckSessionStatus(sessionID)
+					if err != nil {
+						log.Printf("Error checking session status: %v", err)
+						continue
+					}
+
+					switch status {
+					case services.Warning:
+						conn.WriteJSON(Message{
+							Type:      "warning",
+							Content:   "Your session will expire in 1 minute due to inactivity. Send any message to keep it active.",
+							SessionID: sessionID,
+						})
+					case services.Expired:
+						conn.WriteJSON(Message{
+							Type:      "expired",
+							Content:   "Your session has expired due to inactivity.",
+							SessionID: sessionID,
+						})
+						return
+					}
+				}
+			}
+		}
+	}()
+
 	for {
 		_, message, err := conn.ReadMessage()
 		if err != nil {
@@ -54,25 +97,34 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request, user i
 		if err := json.Unmarshal(message, &msg); err != nil {
 			continue
 		}
+		sessionID := msg.SessionID
 
 		switch msg.Type {
 		case "message":
 			h.handleChatMessage(conn, msg, ctx)
-		case "heartbeat":
-			err := h.researchChatService.UpdateSessionHeartbeat(ctx, msg.SessionID)
+			// Update session activity after processing any message
+			if err := h.researchChatService.UpdateSessionActivity(ctx, sessionID); err != nil {
+				conn.WriteJSON(Message{
+					Type:      "error",
+					Content:   fmt.Sprintf("Failed to update session activity: %v", err),
+					SessionID: sessionID,
+				})
+			}
+		case "keep_alive":
+			err := h.researchChatService.UpdateSessionActivity(ctx, sessionID)
 			if err != nil {
 				conn.WriteJSON(Message{
 					Type:      "error",
-					Content:   fmt.Sprintf("Failed to update session heartbeat: %v", err),
-					SessionID: msg.SessionID,
+					Content:   fmt.Sprintf("Failed to update session activity: %v", err),
+					SessionID: sessionID,
 				})
 			}
 		case "terminate":
-			if err := h.researchChatService.EndResearchSession(ctx, msg.SessionID); err == nil {
+			if err := h.researchChatService.EndResearchSession(ctx, sessionID); err == nil {
 				conn.WriteJSON(Message{
 					Type:      "info",
 					Content:   "Research session terminated successfully",
-					SessionID: msg.SessionID,
+					SessionID: sessionID,
 				})
 			}
 		default:
@@ -122,6 +174,7 @@ func (h *Handler) handleChatMessage(conn *websocket.Conn, msg Message, ctx conte
 				SessionID: msg.SessionID,
 			}
 			if err := conn.WriteJSON(endMsg); err != nil {
+				log.Printf("Error sending end message: %v", err)
 			}
 			break
 		}

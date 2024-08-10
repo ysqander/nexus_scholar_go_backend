@@ -155,10 +155,14 @@ func (s *ResearchChatService) GetUserChatHistory(userID uuid.UUID) ([]models.Cha
 	return s.chatService.GetChatsByUserIDFromDB(userID)
 }
 
-func (s *ResearchChatService) UpdateSessionHeartbeat(ctx context.Context, sessionID string) error {
-	return s.chatSession.UpdateSessionHeartbeat(ctx, sessionID)
+func (s *ResearchChatService) UpdateSessionActivity(ctx context.Context, sessionID string) error {
+	return s.chatSession.UpdateSessionActivity(ctx, sessionID)
 }
 
 func (s *ResearchChatService) SaveMessageToDB(ctx context.Context, sessionID, msgType, content string) error {
 	return s.chatService.SaveMessageToDB(sessionID, msgType, content)
+}
+
+func (s *ResearchChatService) CheckSessionStatus(sessionID string) (SessionStatus, error) {
+	return s.chatSession.CheckSessionStatus(sessionID)
 }
