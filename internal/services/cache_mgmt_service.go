@@ -43,22 +43,19 @@ type CacheManagementService struct {
 	genAIClient        GenAIClient
 	contentAggregation *ContentAggregationService
 	expirationTime     time.Duration
-	cacheExtendPeriod  time.Duration
 	cacheServiceDB     CacheServiceDB
 }
 
 func NewCacheManagementService(
 	genAIClient GenAIClient,
 	contentAggregation *ContentAggregationService,
-	expirationTime,
-	cacheExtendPeriod time.Duration,
+	expirationTime time.Duration,
 	cacheServiceDB CacheServiceDB,
 ) *CacheManagementService {
 	return &CacheManagementService{
 		genAIClient:        genAIClient,
 		contentAggregation: contentAggregation,
 		expirationTime:     expirationTime,
-		cacheExtendPeriod:  cacheExtendPeriod,
 		cacheServiceDB:     cacheServiceDB,
 	}
 }

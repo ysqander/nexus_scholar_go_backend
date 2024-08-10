@@ -89,30 +89,25 @@ func (css *ChatSessionService) StartChatSession(ctx context.Context, userID uuid
 	return nil
 }
 
-func (css *ChatSessionService) CheckSessionStatus(sessionID string) (SessionStatus, error) {
+func (css *ChatSessionService) CheckSessionStatus(sessionID string) (SessionStatus, time.Time, error) {
 	css.sessionsMutex.RLock()
 	defer css.sessionsMutex.RUnlock()
 
 	sessionInfo, ok := css.sessions.Load(sessionID)
 	if !ok {
-		return Expired, ErrSessionNotFound
+		return Expired, time.Time{}, ErrSessionNotFound
 	}
 
 	info := sessionInfo.(ChatSessionInfo)
 	now := time.Now()
-	inactivityDuration := now.Sub(info.LastActivity)
 
-	if inactivityDuration >= css.cfg.SessionTimeout {
-		return Expired, nil
-	} else if inactivityDuration >= (css.cfg.SessionTimeout - css.cfg.GracePeriod) {
-		if info.WarningTime.IsZero() {
-			info.WarningTime = now
-			css.sessions.Store(sessionID, info)
-		}
-		return Warning, nil
+	if now.After(info.CacheExpiresAt) {
+		return Expired, time.Time{}, nil
+	} else if now.After(info.CacheExpiresAt.Add(-css.cfg.GracePeriod)) {
+		return Warning, info.CacheExpiresAt, nil
 	}
 
-	return Active, nil
+	return Active, info.CacheExpiresAt, nil
 }
 
 func (css *ChatSessionService) UpdateSessionActivity(ctx context.Context, sessionID string) error {
@@ -127,11 +122,11 @@ func (css *ChatSessionService) UpdateSessionActivity(ctx context.Context, sessio
 	sessionInfo := sessionInterface.(ChatSessionInfo)
 	now := time.Now()
 	sessionInfo.LastActivity = now
-	sessionInfo.WarningTime = time.Time{} // Reset warning time
+	cacheExpiresAt := sessionInfo.CacheExpiresAt
 
-	// Extend cache if necessary TODO: Check if expirytime is in less than inactivity time + 30 seconds
-	if now.After(sessionInfo.CacheExpiresAt.Add(-css.cfg.SessionTimeout - 30*time.Second)) {
-		newExpirationTime := sessionInfo.CacheExpiresAt.Add(css.cfg.CacheExtendPeriod)
+	// Extend cache if necessary
+	if now.After(cacheExpiresAt.Add(-css.cfg.GracePeriod)) {
+		newExpirationTime := cacheExpiresAt.Add(css.cfg.CacheExpirationTime)
 		if err := css.CacheManager.ExtendCacheLifetime(ctx, sessionInfo.CachedContentName, newExpirationTime); err != nil {
 			log.Printf("Failed to extend cache lifetime for session %s: %v", sessionID, err)
 		} else {
@@ -226,7 +221,7 @@ func (css *ChatSessionService) CleanupExpiredSessions() {
 	css.sessions.Range(func(key, value interface{}) bool {
 		sessionID := key.(string)
 
-		status, _ := css.CheckSessionStatus(sessionID)
+		status, _, _ := css.CheckSessionStatus(sessionID)
 		if status == Expired {
 			if err := css.TerminateSession(context.Background(), sessionID, SessionTimeout); err != nil {
 				log.Printf("Failed to terminate session %s: %v", sessionID, err)

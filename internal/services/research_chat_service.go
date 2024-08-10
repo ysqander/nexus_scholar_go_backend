@@ -163,6 +163,6 @@ func (s *ResearchChatService) SaveMessageToDB(ctx context.Context, sessionID, ms
 	return s.chatService.SaveMessageToDB(sessionID, msgType, content)
 }
 
-func (s *ResearchChatService) CheckSessionStatus(sessionID string) (SessionStatus, error) {
+func (s *ResearchChatService) CheckSessionStatus(sessionID string) (SessionStatus, time.Time, error) {
 	return s.chatSession.CheckSessionStatus(sessionID)
 }

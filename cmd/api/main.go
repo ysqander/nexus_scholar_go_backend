@@ -59,8 +59,6 @@ func main() {
 	// Initial paramters for services
 	cfg := config.NewConfig()
 	arxivBaseURL := "https://arxiv.org/pdf/"
-	cacheExpirationTime := 10 * time.Minute
-	cacheExtendPeriod := 10 * time.Minute
 
 	gcsBucketName := os.Getenv("GCS_BUCKET_NAME")
 	if gcsBucketName == "" {
@@ -74,8 +72,7 @@ func main() {
 	cacheManagementService := services.NewCacheManagementService(
 		genaiClient,
 		contentAggregationService,
-		cacheExpirationTime,
-		cacheExtendPeriod,
+		cfg.CacheExpirationTime,
 		cacheServiceDB,
 	)
 
@@ -103,7 +100,7 @@ func main() {
 		cacheManagementService,
 		chatSessionService,
 		chatServiceDB,
-		cacheExpirationTime,
+		cfg.CacheExpirationTime,
 		gcsService,
 		gcsBucketName,
 	)

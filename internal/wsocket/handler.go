@@ -44,7 +44,6 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request, user i
 	}
 	defer conn.Close()
 
-	// heartbeat listening mechanism
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 
@@ -61,7 +60,7 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request, user i
 				return
 			case <-ticker.C:
 				if sessionID != "" {
-					status, err := h.researchChatService.CheckSessionStatus(sessionID)
+					status, cacheExpiresAt, err := h.researchChatService.CheckSessionStatus(sessionID)
 					if err != nil {
 						log.Printf("Error checking session status: %v", err)
 						continue
@@ -69,17 +68,23 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request, user i
 
 					switch status {
 					case services.Warning:
-						conn.WriteJSON(Message{
+						remainingTime := time.Until(cacheExpiresAt)
+						warningMsg := fmt.Sprintf("Your session will expire in %d seconds. Send any message to extend.", int(remainingTime.Seconds()))
+						if err := conn.WriteJSON(Message{
 							Type:      "warning",
-							Content:   "Your session will expire in 1 minute due to inactivity. Send any message to keep it active.",
+							Content:   warningMsg,
 							SessionID: sessionID,
-						})
+						}); err != nil {
+							log.Printf("Error sending warning message: %v", err)
+						}
 					case services.Expired:
-						conn.WriteJSON(Message{
+						if err := conn.WriteJSON(Message{
 							Type:      "expired",
-							Content:   "Your session has expired due to inactivity.",
+							Content:   "Your session has expired.",
 							SessionID: sessionID,
-						})
+						}); err != nil {
+							log.Printf("Error sending expiration message: %v", err)
+						}
 						return
 					}
 				}
@@ -110,24 +115,20 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request, user i
 					SessionID: sessionID,
 				})
 			}
-		case "keep_alive":
-			err := h.researchChatService.UpdateSessionActivity(ctx, sessionID)
-			if err != nil {
-				conn.WriteJSON(Message{
-					Type:      "error",
-					Content:   fmt.Sprintf("Failed to update session activity: %v", err),
-					SessionID: sessionID,
-				})
-			}
 		case "terminate":
-			if err := h.researchChatService.EndResearchSession(ctx, sessionID); err == nil {
-				conn.WriteJSON(Message{
+			if err := h.researchChatService.EndResearchSession(ctx, sessionID); err != nil {
+				log.Printf("Error ending research session: %v", err)
+			} else {
+				if err := conn.WriteJSON(Message{
 					Type:      "info",
 					Content:   "Research session terminated successfully",
 					SessionID: sessionID,
-				})
+				}); err != nil {
+					log.Printf("Error sending termination confirmation: %v", err)
+				}
 			}
 		default:
+			log.Printf("Unknown message type: %s", msg.Type)
 		}
 	}
 }

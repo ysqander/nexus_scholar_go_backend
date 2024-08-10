@@ -22,7 +22,7 @@ type CacheManager interface {
 
 type ChatSessionManager interface {
 	StartChatSession(ctx context.Context, userID uuid.UUID, cachedContentName string, sessionID string, cacheCreateTime time.Time) error
-	CheckSessionStatus(sessionID string) (SessionStatus, error)
+	CheckSessionStatus(sessionID string) (SessionStatus, time.Time, error)
 	UpdateSessionActivity(ctx context.Context, sessionID string) error
 	TerminateSession(ctx context.Context, sessionID string, reason TerminationReason) error
 	StreamChatMessage(ctx context.Context, sessionID string, message string) (*genai.GenerateContentResponseIterator, error)
