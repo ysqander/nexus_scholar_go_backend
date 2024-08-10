@@ -26,6 +26,8 @@ type ChatSessionManager interface {
 	UpdateSessionActivity(ctx context.Context, sessionID string) error
 	TerminateSession(ctx context.Context, sessionID string, reason TerminationReason) error
 	StreamChatMessage(ctx context.Context, sessionID string, message string) (*genai.GenerateContentResponseIterator, error)
+	GetSessionStatus(sessionID string) (SessionStatusInfo, error)
+	ExtendSession(ctx context.Context, sessionID string) error
 }
 
 type CloudStorageManager interface {

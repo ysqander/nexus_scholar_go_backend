@@ -49,44 +49,78 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request, user i
 
 	var sessionID string
 
-	// Start a goroutine to check session status periodically
-	go func() {
-		ticker := time.NewTicker(h.sessionCheckInterval)
-		defer ticker.Stop()
+	// Read the initial message to get the sessionID
+	_, message, err := conn.ReadMessage()
+	if err != nil {
+		log.Printf("Error reading initial message: %v", err)
+		return
+	}
 
+	var initialMsg Message
+	if err := json.Unmarshal(message, &initialMsg); err != nil {
+		log.Printf("Error unmarshaling initial message: %v", err)
+		return
+	}
+
+	sessionID = initialMsg.SessionID
+
+	// Send initial session status
+	statusInfo, err := h.researchChatService.GetSessionStatus(sessionID)
+	if err != nil {
+		log.Printf("Error getting initial session status: %v", err)
+		return
+	}
+	statusInfoJSON, err := json.Marshal(statusInfo)
+	if err != nil {
+		log.Printf("Error marshaling session status: %v", err)
+		return
+	}
+	if err := conn.WriteJSON(Message{
+		Type:      "session_status",
+		Content:   string(statusInfoJSON),
+		SessionID: sessionID,
+	}); err != nil {
+		log.Printf("Error sending initial session status: %v", err)
+		return
+	}
+
+	ticker := time.NewTicker(h.sessionCheckInterval)
+	defer ticker.Stop()
+
+	go func() {
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				if sessionID != "" {
-					status, cacheExpiresAt, err := h.researchChatService.CheckSessionStatus(sessionID)
-					if err != nil {
-						log.Printf("Error checking session status: %v", err)
-						continue
-					}
+				status, err := h.researchChatService.GetSessionStatus(sessionID)
+				if err != nil {
+					log.Printf("Error getting session status: %v", err)
+					continue
+				}
+				statusJSON, err := json.Marshal(status)
+				if err != nil {
+					log.Printf("Error marshaling session status: %v", err)
+					continue
+				}
+				if err := conn.WriteJSON(Message{
+					Type:      "session_status",
+					Content:   string(statusJSON),
+					SessionID: sessionID,
+				}); err != nil {
+					log.Printf("Error sending session status: %v", err)
+					return
+				}
 
-					switch status {
-					case services.Warning:
-						remainingTime := time.Until(cacheExpiresAt)
-						warningMsg := fmt.Sprintf("Your session will expire in %d seconds. Send any message to extend.", int(remainingTime.Seconds()))
-						if err := conn.WriteJSON(Message{
-							Type:      "warning",
-							Content:   warningMsg,
-							SessionID: sessionID,
-						}); err != nil {
-							log.Printf("Error sending warning message: %v", err)
-						}
-					case services.Expired:
-						if err := conn.WriteJSON(Message{
-							Type:      "expired",
-							Content:   "Your session has expired.",
-							SessionID: sessionID,
-						}); err != nil {
-							log.Printf("Error sending expiration message: %v", err)
-						}
-						return
+				if status.Status == "expired" {
+					if err := conn.WriteJSON(Message{
+						Type:      "expired",
+						Content:   "Your session has expired.",
+						SessionID: sessionID,
+					}); err != nil {
+						log.Printf("Error sending expiration message: %v", err)
 					}
+					return
 				}
 			}
 		}
@@ -126,6 +160,36 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request, user i
 				}); err != nil {
 					log.Printf("Error sending termination confirmation: %v", err)
 				}
+			}
+		case "get_session_status":
+			status, err := h.researchChatService.GetSessionStatus(sessionID)
+			if err != nil {
+				conn.WriteJSON(Message{
+					Type:      "error",
+					Content:   fmt.Sprintf("Failed to get session status: %v", err),
+					SessionID: sessionID,
+				})
+			} else {
+				statusJSON, _ := json.Marshal(status)
+				conn.WriteJSON(Message{
+					Type:      "session_status",
+					Content:   string(statusJSON),
+					SessionID: sessionID,
+				})
+			}
+		case "extend_session":
+			if err := h.researchChatService.ExtendSession(ctx, sessionID); err != nil {
+				conn.WriteJSON(Message{
+					Type:      "error",
+					Content:   fmt.Sprintf("Failed to extend session: %v", err),
+					SessionID: sessionID,
+				})
+			} else {
+				conn.WriteJSON(Message{
+					Type:      "info",
+					Content:   "Session extended successfully",
+					SessionID: sessionID,
+				})
 			}
 		default:
 			log.Printf("Unknown message type: %s", msg.Type)

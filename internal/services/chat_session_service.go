@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"nexus_scholar_go_backend/cmd/api/config"
 	"sync"
@@ -43,6 +44,12 @@ type ChatSessionService struct {
 	chatService   ChatServiceDB
 	CacheManager  CacheManager
 	cfg           *config.Config
+}
+
+type SessionStatusInfo struct {
+	Status        string    `json:"status"`
+	ExpiryTime    time.Time `json:"expiryTime"`
+	TimeRemaining int       `json:"timeRemaining"` // in seconds
 }
 
 func NewChatSessionService(
@@ -234,4 +241,53 @@ func (css *ChatSessionService) CleanupExpiredSessions() {
 
 func (css *ChatSessionService) Sessions() *sync.Map {
 	return &css.sessions
+}
+
+func (css *ChatSessionService) GetSessionStatus(sessionID string) (SessionStatusInfo, error) {
+	css.sessionsMutex.RLock()
+	defer css.sessionsMutex.RUnlock()
+
+	sessionInfo, ok := css.sessions.Load(sessionID)
+	if !ok {
+		return SessionStatusInfo{}, ErrSessionNotFound
+	}
+
+	info := sessionInfo.(ChatSessionInfo)
+	now := time.Now()
+	timeRemaining := int(info.CacheExpiresAt.Sub(now).Seconds())
+
+	status := "active"
+	if now.After(info.CacheExpiresAt) {
+		status = "expired"
+	} else if now.After(info.CacheExpiresAt.Add(-css.cfg.GracePeriod)) {
+		status = "warning"
+	}
+
+	return SessionStatusInfo{
+		Status:        status,
+		ExpiryTime:    info.CacheExpiresAt,
+		TimeRemaining: timeRemaining,
+	}, nil
+}
+
+func (css *ChatSessionService) ExtendSession(ctx context.Context, sessionID string) error {
+	css.sessionsMutex.Lock()
+	defer css.sessionsMutex.Unlock()
+
+	sessionInfo, ok := css.sessions.Load(sessionID)
+	if !ok {
+		return ErrSessionNotFound
+	}
+
+	info := sessionInfo.(ChatSessionInfo)
+	newExpirationTime := time.Now().Add(css.cfg.CacheExpirationTime)
+
+	if err := css.CacheManager.ExtendCacheLifetime(ctx, info.CachedContentName, newExpirationTime); err != nil {
+		return fmt.Errorf("failed to extend cache lifetime: %w", err)
+	}
+
+	info.CacheExpiresAt = newExpirationTime
+	css.sessions.Store(sessionID, info)
+
+	return nil
 }
