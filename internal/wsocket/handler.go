@@ -30,6 +30,7 @@ type Message struct {
 }
 
 func NewHandler(researchChatService *services.ResearchChatService, upgrader websocket.Upgrader, sessionCheckInterval time.Duration) *Handler {
+	log.Println("DEBUG: Creating new Handler")
 	return &Handler{
 		researchChatService:  researchChatService,
 		upgrader:             upgrader,
@@ -38,51 +39,23 @@ func NewHandler(researchChatService *services.ResearchChatService, upgrader webs
 }
 
 func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request, user interface{}) {
+	log.Println("DEBUG: Handling new WebSocket connection")
+	sessionID := r.URL.Query().Get("sessionId")
+	if sessionID == "" {
+		log.Println("DEBUG: No sessionId provided in WebSocket connection")
+		http.Error(w, "No sessionId provided", http.StatusBadRequest)
+		return
+	}
+	log.Printf("DEBUG: Received sessionId: %s", sessionID)
 	conn, err := h.upgrader.Upgrade(w, r, nil)
 	if err != nil {
+		log.Printf("DEBUG: Error upgrading connection: %v", err)
 		return
 	}
 	defer conn.Close()
 
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
-
-	var sessionID string
-
-	// Read the initial message to get the sessionID
-	_, message, err := conn.ReadMessage()
-	if err != nil {
-		log.Printf("Error reading initial message: %v", err)
-		return
-	}
-
-	var initialMsg Message
-	if err := json.Unmarshal(message, &initialMsg); err != nil {
-		log.Printf("Error unmarshaling initial message: %v", err)
-		return
-	}
-
-	sessionID = initialMsg.SessionID
-
-	// Send initial session status
-	statusInfo, err := h.researchChatService.GetSessionStatus(sessionID)
-	if err != nil {
-		log.Printf("Error getting initial session status: %v", err)
-		return
-	}
-	statusInfoJSON, err := json.Marshal(statusInfo)
-	if err != nil {
-		log.Printf("Error marshaling session status: %v", err)
-		return
-	}
-	if err := conn.WriteJSON(Message{
-		Type:      "session_status",
-		Content:   string(statusInfoJSON),
-		SessionID: sessionID,
-	}); err != nil {
-		log.Printf("Error sending initial session status: %v", err)
-		return
-	}
 
 	ticker := time.NewTicker(h.sessionCheckInterval)
 	defer ticker.Stop()
@@ -91,16 +64,18 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request, user i
 		for {
 			select {
 			case <-ctx.Done():
+				log.Println("DEBUG: Context done, exiting goroutine")
 				return
 			case <-ticker.C:
+				log.Println("DEBUG: Checking session status")
 				status, err := h.researchChatService.GetSessionStatus(sessionID)
 				if err != nil {
-					log.Printf("Error getting session status: %v", err)
+					log.Printf("DEBUG: Error getting session status: %v", err)
 					continue
 				}
 				statusJSON, err := json.Marshal(status)
 				if err != nil {
-					log.Printf("Error marshaling session status: %v", err)
+					log.Printf("DEBUG: Error marshaling session status: %v", err)
 					continue
 				}
 				if err := conn.WriteJSON(Message{
@@ -108,17 +83,18 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request, user i
 					Content:   string(statusJSON),
 					SessionID: sessionID,
 				}); err != nil {
-					log.Printf("Error sending session status: %v", err)
+					log.Printf("DEBUG: Error sending session status: %v", err)
 					return
 				}
 
 				if status.Status == "expired" {
+					log.Println("DEBUG: Session expired")
 					if err := conn.WriteJSON(Message{
 						Type:      "expired",
 						Content:   "Your session has expired.",
 						SessionID: sessionID,
 					}); err != nil {
-						log.Printf("Error sending expiration message: %v", err)
+						log.Printf("DEBUG: Error sending expiration message: %v", err)
 					}
 					return
 				}
@@ -129,20 +105,25 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request, user i
 	for {
 		_, message, err := conn.ReadMessage()
 		if err != nil {
+			log.Printf("DEBUG: Error reading message: %v", err)
 			break
 		}
 
 		var msg Message
 		if err := json.Unmarshal(message, &msg); err != nil {
+			log.Printf("DEBUG: Error unmarshaling message: %v", err)
 			continue
 		}
 		sessionID := msg.SessionID
+		log.Printf("DEBUG: Received message of type: %s for session: %s", msg.Type, sessionID)
 
 		switch msg.Type {
 		case "message":
+			log.Println("DEBUG: Handling chat message")
 			h.handleChatMessage(conn, msg, ctx)
 			// Update session activity after processing any message
 			if err := h.researchChatService.UpdateSessionActivity(ctx, sessionID); err != nil {
+				log.Printf("DEBUG: Failed to update session activity: %v", err)
 				conn.WriteJSON(Message{
 					Type:      "error",
 					Content:   fmt.Sprintf("Failed to update session activity: %v", err),
@@ -150,35 +131,25 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request, user i
 				})
 			}
 		case "terminate":
+			log.Println("DEBUG: Terminating session")
 			if err := h.researchChatService.EndResearchSession(ctx, sessionID); err != nil {
-				log.Printf("Error ending research session: %v", err)
+				log.Printf("DEBUG: Error ending research session: %v", err)
 			} else {
 				if err := conn.WriteJSON(Message{
 					Type:      "info",
 					Content:   "Research session terminated successfully",
 					SessionID: sessionID,
 				}); err != nil {
-					log.Printf("Error sending termination confirmation: %v", err)
+					log.Printf("DEBUG: Error sending termination confirmation: %v", err)
 				}
 			}
 		case "get_session_status":
-			status, err := h.researchChatService.GetSessionStatus(sessionID)
-			if err != nil {
-				conn.WriteJSON(Message{
-					Type:      "error",
-					Content:   fmt.Sprintf("Failed to get session status: %v", err),
-					SessionID: sessionID,
-				})
-			} else {
-				statusJSON, _ := json.Marshal(status)
-				conn.WriteJSON(Message{
-					Type:      "session_status",
-					Content:   string(statusJSON),
-					SessionID: sessionID,
-				})
-			}
+			log.Println("DEBUG: Getting session status")
+			h.sendSessionStatus(conn, sessionID)
 		case "extend_session":
+			log.Println("DEBUG: Extending session")
 			if err := h.researchChatService.ExtendSession(ctx, sessionID); err != nil {
+				log.Printf("DEBUG: Failed to extend session: %v", err)
 				conn.WriteJSON(Message{
 					Type:      "error",
 					Content:   fmt.Sprintf("Failed to extend session: %v", err),
@@ -192,14 +163,16 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request, user i
 				})
 			}
 		default:
-			log.Printf("Unknown message type: %s", msg.Type)
+			log.Printf("DEBUG: Unknown message type: %s", msg.Type)
 		}
 	}
 }
 
 func (h *Handler) handleChatMessage(conn *websocket.Conn, msg Message, ctx context.Context) {
+	log.Printf("DEBUG: Handling chat message for session: %s", msg.SessionID)
 	responseIterator, err := h.researchChatService.SendMessage(ctx, msg.SessionID, msg.Content)
 	if err != nil {
+		log.Printf("DEBUG: Failed to send message: %v", err)
 		conn.WriteJSON(Message{
 			Type:      "error",
 			Content:   fmt.Sprintf("Failed to send message: %v", err),
@@ -211,6 +184,7 @@ func (h *Handler) handleChatMessage(conn *websocket.Conn, msg Message, ctx conte
 
 	// Save user message
 	if err := h.researchChatService.SaveMessageToDB(ctx, msg.SessionID, "user", msg.Content); err != nil {
+		log.Printf("DEBUG: Failed to save user message: %v", err)
 		conn.WriteJSON(Message{
 			Type:      "error",
 			Content:   fmt.Sprintf("Failed to save user message: %v", err),
@@ -224,8 +198,10 @@ func (h *Handler) handleChatMessage(conn *websocket.Conn, msg Message, ctx conte
 	for {
 		response, err := responseIterator.Next()
 		if err == iterator.Done {
+			log.Println("DEBUG: AI response complete")
 			// Update the session's chat history with the AI response
 			if err := h.researchChatService.SaveMessageToDB(ctx, msg.SessionID, "ai", aiResponse.String()); err != nil {
+				log.Printf("DEBUG: Failed to save AI response to chat history: %v", err)
 				conn.WriteJSON(Message{
 					Type:      "error",
 					Content:   fmt.Sprintf("Failed to save AI response to chat history: %v", err),
@@ -239,11 +215,12 @@ func (h *Handler) handleChatMessage(conn *websocket.Conn, msg Message, ctx conte
 				SessionID: msg.SessionID,
 			}
 			if err := conn.WriteJSON(endMsg); err != nil {
-				log.Printf("Error sending end message: %v", err)
+				log.Printf("DEBUG: Error sending end message: %v", err)
 			}
 			break
 		}
 		if err != nil {
+			log.Printf("DEBUG: Error getting response: %v", err)
 			conn.WriteJSON(Message{
 				Type:      "error",
 				Content:   fmt.Sprintf("Error getting response: %v", err),
@@ -260,6 +237,7 @@ func (h *Handler) handleChatMessage(conn *websocket.Conn, msg Message, ctx conte
 			case *genai.Text:
 				content = string(*part)
 			default:
+				log.Println("DEBUG: Unexpected content type in response")
 				continue
 			}
 			// Aggregating the ai response to later save in DB.
@@ -272,8 +250,23 @@ func (h *Handler) handleChatMessage(conn *websocket.Conn, msg Message, ctx conte
 				SessionID: msg.SessionID,
 			}
 			if err := conn.WriteJSON(responseMsg); err != nil {
+				log.Printf("DEBUG: Error sending AI response: %v", err)
 				return
 			}
 		}
 	}
+}
+
+func (h *Handler) sendSessionStatus(conn *websocket.Conn, sessionID string) error {
+	statusInfo, err := h.researchChatService.GetSessionStatus(sessionID)
+	if err != nil {
+		log.Printf("DEBUG: Error getting session status: %v", err)
+		return conn.WriteJSON(Message{Type: "error", Content: "Failed to get session status"})
+	}
+	statusInfoJSON, _ := json.Marshal(statusInfo)
+	return conn.WriteJSON(Message{
+		Type:      "session_status",
+		Content:   string(statusInfoJSON),
+		SessionID: sessionID,
+	})
 }

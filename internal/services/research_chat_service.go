@@ -75,7 +75,9 @@ func (s *ResearchChatService) StartResearchSession(c *gin.Context, arxivIDs []st
 
 	fmt.Printf("DEBUG: Creating content cache for user ID: %s, session ID: %s, price tier: %s\n", userModel.ID, sessionID, priceTier)
 	// Create cache
-	cacheName, cacheCreateTime, err := s.cacheManagement.CreateContentCache(c.Request.Context(), userModel.ID, sessionID, priceTier, aggregatedContent)
+	cacheName, cacheExpiryTime, err := s.cacheManagement.CreateContentCache(c.Request.Context(), userModel.ID, sessionID, priceTier, aggregatedContent)
+	// Printout cacheCreateTime
+	fmt.Printf("DEBUG: Cache expiry time from CreateContentCache: %v\n", cacheExpiryTime)
 	if err != nil {
 		fmt.Printf("DEBUG: Failed to create content cache: %v\n", err)
 		return "", "", fmt.Errorf("failed to create content cache: %w", err)
@@ -83,7 +85,7 @@ func (s *ResearchChatService) StartResearchSession(c *gin.Context, arxivIDs []st
 
 	fmt.Printf("DEBUG: Starting chat session for user ID: %s, cache name: %s, session ID: %s\n", userModel.ID, cacheName, sessionID)
 	// Start chat session
-	err = s.chatSession.StartChatSession(c.Request.Context(), userModel.ID, cacheName, sessionID, cacheCreateTime)
+	err = s.chatSession.StartChatSession(c.Request.Context(), userModel.ID, cacheName, sessionID, cacheExpiryTime)
 	if err != nil {
 		fmt.Printf("DEBUG: Failed to start chat session: %v\n", err)
 		// Clean up cache if session start fails
@@ -96,13 +98,6 @@ func (s *ResearchChatService) StartResearchSession(c *gin.Context, arxivIDs []st
 		_ = s.cloudStorage.DeleteFile(c.Request.Context(), s.bucketName, fileName)
 
 		return "", "", fmt.Errorf("failed to start chat session: %w", err)
-	}
-
-	fmt.Printf("DEBUG: Saving chat session to history for user ID: %s, session ID: %s\n", userModel.ID, sessionID)
-	// Save chat session to history
-	if err := s.chatService.SaveChatToDB(userModel.ID, sessionID); err != nil {
-		fmt.Printf("DEBUG: Failed to save chat to history: %v\n", err)
-		return "", "", fmt.Errorf("failed to save chat to history: %w", err)
 	}
 
 	fmt.Printf("DEBUG: Research session started successfully. Session ID: %s, Cache Name: %s\n", sessionID, cacheName)

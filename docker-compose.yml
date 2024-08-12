@@ -24,6 +24,9 @@ services:
       - "3000:3000"
     env_file:
       - .env
+    environment:
+      DB_HOST: db
+      GOOGLE_APPLICATION_CREDENTIALS: /app/nexus-scholar-key.json
     volumes:
       - .:/app
       - ./nexus-scholar-key.json:/app/nexus-scholar-key.json:ro

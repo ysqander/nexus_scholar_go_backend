@@ -29,6 +29,7 @@ type ChatSessionInfo struct {
 	CacheExpiresAt    time.Time
 	UserID            uuid.UUID
 	WarningTime       time.Time
+	mutex             *sync.RWMutex
 }
 
 type ChatMessage struct {
@@ -38,7 +39,7 @@ type ChatMessage struct {
 }
 
 type ChatSessionService struct {
-	sessions      sync.Map
+	sessions      map[string]*ChatSessionInfo
 	sessionsMutex sync.RWMutex
 	genAIClient   GenAIClient
 	chatService   ChatServiceDB
@@ -63,13 +64,14 @@ func NewChatSessionService(
 		chatService:  chatService,
 		CacheManager: CacheManager,
 		cfg:          cfg,
-		sessions:     sync.Map{},
+		sessions:     make(map[string]*ChatSessionInfo),
 	}
 	go css.periodicCleanup()
 	return css
 }
 
-func (css *ChatSessionService) StartChatSession(ctx context.Context, userID uuid.UUID, cachedContentName string, sessionID string, cacheCreateTime time.Time) error {
+func (css *ChatSessionService) StartChatSession(ctx context.Context, userID uuid.UUID, cachedContentName string, sessionID string, cacheExpiryTime time.Time) error {
+	fmt.Printf("DEBUG: Cache expiry time: %v\n", cacheExpiryTime)
 	// Get the GenerativeModel using the CacheManagementService
 	model, err := css.CacheManager.GetGenerativeModel(ctx, cachedContentName)
 	if err != nil {
@@ -81,52 +83,61 @@ func (css *ChatSessionService) StartChatSession(ctx context.Context, userID uuid
 	if err := css.chatService.SaveChatToDB(userID, sessionID); err != nil {
 		return err
 	}
+	fmt.Printf("DEBUG: Saved chat session to history in DB for user ID: %s, session ID: %s\n", userID, sessionID)
 
 	css.sessionsMutex.Lock()
 	defer css.sessionsMutex.Unlock()
 
-	css.sessions.Store(sessionID, ChatSessionInfo{
+	css.sessions[sessionID] = &ChatSessionInfo{
 		Session:           session,
 		CachedContentName: cachedContentName,
 		LastActivity:      time.Now(),
-		CacheExpiresAt:    cacheCreateTime,
+		CacheExpiresAt:    cacheExpiryTime,
 		UserID:            userID,
-	})
-
+		mutex:             &sync.RWMutex{},
+	}
 	return nil
 }
 
 func (css *ChatSessionService) CheckSessionStatus(sessionID string) (SessionStatus, time.Time, error) {
 	css.sessionsMutex.RLock()
-	defer css.sessionsMutex.RUnlock()
+	sessionInfo, ok := css.sessions[sessionID]
+	css.sessionsMutex.RUnlock()
 
-	sessionInfo, ok := css.sessions.Load(sessionID)
 	if !ok {
+		log.Printf("DEBUG: Session not found for ID: %s", sessionID)
 		return Expired, time.Time{}, ErrSessionNotFound
 	}
 
-	info := sessionInfo.(ChatSessionInfo)
+	sessionInfo.mutex.RLock()
+	defer sessionInfo.mutex.RUnlock()
+
 	now := time.Now()
 
-	if now.After(info.CacheExpiresAt) {
+	if now.After(sessionInfo.CacheExpiresAt) {
+		log.Printf("DEBUG: Session expired for ID: %s", sessionID)
 		return Expired, time.Time{}, nil
-	} else if now.After(info.CacheExpiresAt.Add(-css.cfg.GracePeriod)) {
-		return Warning, info.CacheExpiresAt, nil
+	} else if now.After(sessionInfo.CacheExpiresAt.Add(-css.cfg.GracePeriod)) {
+		log.Printf("DEBUG: Session in warning state for ID: %s", sessionID)
+		return Warning, sessionInfo.CacheExpiresAt, nil
 	}
 
-	return Active, info.CacheExpiresAt, nil
+	log.Printf("DEBUG: Session active for ID: %s", sessionID)
+	return Active, sessionInfo.CacheExpiresAt, nil
 }
 
 func (css *ChatSessionService) UpdateSessionActivity(ctx context.Context, sessionID string) error {
-	css.sessionsMutex.Lock()
-	defer css.sessionsMutex.Unlock()
+	css.sessionsMutex.RLock()
+	sessionInfo, ok := css.sessions[sessionID]
+	css.sessionsMutex.RUnlock()
 
-	sessionInterface, ok := css.sessions.Load(sessionID)
 	if !ok {
 		return errors.New("session not found")
 	}
 
-	sessionInfo := sessionInterface.(ChatSessionInfo)
+	sessionInfo.mutex.Lock()
+	defer sessionInfo.mutex.Unlock()
+
 	now := time.Now()
 	sessionInfo.LastActivity = now
 	cacheExpiresAt := sessionInfo.CacheExpiresAt
@@ -142,7 +153,6 @@ func (css *ChatSessionService) UpdateSessionActivity(ctx context.Context, sessio
 		}
 	}
 
-	css.sessions.Store(sessionID, sessionInfo)
 	return nil
 }
 
@@ -160,23 +170,25 @@ const (
 )
 
 func (css *ChatSessionService) TerminateSession(ctx context.Context, sessionID string, reason TerminationReason) error {
-	css.sessionsMutex.Lock()
-	defer css.sessionsMutex.Unlock()
+	css.sessionsMutex.RLock()
+	sessionInfo, ok := css.sessions[sessionID]
+	css.sessionsMutex.RUnlock()
 
-	sessionInterface, ok := css.sessions.Load(sessionID)
 	if !ok {
 		return ErrSessionNotFound
 	}
 
-	sessionInfo := sessionInterface.(ChatSessionInfo)
+	sessionInfo.mutex.Lock()
+	defer sessionInfo.mutex.Unlock()
 
 	// Delete the cached content when terminating the session
 	if err := css.CacheManager.DeleteCache(ctx, sessionInfo.UserID, sessionID, sessionInfo.CachedContentName); err != nil {
 		log.Printf("Failed to delete cached content for session %s: %v", sessionID, err)
 	}
 
-	// Remove the session from the map
-	css.sessions.Delete(sessionID)
+	css.sessionsMutex.Lock()
+	delete(css.sessions, sessionID)
+	css.sessionsMutex.Unlock()
 
 	// Log the termination
 	log.Printf("Session %s terminated. Reason: %v", sessionID, reason)
@@ -196,18 +208,19 @@ func (css *ChatSessionService) StreamChatMessage(ctx context.Context, sessionID 
 	return responseIterator, nil
 }
 
-func (css *ChatSessionService) getAndUpdateSession(sessionID string) (ChatSessionInfo, bool) {
-	css.sessionsMutex.Lock()
-	defer css.sessionsMutex.Unlock()
+func (css *ChatSessionService) getAndUpdateSession(sessionID string) (*ChatSessionInfo, bool) {
+	css.sessionsMutex.RLock()
+	sessionInfo, ok := css.sessions[sessionID]
+	css.sessionsMutex.RUnlock()
 
-	sessionInterface, ok := css.sessions.Load(sessionID)
 	if !ok {
-		return ChatSessionInfo{}, false
+		return nil, false
 	}
 
-	sessionInfo := sessionInterface.(ChatSessionInfo)
+	sessionInfo.mutex.Lock()
+	defer sessionInfo.mutex.Unlock()
+
 	sessionInfo.LastActivity = time.Now()
-	css.sessions.Store(sessionID, sessionInfo)
 
 	return sessionInfo, true
 }
@@ -225,69 +238,83 @@ func (css *ChatSessionService) periodicCleanup() {
 
 // Modify the CleanupExpiredSessions method
 func (css *ChatSessionService) CleanupExpiredSessions() {
-	css.sessions.Range(func(key, value interface{}) bool {
-		sessionID := key.(string)
+	css.sessionsMutex.RLock()
+	sessionIDs := make([]string, 0, len(css.sessions))
+	for sessionID := range css.sessions {
+		sessionIDs = append(sessionIDs, sessionID)
+	}
+	css.sessionsMutex.RUnlock()
 
+	for _, sessionID := range sessionIDs {
 		status, _, _ := css.CheckSessionStatus(sessionID)
 		if status == Expired {
 			if err := css.TerminateSession(context.Background(), sessionID, SessionTimeout); err != nil {
 				log.Printf("Failed to terminate session %s: %v", sessionID, err)
 			}
 		}
-
-		return true
-	})
+	}
 }
 
-func (css *ChatSessionService) Sessions() *sync.Map {
-	return &css.sessions
+func (css *ChatSessionService) Sessions() map[string]*ChatSessionInfo {
+	css.sessionsMutex.RLock()
+	defer css.sessionsMutex.RUnlock()
+
+	// Create a copy of the sessions map to avoid concurrent access issues
+	sessionsCopy := make(map[string]*ChatSessionInfo, len(css.sessions))
+	for k, v := range css.sessions {
+		sessionsCopy[k] = v
+	}
+
+	return sessionsCopy
 }
 
 func (css *ChatSessionService) GetSessionStatus(sessionID string) (SessionStatusInfo, error) {
 	css.sessionsMutex.RLock()
-	defer css.sessionsMutex.RUnlock()
+	sessionInfo, ok := css.sessions[sessionID]
+	css.sessionsMutex.RUnlock()
 
-	sessionInfo, ok := css.sessions.Load(sessionID)
 	if !ok {
 		return SessionStatusInfo{}, ErrSessionNotFound
 	}
 
-	info := sessionInfo.(ChatSessionInfo)
+	sessionInfo.mutex.RLock()
+	defer sessionInfo.mutex.RUnlock()
 	now := time.Now()
-	timeRemaining := int(info.CacheExpiresAt.Sub(now).Seconds())
+	timeRemaining := int(sessionInfo.CacheExpiresAt.Sub(now).Seconds())
 
 	status := "active"
-	if now.After(info.CacheExpiresAt) {
+	if now.After(sessionInfo.CacheExpiresAt) {
 		status = "expired"
-	} else if now.After(info.CacheExpiresAt.Add(-css.cfg.GracePeriod)) {
+	} else if now.After(sessionInfo.CacheExpiresAt.Add(-css.cfg.GracePeriod)) {
 		status = "warning"
 	}
 
 	return SessionStatusInfo{
 		Status:        status,
-		ExpiryTime:    info.CacheExpiresAt,
+		ExpiryTime:    sessionInfo.CacheExpiresAt,
 		TimeRemaining: timeRemaining,
 	}, nil
 }
 
 func (css *ChatSessionService) ExtendSession(ctx context.Context, sessionID string) error {
-	css.sessionsMutex.Lock()
-	defer css.sessionsMutex.Unlock()
+	css.sessionsMutex.RLock()
+	sessionInfo, ok := css.sessions[sessionID]
+	css.sessionsMutex.RUnlock()
 
-	sessionInfo, ok := css.sessions.Load(sessionID)
 	if !ok {
 		return ErrSessionNotFound
 	}
 
-	info := sessionInfo.(ChatSessionInfo)
+	sessionInfo.mutex.Lock()
+	defer sessionInfo.mutex.Unlock()
+
 	newExpirationTime := time.Now().Add(css.cfg.CacheExpirationTime)
 
-	if err := css.CacheManager.ExtendCacheLifetime(ctx, info.CachedContentName, newExpirationTime); err != nil {
+	if err := css.CacheManager.ExtendCacheLifetime(ctx, sessionInfo.CachedContentName, newExpirationTime); err != nil {
 		return fmt.Errorf("failed to extend cache lifetime: %w", err)
 	}
 
-	info.CacheExpiresAt = newExpirationTime
-	css.sessions.Store(sessionID, info)
+	sessionInfo.CacheExpiresAt = newExpirationTime
 
 	return nil
 }

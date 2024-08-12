@@ -26,7 +26,8 @@ func initGCSClient(ctx context.Context) (*storage.Client, error) {
 	if credJSON := os.Getenv("GOOGLE_CREDENTIALS_JSON"); credJSON != "" {
 		return storage.NewClient(ctx, option.WithCredentialsJSON([]byte(credJSON)))
 	}
-	return storage.NewClient(ctx, option.WithCredentialsFile("/app/nexus-scholar-key.json"))
+	GOOGLE_APPLICATION_CREDENTIALS := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
+	return storage.NewClient(ctx, option.WithCredentialsFile(GOOGLE_APPLICATION_CREDENTIALS))
 }
 
 func (s *GCSService) UploadFile(ctx context.Context, bucketName, objectName string, content io.Reader) error {

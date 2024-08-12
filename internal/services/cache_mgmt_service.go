@@ -84,16 +84,19 @@ func (cms *CacheManagementService) CreateContentCache(ctx context.Context, userI
 
 	// Get the token count, name and creation time from the usage metadata
 	tokenCount := cachedContent.UsageMetadata.TotalTokenCount
-	createTime := cachedContent.CreateTime
+	fmt.Printf("DEBUG: Token count: %v\n", tokenCount)
+
+	cacheExpiryTime := cachedContent.CreateTime.Add(cms.expirationTime)
+	fmt.Printf("DEBUG: Cache expiry time: %v\n", cacheExpiryTime)
 	cacheName := cachedContent.Name
 
 	// Save the cache data to the database
-	err = cms.cacheServiceDB.CreateCacheDB(userID, sessionID, cacheName, tokenCount, createTime)
+	err = cms.cacheServiceDB.CreateCacheDB(userID, sessionID, cacheName, tokenCount, cacheExpiryTime)
 	if err != nil {
 		return "", time.Time{}, fmt.Errorf("failed to save cache data: %v", err)
 	}
 
-	return cacheName, createTime, nil
+	return cacheName, cacheExpiryTime, nil
 }
 
 func (cms *CacheManagementService) ExtendCacheLifetime(ctx context.Context, cachedContentName string, newExpirationTime time.Time) error {
