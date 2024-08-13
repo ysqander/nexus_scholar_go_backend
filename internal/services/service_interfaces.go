@@ -18,6 +18,7 @@ type CacheManager interface {
 	ExtendCacheLifetime(ctx context.Context, cachedContentName string, newExpirationTime time.Time) error
 	DeleteCache(ctx context.Context, userID uuid.UUID, sessionID string, cachedContentName string) error
 	GetGenerativeModel(ctx context.Context, cachedContentName string) (*genai.GenerativeModel, error)
+	RecordCacheTokenUsage(ctx context.Context, userID uuid.UUID, sessionID string) error
 }
 
 type ChatSessionManager interface {

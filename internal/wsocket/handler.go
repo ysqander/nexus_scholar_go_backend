@@ -29,7 +29,7 @@ type Message struct {
 	CachedContentName string `json:"cachedContentName,omitempty"`
 }
 
-func NewHandler(researchChatService *services.ResearchChatService, upgrader websocket.Upgrader, sessionCheckInterval time.Duration) *Handler {
+func NewHandler(researchChatService *services.ResearchChatService, upgrader websocket.Upgrader, sessionCheckInterval time.Duration, sessionMemoryTimeout time.Duration) *Handler {
 	log.Println("DEBUG: Creating new Handler")
 	return &Handler{
 		researchChatService:  researchChatService,

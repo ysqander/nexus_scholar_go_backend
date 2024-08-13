@@ -74,6 +74,7 @@ func main() {
 		contentAggregationService,
 		cfg.CacheExpirationTime,
 		cacheServiceDB,
+		chatServiceDB,
 	)
 
 	userService := services.NewUserService(database.DB, cacheManagementService)
@@ -132,7 +133,7 @@ func main() {
 	}
 
 	// Create WebSocket handler
-	wsHandler := wsocket.NewHandler(researchChatService, upgrader, cfg.SessionCheckInterval)
+	wsHandler := wsocket.NewHandler(researchChatService, upgrader, cfg.SessionCheckInterval, cfg.SessionMemoryTimeout)
 
 	api.SetupRoutes(r, researchChatService, chatServiceDB, stripeService, cacheManagementService, userService)
 	auth.SetupRoutes(r, userService)

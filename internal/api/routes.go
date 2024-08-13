@@ -259,9 +259,13 @@ func getChatHistoryHandler(researchChatService *services.ResearchChatService) gi
 			}
 
 			chatHistory = append(chatHistory, gin.H{
-				"session_id": chat.SessionID,
-				"messages":   messages,
-				"created_at": chat.CreatedAt.Format(time.RFC3339),
+				"session_id":       chat.SessionID,
+				"messages":         messages,
+				"created_at":       chat.CreatedAt.Format(time.RFC3339),
+				"chat_duration":    chat.ChatDuration,
+				"token_count_used": chat.TokenCountUsed,
+				"price_tier":       chat.PriceTier,
+				"token_hours_used": chat.TokenHoursUsed,
 			})
 		}
 

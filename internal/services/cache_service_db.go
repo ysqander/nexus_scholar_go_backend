@@ -9,7 +9,7 @@ import (
 )
 
 type CacheServiceDB interface {
-	CreateCacheDB(userID uuid.UUID, sessionID, cacheName string, tokenCount int32, creationTime time.Time) error
+	CreateCacheDB(userID uuid.UUID, sessionID, cacheName string, priceTier string, tokenCount int32, creationTime time.Time) error
 	GetCacheDB(sessionID string) (*models.Cache, error)
 	UpdateCacheTokenCountDB(sessionID string, tokenCount int32) error
 	UpdateCacheTerminationTimeDB(sessionID string, terminationTime time.Time) error
@@ -28,11 +28,12 @@ func NewCacheServiceDB(db *gorm.DB) CacheServiceDB {
 	return &DefaultCacheService{db: db}
 }
 
-func (s *DefaultCacheService) CreateCacheDB(userID uuid.UUID, sessionID, cacheName string, tokenCount int32, creationTime time.Time) error {
+func (s *DefaultCacheService) CreateCacheDB(userID uuid.UUID, sessionID, cacheName string, priceTier string, tokenCount int32, creationTime time.Time) error {
 	cache := &models.Cache{
 		UserID:          userID,
 		SessionID:       sessionID,
 		CacheName:       cacheName,
+		PriceTier:       priceTier,
 		TotalTokenCount: tokenCount,
 		CreationTime:    creationTime,
 	}

@@ -170,28 +170,24 @@ const (
 )
 
 func (css *ChatSessionService) TerminateSession(ctx context.Context, sessionID string, reason TerminationReason) error {
-	css.sessionsMutex.RLock()
+	css.sessionsMutex.Lock()
 	sessionInfo, ok := css.sessions[sessionID]
-	css.sessionsMutex.RUnlock()
-
 	if !ok {
+		css.sessionsMutex.Unlock()
 		return ErrSessionNotFound
 	}
-
-	sessionInfo.mutex.Lock()
-	defer sessionInfo.mutex.Unlock()
-
-	// Delete the cached content when terminating the session
-	if err := css.CacheManager.DeleteCache(ctx, sessionInfo.UserID, sessionID, sessionInfo.CachedContentName); err != nil {
-		log.Printf("Failed to delete cached content for session %s: %v", sessionID, err)
-	}
-
-	css.sessionsMutex.Lock()
 	delete(css.sessions, sessionID)
 	css.sessionsMutex.Unlock()
 
-	// Log the termination
-	log.Printf("Session %s terminated. Reason: %v", sessionID, reason)
+	// Use defer to ensure we always log the termination
+	defer log.Printf("Session %s terminated. Reason: %v", sessionID, reason)
+
+	// Attempt to delete the cached content
+	err := css.CacheManager.DeleteCache(ctx, sessionInfo.UserID, sessionID, sessionInfo.CachedContentName)
+	if err != nil {
+		log.Printf("Failed to delete cached content for session %s: %v", sessionID, err)
+		// Don't return here, continue with termination even if cache deletion fails
+	}
 
 	return nil
 }
@@ -230,27 +226,48 @@ func (css *ChatSessionService) formatMessage(message string) string {
 }
 
 func (css *ChatSessionService) periodicCleanup() {
-	ticker := time.NewTicker(1 * time.Minute)
-	for range ticker.C {
-		css.CleanupExpiredSessions()
+	cacheCleanupTicker := time.NewTicker(css.cfg.CacheCleanupDelay)
+	sessionCleanupTicker := time.NewTicker(css.cfg.SessionMemoryTimeout)
+
+	for {
+		select {
+		case <-cacheCleanupTicker.C:
+			css.cleanupExpiredCaches()
+		case <-sessionCleanupTicker.C:
+			css.cleanupExpiredSessions()
+		}
 	}
 }
 
-// Modify the CleanupExpiredSessions method
-func (css *ChatSessionService) CleanupExpiredSessions() {
-	css.sessionsMutex.RLock()
-	sessionIDs := make([]string, 0, len(css.sessions))
-	for sessionID := range css.sessions {
-		sessionIDs = append(sessionIDs, sessionID)
-	}
-	css.sessionsMutex.RUnlock()
+func (css *ChatSessionService) cleanupExpiredCaches() {
+	css.sessionsMutex.Lock()
+	defer css.sessionsMutex.Unlock()
 
-	for _, sessionID := range sessionIDs {
-		status, _, _ := css.CheckSessionStatus(sessionID)
-		if status == Expired {
-			if err := css.TerminateSession(context.Background(), sessionID, SessionTimeout); err != nil {
-				log.Printf("Failed to terminate session %s: %v", sessionID, err)
+	now := time.Now()
+	for sessionID, sessionInfo := range css.sessions {
+		if now.After(sessionInfo.CacheExpiresAt) {
+			log.Printf("DEBUG: Attempting to clean up expired cache for session %s", sessionID)
+			ctx := context.Background()
+			err := css.CacheManager.RecordCacheTokenUsage(ctx, sessionInfo.UserID, sessionID)
+			if err != nil {
+
+				log.Printf("ERROR: Failed to record cache token usage for session %s: %v", sessionID, err)
+			} else {
+				log.Printf("DEBUG: Successfully recorded cache token usage for session %s", sessionID)
 			}
+		}
+	}
+}
+
+func (css *ChatSessionService) cleanupExpiredSessions() {
+	css.sessionsMutex.Lock()
+	defer css.sessionsMutex.Unlock()
+
+	now := time.Now()
+	for sessionID, sessionInfo := range css.sessions {
+		if now.After(sessionInfo.CacheExpiresAt.Add(css.cfg.SessionMemoryTimeout)) {
+			delete(css.sessions, sessionID)
+			log.Printf("Removed expired session %s from memory", sessionID)
 		}
 	}
 }
@@ -285,6 +302,7 @@ func (css *ChatSessionService) GetSessionStatus(sessionID string) (SessionStatus
 	status := "active"
 	if now.After(sessionInfo.CacheExpiresAt) {
 		status = "expired"
+		timeRemaining = 0
 	} else if now.After(sessionInfo.CacheExpiresAt.Add(-css.cfg.GracePeriod)) {
 		status = "warning"
 	}

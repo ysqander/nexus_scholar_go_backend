@@ -24,14 +24,19 @@ func NewContentAggregationService(arxivBaseURL string) *ContentAggregationServic
 
 func (s *ContentAggregationService) AggregateDocuments(arxivIDs []string, userPDFs []string) (string, error) {
 	var aggregatedContent strings.Builder
+	var summary strings.Builder
+	documentCount := 0
 
 	// Process arXiv papers
 	for _, id := range arxivIDs {
+		documentCount++
 		content, title, err := s.processArXivPaper(id)
 		if err != nil {
 			return "", fmt.Errorf("failed to process arXiv paper %s: %v", id, err)
 		}
-		aggregatedContent.WriteString(fmt.Sprintf("<Document>\n<title>Title:%s</title>\n%s\n</Document>\n", title, content))
+		documentString := fmt.Sprintf("<Document %d>\n<title>Title: %s</title>\n%s\n</Document %d>\n", documentCount, title, content, documentCount)
+		aggregatedContent.WriteString(documentString)
+		summary.WriteString(fmt.Sprintf("Document %d: %s (arXiv ID: %s)\n", documentCount, title, id))
 	}
 
 	// Process user-provided PDFs
@@ -39,14 +44,20 @@ func (s *ContentAggregationService) AggregateDocuments(arxivIDs []string, userPD
 		if pdfPath == "" {
 			continue
 		}
+		documentCount++
 		content, title, err := s.ProcessUserPDF(pdfPath)
 		if err != nil {
 			return "", fmt.Errorf("failed to process PDF %s: %v", pdfPath, err)
 		}
-		aggregatedContent.WriteString(fmt.Sprintf("<Document>\n<title>Title:%s</title>\n%s\n</Document>\n", title, content))
+		documentString := fmt.Sprintf("<Document %d>\n<title>Title: %s</title>\n%s\n</Document%d>\n", documentCount, title, content, documentCount)
+		aggregatedContent.WriteString(documentString)
+		summary.WriteString(fmt.Sprintf("Document %d: %s (User PDF)\n", documentCount, title))
 	}
 
-	return aggregatedContent.String(), nil
+	// Prepend the summary to the aggregated content
+	finalContent := fmt.Sprintf("Summary of Documents:\n%s\n\nAggregated Content:\n%s", summary.String(), aggregatedContent.String())
+
+	return finalContent, nil
 }
 
 func (s *ContentAggregationService) processArXivPaper(arxivID string) (string, string, error) {

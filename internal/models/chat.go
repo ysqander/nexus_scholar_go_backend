@@ -9,9 +9,14 @@ import (
 
 type Chat struct {
 	gorm.Model
-	UserID    uuid.UUID `gorm:"type:uuid;index"`
-	SessionID string    `gorm:"index;unique"`
-	Messages  []Message
+	UserID          uuid.UUID `gorm:"type:uuid;index"`
+	SessionID       string    `gorm:"index;unique"`
+	Messages        []Message
+	ChatDuration    time.Duration
+	TerminationTime time.Time
+	TokenCountUsed  int32
+	PriceTier       string
+	TokenHoursUsed  float64
 }
 
 type Message struct {

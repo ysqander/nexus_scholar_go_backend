@@ -44,6 +44,7 @@ type CacheManagementService struct {
 	contentAggregation *ContentAggregationService
 	expirationTime     time.Duration
 	cacheServiceDB     CacheServiceDB
+	chatServiceDB      ChatServiceDB
 }
 
 func NewCacheManagementService(
@@ -51,12 +52,14 @@ func NewCacheManagementService(
 	contentAggregation *ContentAggregationService,
 	expirationTime time.Duration,
 	cacheServiceDB CacheServiceDB,
+	chatServiceDB ChatServiceDB,
 ) *CacheManagementService {
 	return &CacheManagementService{
 		genAIClient:        genAIClient,
 		contentAggregation: contentAggregation,
 		expirationTime:     expirationTime,
 		cacheServiceDB:     cacheServiceDB,
+		chatServiceDB:      chatServiceDB,
 	}
 }
 
@@ -91,7 +94,7 @@ func (cms *CacheManagementService) CreateContentCache(ctx context.Context, userI
 	cacheName := cachedContent.Name
 
 	// Save the cache data to the database
-	err = cms.cacheServiceDB.CreateCacheDB(userID, sessionID, cacheName, tokenCount, cacheExpiryTime)
+	err = cms.cacheServiceDB.CreateCacheDB(userID, sessionID, cacheName, priceTier, tokenCount, cachedContent.CreateTime)
 	if err != nil {
 		return "", time.Time{}, fmt.Errorf("failed to save cache data: %v", err)
 	}
@@ -126,19 +129,40 @@ func (cms *CacheManagementService) DeleteCache(ctx context.Context, userID uuid.
 		return fmt.Errorf("failed to delete cached content: %v", err)
 	}
 
+	err = cms.RecordCacheTokenUsage(ctx, userID, sessionID)
+	if err != nil {
+		return fmt.Errorf("failed to record cache token usage: %v", err)
+	}
+
+	return nil
+}
+
+func (cms *CacheManagementService) RecordCacheTokenUsage(ctx context.Context, userID uuid.UUID, sessionID string) error {
 	cache, err := cms.cacheServiceDB.GetCacheDB(sessionID)
 	if err != nil {
 		return fmt.Errorf("failed to get cache: %v", err)
 	}
+
 	terminationTime := time.Now()
 	err = cms.cacheServiceDB.UpdateCacheTerminationTimeDB(sessionID, terminationTime)
 	if err != nil {
 		return fmt.Errorf("failed to update cache termination time: %v", err)
 	}
+
 	// Calculate and log the final usage for this cache session
 	duration := terminationTime.Sub(cache.CreationTime)
+	fmt.Printf("DEBUG: Duration: %v\n", duration)
 	tokenHours := float64(cache.TotalTokenCount) * duration.Hours() / 1_000_000 // Convert to million token-hours
-	err = cms.LogCacheUsage(ctx, userID, cache.PriceTier, tokenHours)
+	fmt.Printf("DEBUG: Total token count: %v\n", cache.TotalTokenCount)
+	fmt.Printf("DEBUG: Token hours: %v\n", tokenHours)
+
+	// Update chat metrics in table Chats in the DB
+	err = cms.chatServiceDB.UpdateChatMetrics(sessionID, duration.Minutes(), cache.TotalTokenCount, cache.PriceTier, tokenHours, terminationTime)
+	if err != nil {
+		return fmt.Errorf("failed to update chat metrics: %v", err)
+	}
+
+	err = cms.LogCacheUsage(ctx, userID, cache.PriceTier, tokenHours, duration, cache.TotalTokenCount)
 	if err != nil {
 		return fmt.Errorf("failed to log final cache usage: %v", err)
 	}
@@ -165,10 +189,10 @@ func (cms *CacheManagementService) UpdateAllowedCacheUsage(ctx context.Context, 
 		if err == gorm.ErrRecordNotFound {
 			// Create new budget if it doesn't exist
 			budget = &models.TierTokenBudget{
-				UserID:       userID,
-				PriceTier:    priceTier,
-				TokensBought: additionalTokens,
-				TokensUsed:   0, // Initialize TokensUsed to 0
+				UserID:           userID,
+				PriceTier:        priceTier,
+				TokenHoursBought: additionalTokens,
+				TokenHoursUsed:   0, // Initialize TokensUsed to 0
 			}
 			return cms.cacheServiceDB.CreateTierTokenBudgetDB(budget)
 		}
@@ -176,21 +200,21 @@ func (cms *CacheManagementService) UpdateAllowedCacheUsage(ctx context.Context, 
 	}
 
 	// Update existing budget
-	budget.TokensBought += additionalTokens
+	budget.TokenHoursBought += additionalTokens
 	return cms.cacheServiceDB.UpdateTierTokenBudgetDB(budget)
 }
 
-func (cms *CacheManagementService) LogCacheUsage(ctx context.Context, userID uuid.UUID, priceTier string, tokensUsed float64) error {
+func (cms *CacheManagementService) LogCacheUsage(ctx context.Context, userID uuid.UUID, priceTier string, tokenHoursUsed float64, chatDuration time.Duration, tokenCountUsed int32) error {
 	budget, err := cms.cacheServiceDB.GetTierTokenBudgetDB(userID, priceTier)
 	if err != nil {
 		return fmt.Errorf("failed to get tier token budget: %v", err)
 	}
 
-	if budget.TokensUsed+tokensUsed > budget.TokensBought {
+	if budget.TokenHoursUsed+tokenHoursUsed > budget.TokenHoursBought {
 		return fmt.Errorf("usage limit exceeded for tier: %s", priceTier)
 	}
 
-	budget.TokensUsed += tokensUsed
+	budget.TokenHoursUsed += tokenHoursUsed
 	return cms.cacheServiceDB.UpdateTierTokenBudgetDB(budget)
 }
 
@@ -202,7 +226,7 @@ func (cms *CacheManagementService) GetNetTokensByTier(ctx context.Context, userI
 
 	var baseNetTokens, proNetTokens float64
 	for _, budget := range budgets {
-		netTokens := budget.TokensBought - budget.TokensUsed
+		netTokens := budget.TokenHoursBought - budget.TokenHoursUsed
 		if budget.PriceTier == "base" {
 			baseNetTokens += netTokens
 		} else if budget.PriceTier == "pro" {

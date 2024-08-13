@@ -16,6 +16,7 @@ type ChatServiceDB interface {
 	GetChatsByUserIDFromDB(userID uuid.UUID) ([]models.Chat, error)
 	DeleteChatBySessionIDFromDB(sessionID string) error
 	GetMessagesByChatIDFromDB(chatID uint) ([]models.Message, error)
+	UpdateChatMetrics(sessionID string, chatDuration float64, tokenCountUsed int32, priceTier string, tokenHoursUsed float64, terminationTime time.Time) error
 }
 
 // DefaultChatService implements ChatService
@@ -97,4 +98,17 @@ func (s *DefaultChatService) GetMessagesByChatIDFromDB(chatID uint) ([]models.Me
 		return nil, result.Error
 	}
 	return messages, nil
+}
+
+func (s *DefaultChatService) UpdateChatMetrics(sessionID string, chatDuration float64, tokenCountUsed int32, priceTier string, tokenHoursUsed float64, terminationTime time.Time) error {
+	result := s.db.Model(&models.Chat{}).
+		Where("session_id = ?", sessionID).
+		Updates(map[string]interface{}{
+			"chat_duration":    chatDuration,
+			"token_count_used": tokenCountUsed,
+			"price_tier":       priceTier,
+			"token_hours_used": tokenHoursUsed,
+			"termination_time": terminationTime,
+		})
+	return result.Error
 }

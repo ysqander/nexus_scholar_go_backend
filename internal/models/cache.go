@@ -20,8 +20,8 @@ type Cache struct {
 
 type TierTokenBudget struct {
 	gorm.Model
-	UserID       uuid.UUID `gorm:"type:uuid;index"`
-	PriceTier    string    `gorm:"index"`
-	TokensBought float64   // Total tokens bought for this model (in millions)
-	TokensUsed   float64   // Cumulative tokens used for this model (in millions)
+	UserID           uuid.UUID `gorm:"type:uuid;index"`
+	PriceTier        string    `gorm:"index"`
+	TokenHoursBought float64   // Total tokens bought for this model (in millions)
+	TokenHoursUsed   float64   // Cumulative tokens used for this model (in millions)
 }
