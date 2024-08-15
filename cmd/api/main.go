@@ -12,6 +12,7 @@ import (
 	"nexus_scholar_go_backend/cmd/api/config"
 	"nexus_scholar_go_backend/internal/api"
 	"nexus_scholar_go_backend/internal/auth"
+	"nexus_scholar_go_backend/internal/broker"
 	"nexus_scholar_go_backend/internal/database"
 	"nexus_scholar_go_backend/internal/services"
 	"nexus_scholar_go_backend/internal/wsocket"
@@ -30,7 +31,7 @@ func main() {
 	if err := godotenv.Load(); err != nil {
 		log.Println("No .env file found")
 	}
-
+	messageBroker := broker.NewBroker()
 	genai_apiKey := os.Getenv("GOOGLE_AI_STUDIO_API_KEY")
 	if genai_apiKey == "" {
 		log.Fatal("GOOGLE_AI_STUDIO_API_KEY is not set in the environment")
@@ -82,6 +83,7 @@ func main() {
 	chatSessionService := services.NewChatSessionService(
 		genaiClient,
 		chatServiceDB,
+		cacheServiceDB,
 		cacheManagementService,
 		cfg,
 	)
@@ -135,13 +137,13 @@ func main() {
 	// Create WebSocket handler
 	wsHandler := wsocket.NewHandler(researchChatService, upgrader, cfg.SessionCheckInterval, cfg.SessionMemoryTimeout)
 
-	api.SetupRoutes(r, researchChatService, chatServiceDB, stripeService, cacheManagementService, userService)
+	api.SetupRoutes(r, researchChatService, chatServiceDB, stripeService, cacheManagementService, userService, messageBroker)
 	auth.SetupRoutes(r, userService)
 
 	// Add WebSocket route
 	r.GET("/ws", auth.AuthMiddleware(userService), func(c *gin.Context) {
 		user, _ := c.Get("user")
-		wsHandler.HandleWebSocket(c.Writer, c.Request, user)
+		wsHandler.HandleWebSocket(c.Writer, c.Request, user, messageBroker)
 	})
 
 	port := os.Getenv("PORT")

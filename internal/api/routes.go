@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"nexus_scholar_go_backend/internal/auth"
+	"nexus_scholar_go_backend/internal/broker"
 	"nexus_scholar_go_backend/internal/models"
 	"nexus_scholar_go_backend/internal/services"
 
@@ -22,7 +23,7 @@ import (
 	"google.golang.org/api/iterator"
 )
 
-func SetupRoutes(r *gin.Engine, researchChatService *services.ResearchChatService, chatService services.ChatServiceDB, stripeService *services.StripeService, cacheManagementService *services.CacheManagementService, userService *services.UserService) {
+func SetupRoutes(r *gin.Engine, researchChatService *services.ResearchChatService, chatService services.ChatServiceDB, stripeService *services.StripeService, cacheManagementService *services.CacheManagementService, userService *services.UserService, messageBroker *broker.Broker) {
 	api := r.Group("/api")
 	{
 		api.GET("/papers/:arxiv_id", auth.AuthMiddleware(userService), getPaper)
@@ -35,8 +36,8 @@ func SetupRoutes(r *gin.Engine, researchChatService *services.ResearchChatServic
 		api.GET("/chat/history", auth.AuthMiddleware(userService), getChatHistoryHandler(researchChatService))
 		api.POST("/purchase-cache-volume", auth.AuthMiddleware(userService), purchaseCacheVolume(stripeService))
 		api.GET("/cache-usage", auth.AuthMiddleware(userService), getCacheUsageHandler(cacheManagementService, chatService))
-		api.POST("/stripe/webhook", stripeWebhookHandler(stripeService, cacheManagementService))
-		api.POST("/stripe/webhook_clitest", stripeWebhookHandler_clitest(stripeService, cacheManagementService))
+		api.POST("/stripe/webhook", stripeWebhookHandler(stripeService, cacheManagementService, messageBroker))
+		api.POST("/stripe/webhook_clitest", stripeWebhookHandler_clitest(stripeService, cacheManagementService, messageBroker))
 	}
 }
 
@@ -336,7 +337,7 @@ func purchaseCacheVolume(stripeService *services.StripeService) gin.HandlerFunc 
 	}
 }
 
-func stripeWebhookHandler(stripeService *services.StripeService, cacheManagementService *services.CacheManagementService) gin.HandlerFunc {
+func stripeWebhookHandler(stripeService *services.StripeService, cacheManagementService *services.CacheManagementService, messageBroker *broker.Broker) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		const MaxBodyBytes = int64(65536)
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, MaxBodyBytes)
@@ -366,7 +367,7 @@ func stripeWebhookHandler(stripeService *services.StripeService, cacheManagement
 				return
 			}
 
-			err = processSuccessfulCheckoutSession(session, cacheManagementService)
+			err = processSuccessfulCheckoutSession(session, cacheManagementService, messageBroker)
 			if err != nil {
 				fmt.Printf("Error processing checkout session: %v\n", err)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process checkout session"})
@@ -381,7 +382,7 @@ func stripeWebhookHandler(stripeService *services.StripeService, cacheManagement
 	}
 }
 
-func processSuccessfulCheckoutSession(session stripe.CheckoutSession, cacheManagementService *services.CacheManagementService) error {
+func processSuccessfulCheckoutSession(session stripe.CheckoutSession, cacheManagementService *services.CacheManagementService, messageBroker *broker.Broker) error {
 	userID, err := uuid.Parse(session.ClientReferenceID)
 	if err != nil {
 		return fmt.Errorf("invalid user ID: %v", err)
@@ -399,11 +400,13 @@ func processSuccessfulCheckoutSession(session stripe.CheckoutSession, cacheManag
 		return fmt.Errorf("failed to update allowed cache usage: %v", err)
 	}
 
+	messageBroker.Publish("credit_update_"+userID.String(), "Credit updated for user "+userID.String())
+
 	return nil
 }
 
 // Stripe Webook versions that match the CLI API version
-func stripeWebhookHandler_clitest(stripeService *services.StripeService, cacheManagementService *services.CacheManagementService) gin.HandlerFunc {
+func stripeWebhookHandler_clitest(stripeService *services.StripeService, cacheManagementService *services.CacheManagementService, messageBroker *broker.Broker) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		const MaxBodyBytes = int64(65536)
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, MaxBodyBytes)
@@ -433,7 +436,7 @@ func stripeWebhookHandler_clitest(stripeService *services.StripeService, cacheMa
 				return
 			}
 
-			err = processSuccessfulCheckoutSession(session, cacheManagementService)
+			err = processSuccessfulCheckoutSession(session, cacheManagementService, messageBroker)
 			if err != nil {
 				fmt.Printf("Error processing checkout session: %v\n", err)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process checkout session"})

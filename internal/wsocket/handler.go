@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"nexus_scholar_go_backend/internal/broker"
+	"nexus_scholar_go_backend/internal/models"
 	"nexus_scholar_go_backend/internal/services"
 
 	"github.com/google/generative-ai-go/genai"
@@ -38,7 +40,7 @@ func NewHandler(researchChatService *services.ResearchChatService, upgrader webs
 	}
 }
 
-func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request, user interface{}) {
+func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request, user interface{}, messageBroker *broker.Broker) {
 	log.Println("DEBUG: Handling new WebSocket connection")
 	sessionID := r.URL.Query().Get("sessionId")
 	if sessionID == "" {
@@ -60,18 +62,45 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request, user i
 	ticker := time.NewTicker(h.sessionCheckInterval)
 	defer ticker.Stop()
 
+	userID := user.(*models.User).ID.String()
+	creditUpdateChan := messageBroker.Subscribe("credit_update_" + userID)
+	defer messageBroker.Unsubscribe("credit_update_"+userID, creditUpdateChan)
+
 	go func() {
 		for {
 			select {
 			case <-ctx.Done():
 				log.Println("DEBUG: Context done, exiting goroutine")
 				return
+			case msg := <-creditUpdateChan:
+				if err := conn.WriteJSON(Message{
+					Type:      "credit_update",
+					Content:   msg.(string),
+					SessionID: sessionID,
+				}); err != nil {
+					log.Printf("Error sending credit update: %v", err)
+				}
 			case <-ticker.C:
-				log.Println("DEBUG: Checking session status")
 				status, err := h.researchChatService.GetSessionStatus(sessionID)
 				if err != nil {
 					log.Printf("DEBUG: Error getting session status: %v", err)
 					continue
+				}
+				isLowCredit, remainingCredit, err := h.researchChatService.CheckCreditStatus(sessionID)
+				if err != nil {
+					log.Printf("DEBUG: Error getting remaining credit: %v", err)
+					continue
+				}
+				if isLowCredit {
+					log.Printf("DEBUG: Session low credit")
+					if err := conn.WriteJSON(Message{
+						Type:      "credit_warning",
+						Content:   fmt.Sprintf(`{"remainingCredit": %.6f}`, remainingCredit),
+						SessionID: sessionID,
+					}); err != nil {
+						log.Printf("DEBUG: Error sending low credit message: %v", err)
+						return
+					}
 				}
 				statusJSON, err := json.Marshal(status)
 				if err != nil {

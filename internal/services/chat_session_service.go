@@ -39,12 +39,13 @@ type ChatMessage struct {
 }
 
 type ChatSessionService struct {
-	sessions      map[string]*ChatSessionInfo
-	sessionsMutex sync.RWMutex
-	genAIClient   GenAIClient
-	chatService   ChatServiceDB
-	CacheManager  CacheManager
-	cfg           *config.Config
+	sessions       map[string]*ChatSessionInfo
+	sessionsMutex  sync.RWMutex
+	genAIClient    GenAIClient
+	chatService    ChatServiceDB
+	CacheManager   CacheManager
+	cacheServiceDB CacheServiceDB
+	cfg            *config.Config
 }
 
 type SessionStatusInfo struct {
@@ -56,15 +57,17 @@ type SessionStatusInfo struct {
 func NewChatSessionService(
 	genAIClient GenAIClient,
 	chatService ChatServiceDB,
+	cacheServiceDB CacheServiceDB,
 	CacheManager CacheManager,
 	cfg *config.Config,
 ) *ChatSessionService {
 	css := &ChatSessionService{
-		genAIClient:  genAIClient,
-		chatService:  chatService,
-		CacheManager: CacheManager,
-		cfg:          cfg,
-		sessions:     make(map[string]*ChatSessionInfo),
+		genAIClient:    genAIClient,
+		chatService:    chatService,
+		cacheServiceDB: cacheServiceDB,
+		CacheManager:   CacheManager,
+		cfg:            cfg,
+		sessions:       make(map[string]*ChatSessionInfo),
 	}
 	go css.periodicCleanup()
 	return css
@@ -335,4 +338,44 @@ func (css *ChatSessionService) ExtendSession(ctx context.Context, sessionID stri
 	sessionInfo.CacheExpiresAt = newExpirationTime
 
 	return nil
+}
+
+func (css *ChatSessionService) calculateRealTimeTokenUsage(sessionID string) (float64, string, error) {
+	cache, err := css.cacheServiceDB.GetCacheDB(sessionID)
+	if err != nil {
+		return 0, "", fmt.Errorf("failed to get cache: %w", err)
+	}
+
+	now := time.Now()
+	duration := now.Sub(cache.CreationTime)
+	durationSeconds := duration.Seconds()
+	tokenHoursUsage := float64(cache.TotalTokenCount) * durationSeconds / (3600 * 1_000_000) // Convert to million token-hours
+
+	return tokenHoursUsage, cache.PriceTier, nil
+}
+
+func (css *ChatSessionService) CheckCreditStatus(sessionID string) (bool, float64, error) {
+	tokenHoursUsedInCurrentSession, priceTier, err := css.calculateRealTimeTokenUsage(sessionID)
+	if err != nil {
+		log.Printf("Error calculating token hours used: %v", err)
+		return false, 0, nil
+	}
+
+	sessionInfo, exists := css.getAndUpdateSession(sessionID)
+	if !exists {
+		return false, 0, nil
+	}
+
+	budget, err := css.cacheServiceDB.GetTierTokenBudgetDB(sessionInfo.UserID, priceTier)
+	if err != nil {
+		log.Printf("Error checking credit status: %v", err)
+		return false, 0, nil
+	}
+
+	remainingCredit := budget.TokenHoursBought - budget.TokenHoursUsed - tokenHoursUsedInCurrentSession
+	ISRemainingCreditLow := remainingCredit < (999_999.0 / 1_000_000.0 * 10.0 / 60.0) //Threshold of 1 million tokens for ten mintues
+	if ISRemainingCreditLow {
+		return true, remainingCredit, nil
+	}
+	return false, remainingCredit, nil
 }

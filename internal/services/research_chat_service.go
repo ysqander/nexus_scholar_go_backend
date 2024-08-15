@@ -168,3 +168,6 @@ func (s *ResearchChatService) GetSessionStatus(sessionID string) (SessionStatusI
 func (s *ResearchChatService) ExtendSession(ctx context.Context, sessionID string) error {
 	return s.chatSession.ExtendSession(ctx, sessionID)
 }
+func (s *ResearchChatService) CheckCreditStatus(sessionID string) (bool, float64, error) {
+	return s.chatSession.CheckCreditStatus(sessionID)
+}

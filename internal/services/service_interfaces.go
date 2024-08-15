@@ -29,6 +29,7 @@ type ChatSessionManager interface {
 	StreamChatMessage(ctx context.Context, sessionID string, message string) (*genai.GenerateContentResponseIterator, error)
 	GetSessionStatus(sessionID string) (SessionStatusInfo, error)
 	ExtendSession(ctx context.Context, sessionID string) error
+	CheckCreditStatus(sessionID string) (bool, float64, error)
 }
 
 type CloudStorageManager interface {
