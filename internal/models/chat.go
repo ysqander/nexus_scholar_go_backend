@@ -12,7 +12,7 @@ type Chat struct {
 	UserID          uuid.UUID `gorm:"type:uuid;index"`
 	SessionID       string    `gorm:"index;unique"`
 	Messages        []Message
-	ChatDuration    time.Duration
+	ChatDuration    float64 `gorm:"type:float"` // in seconds
 	TerminationTime time.Time
 	TokenCountUsed  int32
 	PriceTier       string

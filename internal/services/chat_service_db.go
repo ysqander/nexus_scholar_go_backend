@@ -1,6 +1,7 @@
 package services
 
 import (
+	"log"
 	"nexus_scholar_go_backend/internal/models"
 	"time"
 
@@ -17,6 +18,7 @@ type ChatServiceDB interface {
 	DeleteChatBySessionIDFromDB(sessionID string) error
 	GetMessagesByChatIDFromDB(chatID uint) ([]models.Message, error)
 	UpdateChatMetrics(sessionID string, chatDuration float64, tokenCountUsed int32, priceTier string, tokenHoursUsed float64, terminationTime time.Time) error
+	GetHistoricalChatMetricsByUserID(userID uuid.UUID) ([]models.Chat, error)
 }
 
 // DefaultChatService implements ChatService
@@ -110,5 +112,22 @@ func (s *DefaultChatService) UpdateChatMetrics(sessionID string, chatDuration fl
 			"token_hours_used": tokenHoursUsed,
 			"termination_time": terminationTime,
 		})
-	return result.Error
+
+	if result.Error != nil {
+		return result.Error
+	}
+
+	// Log chat duration
+	log.Printf("Chat duration updated for session %s: %.2f seconds", sessionID, chatDuration)
+
+	return nil
+}
+
+// Implement the new method in DefaultChatService
+func (s *DefaultChatService) GetHistoricalChatMetricsByUserID(userID uuid.UUID) ([]models.Chat, error) {
+	var chats []models.Chat
+	result := s.db.Where("user_id = ?", userID).
+		Select("session_id, token_count_used, token_hours_used, chat_duration, price_tier, termination_time").
+		Find(&chats)
+	return chats, result.Error
 }

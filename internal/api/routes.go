@@ -34,7 +34,7 @@ func SetupRoutes(r *gin.Engine, researchChatService *services.ResearchChatServic
 		api.POST("/chat/terminate", auth.AuthMiddleware(userService), terminateChatSessionHandler(researchChatService))
 		api.GET("/chat/history", auth.AuthMiddleware(userService), getChatHistoryHandler(researchChatService))
 		api.POST("/purchase-cache-volume", auth.AuthMiddleware(userService), purchaseCacheVolume(stripeService))
-		api.GET("/cache-usage", auth.AuthMiddleware(userService), getCacheUsageHandler(cacheManagementService))
+		api.GET("/cache-usage", auth.AuthMiddleware(userService), getCacheUsageHandler(cacheManagementService, chatService))
 		api.POST("/stripe/webhook", stripeWebhookHandler(stripeService, cacheManagementService))
 		api.POST("/stripe/webhook_clitest", stripeWebhookHandler_clitest(stripeService, cacheManagementService))
 	}
@@ -266,6 +266,7 @@ func getChatHistoryHandler(researchChatService *services.ResearchChatService) gi
 				"token_count_used": chat.TokenCountUsed,
 				"price_tier":       chat.PriceTier,
 				"token_hours_used": chat.TokenHoursUsed,
+				"termination_time": chat.TerminationTime.Format(time.RFC3339),
 			})
 		}
 
@@ -447,7 +448,7 @@ func stripeWebhookHandler_clitest(stripeService *services.StripeService, cacheMa
 	}
 }
 
-func getCacheUsageHandler(cacheManagementService *services.CacheManagementService) gin.HandlerFunc {
+func getCacheUsageHandler(cacheManagementService *services.CacheManagementService, chatService services.ChatServiceDB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user, exists := c.Get("user")
 		if !exists {
@@ -467,9 +468,54 @@ func getCacheUsageHandler(cacheManagementService *services.CacheManagementServic
 			return
 		}
 
+		// Get historical chats
+		historicalChatMetrics, err := chatService.GetHistoricalChatMetricsByUserID(userModel.ID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to get historical chats: %v", err)})
+			return
+		}
+
+		// Organize chat history by month and price tier
+		chatHistoryByMonth := make(map[string]map[string][]gin.H)
+
+		fmt.Println("Debug: Starting to process historical chat metrics")
+
+		for _, chat := range historicalChatMetrics {
+			// Use CreatedAt if TerminationTime is zero
+			chatTime := chat.TerminationTime
+			if chatTime.IsZero() {
+				chatTime = chat.CreatedAt
+			}
+
+			monthKey := chatTime.Format("2006-01")
+			fmt.Printf("Debug: Processing chat - SessionID: %s, Time: %s, MonthKey: %s\n", chat.SessionID, chatTime, monthKey)
+
+			if _, exists := chatHistoryByMonth[monthKey]; !exists {
+				chatHistoryByMonth[monthKey] = make(map[string][]gin.H)
+			}
+
+			chatData := gin.H{
+				"session_id":       chat.SessionID,
+				"tokens_used":      chat.TokenCountUsed,
+				"token_hours_used": chat.TokenHoursUsed,
+				"duration":         chat.ChatDuration,
+				"termination_time": chatTime.Format(time.RFC3339),
+			}
+
+			chatHistoryByMonth[monthKey][chat.PriceTier] = append(chatHistoryByMonth[monthKey][chat.PriceTier], chatData)
+		}
+
+		fmt.Printf("Debug: Final chatHistoryByMonth structure: %+v\n", chatHistoryByMonth)
+
 		c.JSON(http.StatusOK, gin.H{
 			"base_net_tokens": baseTokens,
 			"pro_net_tokens":  proTokens,
+			"chat_history":    chatHistoryByMonth,
+			"debug_info": gin.H{
+				"chat_count":      len(historicalChatMetrics),
+				"first_chat_time": historicalChatMetrics[0].TerminationTime.Format(time.RFC3339),
+				"last_chat_time":  historicalChatMetrics[len(historicalChatMetrics)-1].TerminationTime.Format(time.RFC3339),
+			},
 		})
 	}
 }

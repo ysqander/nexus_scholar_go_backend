@@ -151,18 +151,19 @@ func (cms *CacheManagementService) RecordCacheTokenUsage(ctx context.Context, us
 
 	// Calculate and log the final usage for this cache session
 	duration := terminationTime.Sub(cache.CreationTime)
-	fmt.Printf("DEBUG: Duration: %v\n", duration)
-	tokenHours := float64(cache.TotalTokenCount) * duration.Hours() / 1_000_000 // Convert to million token-hours
+	durationSeconds := duration.Seconds()
+	fmt.Printf("DEBUG: Duration (seconds): %v\n", durationSeconds)
+	tokenHours := float64(cache.TotalTokenCount) * durationSeconds / (3600 * 1_000_000) // Convert to million token-hours
 	fmt.Printf("DEBUG: Total token count: %v\n", cache.TotalTokenCount)
 	fmt.Printf("DEBUG: Token hours: %v\n", tokenHours)
 
 	// Update chat metrics in table Chats in the DB
-	err = cms.chatServiceDB.UpdateChatMetrics(sessionID, duration.Minutes(), cache.TotalTokenCount, cache.PriceTier, tokenHours, terminationTime)
+	err = cms.chatServiceDB.UpdateChatMetrics(sessionID, durationSeconds, cache.TotalTokenCount, cache.PriceTier, tokenHours, terminationTime)
 	if err != nil {
 		return fmt.Errorf("failed to update chat metrics: %v", err)
 	}
 
-	err = cms.LogCacheUsage(ctx, userID, cache.PriceTier, tokenHours, duration, cache.TotalTokenCount)
+	err = cms.LogCacheUsage(ctx, userID, cache.PriceTier, tokenHours, durationSeconds, cache.TotalTokenCount)
 	if err != nil {
 		return fmt.Errorf("failed to log final cache usage: %v", err)
 	}
@@ -204,7 +205,7 @@ func (cms *CacheManagementService) UpdateAllowedCacheUsage(ctx context.Context, 
 	return cms.cacheServiceDB.UpdateTierTokenBudgetDB(budget)
 }
 
-func (cms *CacheManagementService) LogCacheUsage(ctx context.Context, userID uuid.UUID, priceTier string, tokenHoursUsed float64, chatDuration time.Duration, tokenCountUsed int32) error {
+func (cms *CacheManagementService) LogCacheUsage(ctx context.Context, userID uuid.UUID, priceTier string, tokenHoursUsed float64, chatDuration float64, tokenCountUsed int32) error {
 	budget, err := cms.cacheServiceDB.GetTierTokenBudgetDB(userID, priceTier)
 	if err != nil {
 		return fmt.Errorf("failed to get tier token budget: %v", err)
