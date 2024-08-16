@@ -211,11 +211,10 @@ func (cms *CacheManagementService) LogCacheUsage(ctx context.Context, userID uui
 		return fmt.Errorf("failed to get tier token budget: %v", err)
 	}
 
-	if budget.TokenHoursUsed+tokenHoursUsed > budget.TokenHoursBought {
-		return fmt.Errorf("usage limit exceeded for tier: %s", priceTier)
-	}
-
 	budget.TokenHoursUsed += tokenHoursUsed
+	if budget.TokenHoursUsed >= budget.TokenHoursBought {
+		budget.TokenHoursUsed = budget.TokenHoursBought // Cap at maximum
+	}
 	return cms.cacheServiceDB.UpdateTierTokenBudgetDB(budget)
 }
 

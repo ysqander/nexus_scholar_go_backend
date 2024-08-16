@@ -18,6 +18,7 @@ type ResearchChatService struct {
 	cacheManagement    CacheManager
 	chatSession        ChatSessionManager
 	chatService        ChatServiceDB
+	cacheServiceDB     CacheServiceDB
 	cloudStorage       CloudStorageManager
 	cacheExpiration    time.Duration
 	bucketName         string
@@ -28,6 +29,7 @@ func NewResearchChatService(
 	cm CacheManager,
 	cs ChatSessionManager,
 	chat ChatServiceDB,
+	cacheServiceDB CacheServiceDB,
 	cacheExpiration time.Duration,
 	cloudStorage CloudStorageManager,
 	bucketName string,
@@ -37,6 +39,7 @@ func NewResearchChatService(
 		cacheManagement:    cm,
 		chatSession:        cs,
 		chatService:        chat,
+		cacheServiceDB:     cacheServiceDB,
 		cacheExpiration:    cacheExpiration,
 		cloudStorage:       cloudStorage,
 		bucketName:         bucketName,
@@ -54,6 +57,19 @@ func (s *ResearchChatService) StartResearchSession(c *gin.Context, arxivIDs []st
 	if !ok {
 		fmt.Println("DEBUG: Invalid user type in context")
 		return "", "", fmt.Errorf("invalid user type in context")
+	}
+
+	// Check if user has enough credits
+	budget, err := s.cacheServiceDB.GetTierTokenBudgetDB(userModel.ID, priceTier)
+	if err != nil {
+		fmt.Printf("DEBUG: Failed to get user budget: %v\n", err)
+		return "", "", fmt.Errorf("failed to get user budget: %w", err)
+	}
+
+	remainingCredit := budget.TokenHoursBought - budget.TokenHoursUsed
+	if remainingCredit <= (999_999.0 / 1_000_000.0 * 11.0 / 60.0) {
+		fmt.Println("DEBUG: Insufficient credits to start a new session")
+		return "", "", fmt.Errorf("insufficient credits to start a new session")
 	}
 
 	fmt.Printf("DEBUG: Aggregating documents for arXiv IDs: %v and user PDFs: %v\n", arxivIDs, userPDFs)
@@ -168,6 +184,6 @@ func (s *ResearchChatService) GetSessionStatus(sessionID string) (SessionStatusI
 func (s *ResearchChatService) ExtendSession(ctx context.Context, sessionID string) error {
 	return s.chatSession.ExtendSession(ctx, sessionID)
 }
-func (s *ResearchChatService) CheckCreditStatus(sessionID string) (bool, float64, error) {
+func (s *ResearchChatService) CheckCreditStatus(sessionID string) (bool, bool, float64, error) {
 	return s.chatSession.CheckCreditStatus(sessionID)
 }

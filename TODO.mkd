@@ -20,4 +20,5 @@ To apply code changes during development:
 Make changes to your Go files.
 Save the files.
 Restart the Go application by running:
-   **docker-compose restart backend**
+   **docker-compose restart backend*
+*

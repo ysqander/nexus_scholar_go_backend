@@ -103,6 +103,7 @@ func main() {
 		cacheManagementService,
 		chatSessionService,
 		chatServiceDB,
+		cacheServiceDB,
 		cfg.CacheExpirationTime,
 		gcsService,
 		gcsBucketName,

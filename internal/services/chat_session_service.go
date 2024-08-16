@@ -29,6 +29,7 @@ type ChatSessionInfo struct {
 	CacheExpiresAt    time.Time
 	UserID            uuid.UUID
 	WarningTime       time.Time
+	isTerminated      bool
 	mutex             *sync.RWMutex
 }
 
@@ -125,6 +126,18 @@ func (css *ChatSessionService) CheckSessionStatus(sessionID string) (SessionStat
 		return Warning, sessionInfo.CacheExpiresAt, nil
 	}
 
+	// Check credit status
+	isLowCredit, isCreditZero, _, err := css.CheckCreditStatus(sessionID)
+	if err != nil {
+		log.Printf("DEBUG: Error checking credit status: %v", err)
+	} else if isCreditZero {
+		log.Printf("DEBUG: Session expired due to zero credit for ID: %s", sessionID)
+		return Expired, time.Time{}, nil
+	} else if isLowCredit {
+		log.Printf("DEBUG: Session in warning state (low credit) for ID: %s", sessionID)
+		return Warning, sessionInfo.CacheExpiresAt, nil
+	}
+
 	log.Printf("DEBUG: Session active for ID: %s", sessionID)
 	return Active, sessionInfo.CacheExpiresAt, nil
 }
@@ -170,17 +183,21 @@ type TerminationReason int
 const (
 	UserInitiated TerminationReason = iota
 	SessionTimeout
+	ZeroCredit
 )
 
 func (css *ChatSessionService) TerminateSession(ctx context.Context, sessionID string, reason TerminationReason) error {
-	css.sessionsMutex.Lock()
+	css.sessionsMutex.RLock()
 	sessionInfo, ok := css.sessions[sessionID]
+	css.sessionsMutex.RUnlock()
+
 	if !ok {
-		css.sessionsMutex.Unlock()
 		return ErrSessionNotFound
 	}
-	delete(css.sessions, sessionID)
-	css.sessionsMutex.Unlock()
+
+	sessionInfo.mutex.Lock()
+	sessionInfo.isTerminated = true
+	sessionInfo.mutex.Unlock()
 
 	// Use defer to ensure we always log the termination
 	defer log.Printf("Session %s terminated. Reason: %v", sessionID, reason)
@@ -268,9 +285,14 @@ func (css *ChatSessionService) cleanupExpiredSessions() {
 
 	now := time.Now()
 	for sessionID, sessionInfo := range css.sessions {
-		if now.After(sessionInfo.CacheExpiresAt.Add(css.cfg.SessionMemoryTimeout)) {
+		sessionInfo.mutex.RLock()
+		isExpired := now.After(sessionInfo.CacheExpiresAt.Add(css.cfg.SessionMemoryTimeout))
+		isTerminated := sessionInfo.isTerminated
+		sessionInfo.mutex.RUnlock()
+
+		if isExpired || isTerminated {
 			delete(css.sessions, sessionID)
-			log.Printf("Removed expired session %s from memory", sessionID)
+			log.Printf("Removed session %s from memory. Expired: %v, Terminated: %v", sessionID, isExpired, isTerminated)
 		}
 	}
 }
@@ -299,6 +321,15 @@ func (css *ChatSessionService) GetSessionStatus(sessionID string) (SessionStatus
 
 	sessionInfo.mutex.RLock()
 	defer sessionInfo.mutex.RUnlock()
+
+	if sessionInfo.isTerminated {
+		return SessionStatusInfo{
+			Status:        "terminated",
+			ExpiryTime:    time.Time{},
+			TimeRemaining: 0,
+		}, nil
+	}
+
 	now := time.Now()
 	timeRemaining := int(sessionInfo.CacheExpiresAt.Sub(now).Seconds())
 
@@ -354,28 +385,50 @@ func (css *ChatSessionService) calculateRealTimeTokenUsage(sessionID string) (fl
 	return tokenHoursUsage, cache.PriceTier, nil
 }
 
-func (css *ChatSessionService) CheckCreditStatus(sessionID string) (bool, float64, error) {
+func (css *ChatSessionService) CheckCreditStatus(sessionID string) (isRemainingCreditLow bool, isCreditZero bool, remainingCredit float64, err error) {
+	css.sessionsMutex.RLock()
+	sessionInfo, ok := css.sessions[sessionID]
+	css.sessionsMutex.RUnlock()
+
+	if !ok {
+		return false, false, 0, ErrSessionNotFound
+	}
+
 	tokenHoursUsedInCurrentSession, priceTier, err := css.calculateRealTimeTokenUsage(sessionID)
 	if err != nil {
 		log.Printf("Error calculating token hours used: %v", err)
-		return false, 0, nil
-	}
-
-	sessionInfo, exists := css.getAndUpdateSession(sessionID)
-	if !exists {
-		return false, 0, nil
+		return false, false, 0, nil
 	}
 
 	budget, err := css.cacheServiceDB.GetTierTokenBudgetDB(sessionInfo.UserID, priceTier)
 	if err != nil {
 		log.Printf("Error checking credit status: %v", err)
-		return false, 0, nil
+		return false, false, 0, nil
 	}
 
-	remainingCredit := budget.TokenHoursBought - budget.TokenHoursUsed - tokenHoursUsedInCurrentSession
-	ISRemainingCreditLow := remainingCredit < (999_999.0 / 1_000_000.0 * 10.0 / 60.0) //Threshold of 1 million tokens for ten mintues
-	if ISRemainingCreditLow {
-		return true, remainingCredit, nil
+	remainingCredit = budget.TokenHoursBought - budget.TokenHoursUsed - tokenHoursUsedInCurrentSession
+	isRemainingCreditLow = remainingCredit < (999_999.0 / 1_000_000.0 * 10.0 / 60.0) //Threshold of 1 million tokens for ten mintues
+	isCreditZero = remainingCredit <= 0
+
+	if isCreditZero {
+		// Mark the session as expired due to zero credit
+		sessionInfo.mutex.Lock()
+		sessionInfo.CacheExpiresAt = time.Now()
+		sessionInfo.mutex.Unlock()
+
+		// Attempt to terminate the session
+		go func() {
+			ctx := context.Background()
+			if err := css.TerminateSession(ctx, sessionID, ZeroCredit); err != nil {
+				log.Printf("Error terminating session due to zero credit: %v", err)
+			}
+		}()
+
+		return false, true, 0, nil
 	}
-	return false, remainingCredit, nil
+
+	if isRemainingCreditLow {
+		return true, false, remainingCredit, nil
+	}
+	return false, false, remainingCredit, nil
 }

@@ -66,27 +66,40 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request, user i
 	creditUpdateChan := messageBroker.Subscribe("credit_update_" + userID)
 	defer messageBroker.Unsubscribe("credit_update_"+userID, creditUpdateChan)
 
+	isTerminated := false
+
 	go func() {
 		for {
 			select {
 			case <-ctx.Done():
 				log.Println("DEBUG: Context done, exiting goroutine")
 				return
-			case msg := <-creditUpdateChan:
-				if err := conn.WriteJSON(Message{
-					Type:      "credit_update",
-					Content:   msg.(string),
-					SessionID: sessionID,
-				}); err != nil {
-					log.Printf("Error sending credit update: %v", err)
+			case msg, ok := <-creditUpdateChan:
+				if !ok {
+					log.Println("DEBUG: Credit update channel closed, exiting goroutine")
+					return
+				}
+				if msgStr, ok := msg.(string); ok {
+					if err := conn.WriteJSON(Message{
+						Type:      "credit_update",
+						Content:   msgStr,
+						SessionID: sessionID,
+					}); err != nil {
+						log.Printf("Error sending credit update: %v", err)
+					}
+				} else {
+					log.Printf("DEBUG: Received non-string message on credit update channel: %v", msg)
 				}
 			case <-ticker.C:
+				if isTerminated {
+					return
+				}
 				status, err := h.researchChatService.GetSessionStatus(sessionID)
 				if err != nil {
 					log.Printf("DEBUG: Error getting session status: %v", err)
 					continue
 				}
-				isLowCredit, remainingCredit, err := h.researchChatService.CheckCreditStatus(sessionID)
+				isLowCredit, _, remainingCredit, err := h.researchChatService.CheckCreditStatus(sessionID)
 				if err != nil {
 					log.Printf("DEBUG: Error getting remaining credit: %v", err)
 					continue
@@ -172,6 +185,10 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request, user i
 					log.Printf("DEBUG: Error sending termination confirmation: %v", err)
 				}
 			}
+			isTerminated = true
+			time.Sleep(500 * time.Millisecond)
+			cancel()
+			return
 		case "get_session_status":
 			log.Println("DEBUG: Getting session status")
 			h.sendSessionStatus(conn, sessionID)
