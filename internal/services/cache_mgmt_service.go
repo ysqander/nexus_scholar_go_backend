@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/generative-ai-go/genai"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 	"gorm.io/gorm"
 )
 
@@ -45,6 +46,7 @@ type CacheManagementService struct {
 	expirationTime     time.Duration
 	cacheServiceDB     CacheServiceDB
 	chatServiceDB      ChatServiceDB
+	logger             zerolog.Logger
 }
 
 func NewCacheManagementService(
@@ -53,6 +55,7 @@ func NewCacheManagementService(
 	expirationTime time.Duration,
 	cacheServiceDB CacheServiceDB,
 	chatServiceDB ChatServiceDB,
+	logger zerolog.Logger,
 ) *CacheManagementService {
 	return &CacheManagementService{
 		genAIClient:        genAIClient,
@@ -60,10 +63,13 @@ func NewCacheManagementService(
 		expirationTime:     expirationTime,
 		cacheServiceDB:     cacheServiceDB,
 		chatServiceDB:      chatServiceDB,
+		logger:             logger,
 	}
 }
 
 func (cms *CacheManagementService) CreateContentCache(ctx context.Context, userID uuid.UUID, sessionID string, priceTier, aggregatedContent string) (string, time.Time, error) {
+	cms.logger.Info().Str("userID", userID.String()).Str("sessionID", sessionID).Str("priceTier", priceTier).Msg("Creating content cache")
+
 	var modelName string
 	if priceTier == "pro" {
 		modelName = "gemini-1.5-pro-001"
@@ -82,27 +88,27 @@ func (cms *CacheManagementService) CreateContentCache(ctx context.Context, userI
 
 	cachedContent, err := cms.genAIClient.CreateCachedContent(ctx, cc)
 	if err != nil {
+		cms.logger.Error().Err(err).Msg("Failed to create cached content")
 		return "", time.Time{}, fmt.Errorf("failed to create cached content: %v", err)
 	}
 
-	// Get the token count, name and creation time from the usage metadata
 	tokenCount := cachedContent.UsageMetadata.TotalTokenCount
-	fmt.Printf("DEBUG: Token count: %v\n", tokenCount)
-
 	cacheExpiryTime := cachedContent.CreateTime.Add(cms.expirationTime)
-	fmt.Printf("DEBUG: Cache expiry time: %v\n", cacheExpiryTime)
 	cacheName := cachedContent.Name
 
-	// Save the cache data to the database
 	err = cms.cacheServiceDB.CreateCacheDB(userID, sessionID, cacheName, priceTier, tokenCount, cachedContent.CreateTime)
 	if err != nil {
+		cms.logger.Error().Err(err).Msg("Failed to save cache data to database")
 		return "", time.Time{}, fmt.Errorf("failed to save cache data: %v", err)
 	}
 
+	cms.logger.Info().Str("cacheName", cacheName).Time("expiryTime", cacheExpiryTime).Msg("Content cache created successfully")
 	return cacheName, cacheExpiryTime, nil
 }
 
 func (cms *CacheManagementService) ExtendCacheLifetime(ctx context.Context, cachedContentName string, newExpirationTime time.Time) error {
+	cms.logger.Info().Str("cachedContentName", cachedContentName).Time("newExpirationTime", newExpirationTime).Msg("Extending cache lifetime")
+
 	cachedContent := &genai.CachedContent{
 		Name: cachedContentName,
 	}
@@ -117,110 +123,144 @@ func (cms *CacheManagementService) ExtendCacheLifetime(ctx context.Context, cach
 
 	_, err := cms.genAIClient.UpdateCachedContent(ctx, cachedContent, updateContent)
 	if err != nil {
+		cms.logger.Error().Err(err).Msg("Failed to update cached content expiration")
 		return fmt.Errorf("failed to update cached content expiration: %v", err)
 	}
 
+	cms.logger.Info().Msg("Cache lifetime extended successfully")
 	return nil
 }
 
 func (cms *CacheManagementService) DeleteCache(ctx context.Context, userID uuid.UUID, sessionID string, cachedContentName string) error {
+	cms.logger.Info().Str("userID", userID.String()).Str("sessionID", sessionID).Str("cachedContentName", cachedContentName).Msg("Deleting cache")
+
 	err := cms.genAIClient.DeleteCachedContent(ctx, cachedContentName)
 	if err != nil {
+		cms.logger.Error().Err(err).Msg("Failed to delete cached content")
 		return fmt.Errorf("failed to delete cached content: %v", err)
 	}
 
 	err = cms.RecordCacheTokenUsage(ctx, userID, sessionID)
 	if err != nil {
+		cms.logger.Error().Err(err).Msg("Failed to record cache token usage")
 		return fmt.Errorf("failed to record cache token usage: %v", err)
 	}
 
+	cms.logger.Info().Msg("Cache deleted successfully")
 	return nil
 }
 
 func (cms *CacheManagementService) RecordCacheTokenUsage(ctx context.Context, userID uuid.UUID, sessionID string) error {
+	cms.logger.Info().Str("userID", userID.String()).Str("sessionID", sessionID).Msg("Recording cache token usage")
+
 	cache, err := cms.cacheServiceDB.GetCacheDB(sessionID)
 	if err != nil {
+		cms.logger.Error().Err(err).Msg("Failed to get cache from database")
 		return fmt.Errorf("failed to get cache: %v", err)
 	}
 
 	terminationTime := time.Now()
 	err = cms.cacheServiceDB.UpdateCacheTerminationTimeDB(sessionID, terminationTime)
 	if err != nil {
+		cms.logger.Error().Err(err).Msg("Failed to update cache termination time")
 		return fmt.Errorf("failed to update cache termination time: %v", err)
 	}
 
-	// Calculate and log the final usage for this cache session
 	duration := terminationTime.Sub(cache.CreationTime)
 	durationSeconds := duration.Seconds()
-	fmt.Printf("DEBUG: Duration (seconds): %v\n", durationSeconds)
-	tokenHours := float64(cache.TotalTokenCount) * durationSeconds / (3600 * 1_000_000) // Convert to million token-hours
-	fmt.Printf("DEBUG: Total token count: %v\n", cache.TotalTokenCount)
-	fmt.Printf("DEBUG: Token hours: %v\n", tokenHours)
+	tokenHours := float64(cache.TotalTokenCount) * durationSeconds / (3600 * 1_000_000)
 
-	// Update chat metrics in table Chats in the DB
 	err = cms.chatServiceDB.UpdateChatMetrics(sessionID, durationSeconds, cache.TotalTokenCount, cache.PriceTier, tokenHours, terminationTime)
 	if err != nil {
+		cms.logger.Error().Err(err).Msg("Failed to update chat metrics")
 		return fmt.Errorf("failed to update chat metrics: %v", err)
 	}
 
 	err = cms.LogCacheUsage(ctx, userID, cache.PriceTier, tokenHours, durationSeconds, cache.TotalTokenCount)
 	if err != nil {
+		cms.logger.Error().Err(err).Msg("Failed to log final cache usage")
 		return fmt.Errorf("failed to log final cache usage: %v", err)
 	}
 
+	cms.logger.Info().Msg("Cache token usage recorded successfully")
 	return nil
 }
 
 func (cms *CacheManagementService) GetGenerativeModel(ctx context.Context, cachedContentName string) (*genai.GenerativeModel, error) {
+	cms.logger.Info().Str("cachedContentName", cachedContentName).Msg("Getting generative model")
+
 	cachedContent, err := cms.genAIClient.GetCachedContent(ctx, cachedContentName)
 	if err != nil {
+		cms.logger.Error().Err(err).Msg("Failed to get cached content")
 		return nil, fmt.Errorf("failed to get cached content: %v", err)
 	}
 
-	return cms.genAIClient.GenerativeModelFromCachedContent(cachedContent), nil
+	model := cms.genAIClient.GenerativeModelFromCachedContent(cachedContent)
+	cms.logger.Info().Msg("Generative model retrieved successfully")
+	return model, nil
 }
 
-// Cache Usage functions
-
 func (cms *CacheManagementService) UpdateAllowedCacheUsage(ctx context.Context, userID uuid.UUID, priceTier string, additionalTokens float64) error {
+	cms.logger.Info().Str("userID", userID.String()).Str("priceTier", priceTier).Float64("additionalTokens", additionalTokens).Msg("Updating allowed cache usage")
 
-	// Handle TierTokenBudget
 	budget, err := cms.cacheServiceDB.GetTierTokenBudgetDB(userID, priceTier)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			// Create new budget if it doesn't exist
+			cms.logger.Info().Msg("Creating new tier token budget")
 			budget = &models.TierTokenBudget{
 				UserID:           userID,
 				PriceTier:        priceTier,
 				TokenHoursBought: additionalTokens,
-				TokenHoursUsed:   0, // Initialize TokensUsed to 0
+				TokenHoursUsed:   0,
 			}
 			return cms.cacheServiceDB.CreateTierTokenBudgetDB(budget)
 		}
+		cms.logger.Error().Err(err).Msg("Failed to get tier token budget")
 		return fmt.Errorf("failed to get tier token budget: %v", err)
 	}
 
-	// Update existing budget
 	budget.TokenHoursBought += additionalTokens
-	return cms.cacheServiceDB.UpdateTierTokenBudgetDB(budget)
+	err = cms.cacheServiceDB.UpdateTierTokenBudgetDB(budget)
+	if err != nil {
+		cms.logger.Error().Err(err).Msg("Failed to update tier token budget")
+		return err
+	}
+
+	cms.logger.Info().Float64("newTokenHoursBought", budget.TokenHoursBought).Msg("Allowed cache usage updated successfully")
+	return nil
 }
 
 func (cms *CacheManagementService) LogCacheUsage(ctx context.Context, userID uuid.UUID, priceTier string, tokenHoursUsed float64, chatDuration float64, tokenCountUsed int32) error {
+	cms.logger.Info().Str("userID", userID.String()).Str("priceTier", priceTier).Float64("tokenHoursUsed", tokenHoursUsed).Float64("chatDuration", chatDuration).Int32("tokenCountUsed", tokenCountUsed).Msg("Logging cache usage")
+
 	budget, err := cms.cacheServiceDB.GetTierTokenBudgetDB(userID, priceTier)
 	if err != nil {
+		cms.logger.Error().Err(err).Msg("Failed to get tier token budget")
 		return fmt.Errorf("failed to get tier token budget: %v", err)
 	}
 
 	budget.TokenHoursUsed += tokenHoursUsed
 	if budget.TokenHoursUsed >= budget.TokenHoursBought {
-		budget.TokenHoursUsed = budget.TokenHoursBought // Cap at maximum
+		budget.TokenHoursUsed = budget.TokenHoursBought
+		cms.logger.Info().Msg("Token hours used has reached or exceeded the bought limit")
 	}
-	return cms.cacheServiceDB.UpdateTierTokenBudgetDB(budget)
+
+	err = cms.cacheServiceDB.UpdateTierTokenBudgetDB(budget)
+	if err != nil {
+		cms.logger.Error().Err(err).Msg("Failed to update tier token budget")
+		return err
+	}
+
+	cms.logger.Info().Float64("newTokenHoursUsed", budget.TokenHoursUsed).Msg("Cache usage logged successfully")
+	return nil
 }
 
 func (cms *CacheManagementService) GetNetTokensByTier(ctx context.Context, userID uuid.UUID) (float64, float64, error) {
+	cms.logger.Info().Str("userID", userID.String()).Msg("Getting net tokens by tier")
+
 	budgets, err := cms.cacheServiceDB.GetAllTierTokenBudgetsDB(userID)
 	if err != nil {
+		cms.logger.Error().Err(err).Msg("Failed to get tier token budgets")
 		return 0, 0, fmt.Errorf("failed to get tier token budgets: %v", err)
 	}
 
@@ -234,5 +274,6 @@ func (cms *CacheManagementService) GetNetTokensByTier(ctx context.Context, userI
 		}
 	}
 
+	cms.logger.Info().Float64("baseNetTokens", baseNetTokens).Float64("proNetTokens", proNetTokens).Msg("Net tokens retrieved successfully")
 	return baseNetTokens, proNetTokens, nil
 }

@@ -15,28 +15,34 @@ import (
 	"encoding/xml"
 
 	"github.com/nickng/bibtex"
+	"github.com/rs/zerolog"
 )
 
-type PaperLoader struct{}
+type PaperLoader struct {
+	logger zerolog.Logger
+}
 
-func NewPaperLoader() *PaperLoader {
-	return &PaperLoader{}
+func NewPaperLoader(logger zerolog.Logger) *PaperLoader {
+	return &PaperLoader{logger: logger}
 }
 
 func (pl *PaperLoader) ProcessPaper(arxivID string) (map[string]interface{}, error) {
+	pl.logger.Info().Msgf("Processing paper with ArxivID: %s", arxivID)
+
 	// Check if the paper is already in the database
-	existingPaper, err := GetPaperByArxivID(arxivID)
+	existingPaper, err := pl.GetPaperByArxivID(arxivID)
 	if err == nil && existingPaper != nil {
 		// Paper exists, retrieve its references
 		references, err := GetReferencesByArxivID(arxivID)
 		if err != nil {
+			pl.logger.Error().Err(err).Msgf("Failed to retrieve references for existing paper with ArxivID: %s", arxivID)
 			return nil, fmt.Errorf("failed to retrieve references for existing paper with ArxivID: %s: %v", arxivID, err)
 		}
 
 		// Format the existing references
 		formattedReferences := pl.formatExistingReferences(references)
 
-		fmt.Printf("Formatted %d references for paper %s\n", len(formattedReferences), arxivID)
+		pl.logger.Info().Msgf("Formatted %d references for paper %s", len(formattedReferences), arxivID)
 
 		// Return the existing paper data
 		return map[string]interface{}{
@@ -51,20 +57,24 @@ func (pl *PaperLoader) ProcessPaper(arxivID string) (map[string]interface{}, err
 
 	sourceContent, err := pl.downloadPaper(arxivID)
 	if err != nil {
+		pl.logger.Error().Err(err).Msgf("Failed to download source for paper with ID: %s", arxivID)
 		return nil, fmt.Errorf("failed to download source for paper with ID: %s: %v", arxivID, err)
 	}
 
 	bibFiles, err := pl.extractBibFiles(sourceContent)
 	if err != nil {
+		pl.logger.Error().Err(err).Msgf("Failed to extract bib files for paper with ID: %s", arxivID)
 		return nil, fmt.Errorf("failed to extract bib files for paper with ID: %s: %v", arxivID, err)
 	}
 
 	if len(bibFiles) == 0 {
+		pl.logger.Error().Msgf("No .bib files found for paper with ID: %s", arxivID)
 		return nil, fmt.Errorf("no .bib files found for paper with ID: %s", arxivID)
 	}
 
 	references, err := pl.parseBibFiles(bibFiles)
 	if err != nil {
+		pl.logger.Error().Err(err).Msgf("Failed to parse bib files for paper with ID: %s", arxivID)
 		return nil, fmt.Errorf("failed to parse bib files for paper with ID: %s: %v", arxivID, err)
 	}
 
@@ -98,12 +108,14 @@ func (pl *PaperLoader) ProcessPaper(arxivID string) (map[string]interface{}, err
 			IsAvailableOnArxiv: formattedRef["is_available_on_arxiv"].(bool),
 		}
 		if err := CreateOrUpdateReference(&dbRef); err != nil {
+			pl.logger.Error().Err(err).Msg("Failed to save reference to database")
 			return nil, fmt.Errorf("failed to save reference to database: %v", err)
 		}
 	}
 
 	metadata, err := pl.GetPaperMetadata(arxivID)
 	if err != nil {
+		pl.logger.Error().Err(err).Msgf("Failed to fetch metadata for paper with ID: %s", arxivID)
 		return nil, fmt.Errorf("failed to fetch metadata for paper with ID: %s: %v", arxivID, err)
 	}
 
@@ -116,6 +128,7 @@ func (pl *PaperLoader) ProcessPaper(arxivID string) (map[string]interface{}, err
 		"arxiv_id": arxivID,
 	})
 	if err != nil {
+		pl.logger.Error().Err(err).Msg("Failed to create or update paper")
 		return nil, fmt.Errorf("failed to create or update paper: %v", err)
 	}
 
@@ -142,6 +155,7 @@ func (pl *PaperLoader) ProcessPaper(arxivID string) (map[string]interface{}, err
 	}
 
 	if err := CreateOrUpdateReference(&mainPaperRef); err != nil {
+		pl.logger.Error().Err(err).Msg("Failed to save main paper as reference")
 		return nil, fmt.Errorf("failed to save main paper as reference: %v", err)
 	}
 
@@ -165,18 +179,23 @@ func (pl *PaperLoader) getField(entry bibtex.BibEntry, key string) string {
 }
 
 func (pl *PaperLoader) downloadPaper(arxivID string) ([]byte, error) {
+	pl.logger.Info().Msgf("Downloading paper with ArxivID: %s", arxivID)
+
 	resp, err := http.Get(fmt.Sprintf("https://arxiv.org/e-print/%s", arxivID))
 	if err != nil {
+		pl.logger.Error().Err(err).Msgf("Failed to download paper with ArxivID: %s", arxivID)
 		return nil, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		pl.logger.Error().Msgf("Failed to download paper with ArxivID: %s, status code: %d", arxivID, resp.StatusCode)
 		return nil, fmt.Errorf("failed to download paper: status code %d", resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
+		pl.logger.Error().Err(err).Msgf("Failed to read response body for paper with ArxivID: %s", arxivID)
 		return nil, fmt.Errorf("failed to read response body: %v", err)
 	}
 
@@ -184,8 +203,11 @@ func (pl *PaperLoader) downloadPaper(arxivID string) ([]byte, error) {
 }
 
 func (pl *PaperLoader) extractBibFiles(content []byte) ([]string, error) {
+	pl.logger.Info().Msg("Extracting .bib files from source content")
+
 	gzr, err := gzip.NewReader(bytes.NewReader(content))
 	if err != nil {
+		pl.logger.Error().Err(err).Msg("Failed to create gzip reader")
 		return nil, fmt.Errorf("failed to create gzip reader: %v", err)
 	}
 	defer gzr.Close()
@@ -199,18 +221,21 @@ func (pl *PaperLoader) extractBibFiles(content []byte) ([]string, error) {
 			break
 		}
 		if err != nil {
+			pl.logger.Error().Err(err).Msg("Error reading tar")
 			return nil, fmt.Errorf("error reading tar: %v", err)
 		}
 
 		if strings.HasSuffix(header.Name, ".bib") {
 			content, err := io.ReadAll(tr)
 			if err != nil {
+				pl.logger.Error().Err(err).Msg("Error reading .bib file")
 				return nil, fmt.Errorf("error reading .bib file: %v", err)
 			}
 			bibFiles = append(bibFiles, string(content))
 		}
 	}
 	if len(bibFiles) == 0 {
+		pl.logger.Error().Msg("No .bib files found in the archive")
 		return nil, fmt.Errorf("no .bib files found in the archive")
 	}
 
@@ -218,10 +243,13 @@ func (pl *PaperLoader) extractBibFiles(content []byte) ([]string, error) {
 }
 
 func (pl *PaperLoader) parseBibFiles(bibFiles []string) ([]bibtex.BibEntry, error) {
+	pl.logger.Info().Msg("Parsing .bib files")
+
 	var allReferences []bibtex.BibEntry
 	for _, content := range bibFiles {
 		bib, err := bibtex.Parse(strings.NewReader(content))
 		if err != nil {
+			pl.logger.Error().Err(err).Msg("Failed to parse .bib file")
 			return nil, err
 		}
 		for _, entry := range bib.Entries {
@@ -232,6 +260,8 @@ func (pl *PaperLoader) parseBibFiles(bibFiles []string) ([]bibtex.BibEntry, erro
 }
 
 func (pl *PaperLoader) formatReferences(references []*bibtex.BibEntry) []map[string]interface{} {
+	pl.logger.Info().Msg("Formatting references")
+
 	var formattedReferences []map[string]interface{}
 	for _, ref := range references {
 		formattedRef := pl.formatReference(ref)
@@ -247,6 +277,8 @@ func (pl *PaperLoader) formatReferences(references []*bibtex.BibEntry) []map[str
 
 // New helper method to format existing references
 func (pl *PaperLoader) formatExistingReferences(references []models.PaperReference) []map[string]interface{} {
+	pl.logger.Info().Msg("Formatting existing references")
+
 	var formattedReferences []map[string]interface{}
 	for _, ref := range references {
 		formattedReferences = append(formattedReferences, map[string]interface{}{
@@ -259,6 +291,8 @@ func (pl *PaperLoader) formatExistingReferences(references []models.PaperReferen
 }
 
 func (pl *PaperLoader) formatReference(entry *bibtex.BibEntry) string {
+	pl.logger.Info().Msg("Formatting reference")
+
 	getField := func(key string, defaultValue string) string {
 		if field, ok := entry.Fields[key]; ok && field != nil {
 			return field.String()
@@ -278,6 +312,8 @@ func (pl *PaperLoader) formatReference(entry *bibtex.BibEntry) string {
 }
 
 func (pl *PaperLoader) detectArxivID(reference string) string {
+	pl.logger.Info().Msg("Detecting ArxivID")
+
 	arxivPattern := `(?i)(?:arxiv:|https?://arxiv.org/abs/)(\d{4}\.\d{4,5})`
 	re := regexp.MustCompile(arxivPattern)
 	match := re.FindStringSubmatch(reference)
@@ -309,22 +345,27 @@ type ArxivFeed struct {
 }
 
 func (pl *PaperLoader) GetPaperMetadata(arxivID string) (map[string]string, error) {
+	pl.logger.Info().Msgf("Fetching metadata for paper with ArxivID: %s", arxivID)
+
 	url := fmt.Sprintf("http://export.arxiv.org/api/query?id_list=%s", arxivID)
 
 	resp, err := http.Get(url)
 	if err != nil {
+		pl.logger.Error().Err(err).Msgf("Failed to fetch arXiv metadata for paper with ArxivID: %s", arxivID)
 		return nil, fmt.Errorf("failed to fetch arXiv metadata: %v", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
+		pl.logger.Error().Err(err).Msgf("Failed to read response body for paper with ArxivID: %s", arxivID)
 		return nil, fmt.Errorf("failed to read response body: %v", err)
 	}
 
 	var feed ArxivFeed
 	err = xml.Unmarshal(body, &feed)
 	if err != nil {
+		pl.logger.Error().Err(err).Msgf("Failed to parse XML response for paper with ArxivID: %s", arxivID)
 		return nil, fmt.Errorf("failed to parse XML response: %v", err)
 	}
 
@@ -358,10 +399,13 @@ func (pl *PaperLoader) GetPaperMetadata(arxivID string) (map[string]string, erro
 }
 
 // GetPaperByArxivID retrieves a paper from the database by its ArxivID
-func GetPaperByArxivID(arxivID string) (*models.Paper, error) {
+func (pl *PaperLoader) GetPaperByArxivID(arxivID string) (*models.Paper, error) {
+	pl.logger.Info().Msgf("Retrieving paper with ArxivID: %s", arxivID)
+
 	var paper models.Paper
 	result := database.DB.Where("arxiv_id = ?", arxivID).First(&paper)
 	if result.Error != nil {
+		pl.logger.Error().Err(result.Error).Msgf("Failed to retrieve paper with ArxivID: %s", arxivID)
 		return nil, result.Error
 	}
 	return &paper, nil

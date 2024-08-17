@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"nexus_scholar_go_backend/cmd/api/config"
 	"sync"
 	"time"
 
 	"github.com/google/generative-ai-go/genai"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 )
 
 // Add this new struct
@@ -47,6 +47,7 @@ type ChatSessionService struct {
 	CacheManager   CacheManager
 	cacheServiceDB CacheServiceDB
 	cfg            *config.Config
+	logger         zerolog.Logger
 }
 
 type SessionStatusInfo struct {
@@ -61,6 +62,7 @@ func NewChatSessionService(
 	cacheServiceDB CacheServiceDB,
 	CacheManager CacheManager,
 	cfg *config.Config,
+	logger zerolog.Logger,
 ) *ChatSessionService {
 	css := &ChatSessionService{
 		genAIClient:    genAIClient,
@@ -69,13 +71,14 @@ func NewChatSessionService(
 		CacheManager:   CacheManager,
 		cfg:            cfg,
 		sessions:       make(map[string]*ChatSessionInfo),
+		logger:         logger,
 	}
 	go css.periodicCleanup()
 	return css
 }
 
 func (css *ChatSessionService) StartChatSession(ctx context.Context, userID uuid.UUID, cachedContentName string, sessionID string, cacheExpiryTime time.Time) error {
-	fmt.Printf("DEBUG: Cache expiry time: %v\n", cacheExpiryTime)
+	css.logger.Info().Msgf("Starting chat session for user ID: %s, session ID: %s, cached content name: %s", userID, sessionID, cachedContentName)
 	// Get the GenerativeModel using the CacheManagementService
 	model, err := css.CacheManager.GetGenerativeModel(ctx, cachedContentName)
 	if err != nil {
@@ -87,7 +90,7 @@ func (css *ChatSessionService) StartChatSession(ctx context.Context, userID uuid
 	if err := css.chatService.SaveChatToDB(userID, sessionID); err != nil {
 		return err
 	}
-	fmt.Printf("DEBUG: Saved chat session to history in DB for user ID: %s, session ID: %s\n", userID, sessionID)
+	css.logger.Info().Msgf("Saved chat session to history in DB for user ID: %s, session ID: %s", userID, sessionID)
 
 	css.sessionsMutex.Lock()
 	defer css.sessionsMutex.Unlock()
@@ -109,7 +112,7 @@ func (css *ChatSessionService) CheckSessionStatus(sessionID string) (SessionStat
 	css.sessionsMutex.RUnlock()
 
 	if !ok {
-		log.Printf("DEBUG: Session not found for ID: %s", sessionID)
+		css.logger.Info().Msgf("Session not found for ID: %s", sessionID)
 		return Expired, time.Time{}, ErrSessionNotFound
 	}
 
@@ -119,26 +122,26 @@ func (css *ChatSessionService) CheckSessionStatus(sessionID string) (SessionStat
 	now := time.Now()
 
 	if now.After(sessionInfo.CacheExpiresAt) {
-		log.Printf("DEBUG: Session expired for ID: %s", sessionID)
+		css.logger.Info().Msgf("Session expired for ID: %s", sessionID)
 		return Expired, time.Time{}, nil
 	} else if now.After(sessionInfo.CacheExpiresAt.Add(-css.cfg.GracePeriod)) {
-		log.Printf("DEBUG: Session in warning state for ID: %s", sessionID)
+		css.logger.Info().Msgf("Session in warning state for ID: %s", sessionID)
 		return Warning, sessionInfo.CacheExpiresAt, nil
 	}
 
 	// Check credit status
 	isLowCredit, isCreditZero, _, err := css.CheckCreditStatus(sessionID)
 	if err != nil {
-		log.Printf("DEBUG: Error checking credit status: %v", err)
+		css.logger.Error().Err(err).Msg("Error checking credit status")
 	} else if isCreditZero {
-		log.Printf("DEBUG: Session expired due to zero credit for ID: %s", sessionID)
+		css.logger.Info().Msgf("Session expired due to zero credit for ID: %s", sessionID)
 		return Expired, time.Time{}, nil
 	} else if isLowCredit {
-		log.Printf("DEBUG: Session in warning state (low credit) for ID: %s", sessionID)
+		css.logger.Info().Msgf("Session in warning state (low credit) for ID: %s", sessionID)
 		return Warning, sessionInfo.CacheExpiresAt, nil
 	}
 
-	log.Printf("DEBUG: Session active for ID: %s", sessionID)
+	css.logger.Info().Msgf("Session active for ID: %s", sessionID)
 	return Active, sessionInfo.CacheExpiresAt, nil
 }
 
@@ -162,10 +165,11 @@ func (css *ChatSessionService) UpdateSessionActivity(ctx context.Context, sessio
 	if now.After(cacheExpiresAt.Add(-css.cfg.GracePeriod)) {
 		newExpirationTime := cacheExpiresAt.Add(css.cfg.CacheExpirationTime)
 		if err := css.CacheManager.ExtendCacheLifetime(ctx, sessionInfo.CachedContentName, newExpirationTime); err != nil {
-			log.Printf("Failed to extend cache lifetime for session %s: %v", sessionID, err)
+			css.logger.Error().Err(err).Msgf("Failed to extend cache lifetime for session %s", sessionID)
+			return fmt.Errorf("failed to extend cache lifetime: %w", err)
 		} else {
 			sessionInfo.CacheExpiresAt = newExpirationTime
-			log.Printf("Extended cache lifetime for session %s to %v", sessionID, newExpirationTime)
+			css.logger.Info().Msgf("Extended cache lifetime for session %s to %v", sessionID, newExpirationTime)
 		}
 	}
 
@@ -200,13 +204,13 @@ func (css *ChatSessionService) TerminateSession(ctx context.Context, sessionID s
 	sessionInfo.mutex.Unlock()
 
 	// Use defer to ensure we always log the termination
-	defer log.Printf("Session %s terminated. Reason: %v", sessionID, reason)
+	defer css.logger.Info().Msgf("Session %s terminated. Reason: %v", sessionID, reason)
 
 	// Attempt to delete the cached content
 	err := css.CacheManager.DeleteCache(ctx, sessionInfo.UserID, sessionID, sessionInfo.CachedContentName)
 	if err != nil {
-		log.Printf("Failed to delete cached content for session %s: %v", sessionID, err)
-		// Don't return here, continue with termination even if cache deletion fails
+		css.logger.Error().Err(err).Msgf("Failed to delete cached content for session %s", sessionID)
+		return fmt.Errorf("failed to delete cached content: %w", err)
 	}
 
 	return nil
@@ -266,14 +270,14 @@ func (css *ChatSessionService) cleanupExpiredCaches() {
 	now := time.Now()
 	for sessionID, sessionInfo := range css.sessions {
 		if now.After(sessionInfo.CacheExpiresAt) {
-			log.Printf("DEBUG: Attempting to clean up expired cache for session %s", sessionID)
+			css.logger.Info().Msgf("Attempting to clean up expired cache for session %s", sessionID)
 			ctx := context.Background()
 			err := css.CacheManager.RecordCacheTokenUsage(ctx, sessionInfo.UserID, sessionID)
 			if err != nil {
 
-				log.Printf("ERROR: Failed to record cache token usage for session %s: %v", sessionID, err)
+				css.logger.Error().Err(err).Msgf("Failed to record cache token usage for session %s", sessionID)
 			} else {
-				log.Printf("DEBUG: Successfully recorded cache token usage for session %s", sessionID)
+				css.logger.Info().Msgf("Successfully recorded cache token usage for session %s", sessionID)
 			}
 		}
 	}
@@ -292,7 +296,7 @@ func (css *ChatSessionService) cleanupExpiredSessions() {
 
 		if isExpired || isTerminated {
 			delete(css.sessions, sessionID)
-			log.Printf("Removed session %s from memory. Expired: %v, Terminated: %v", sessionID, isExpired, isTerminated)
+			css.logger.Info().Msgf("Removed session %s from memory. Expired: %v, Terminated: %v", sessionID, isExpired, isTerminated)
 		}
 	}
 }
@@ -363,6 +367,7 @@ func (css *ChatSessionService) ExtendSession(ctx context.Context, sessionID stri
 	newExpirationTime := time.Now().Add(css.cfg.CacheExpirationTime)
 
 	if err := css.CacheManager.ExtendCacheLifetime(ctx, sessionInfo.CachedContentName, newExpirationTime); err != nil {
+		css.logger.Error().Err(err).Msg("Failed to extend cache lifetime")
 		return fmt.Errorf("failed to extend cache lifetime: %w", err)
 	}
 
@@ -396,13 +401,13 @@ func (css *ChatSessionService) CheckCreditStatus(sessionID string) (isRemainingC
 
 	tokenHoursUsedInCurrentSession, priceTier, err := css.calculateRealTimeTokenUsage(sessionID)
 	if err != nil {
-		log.Printf("Error calculating token hours used: %v", err)
+		css.logger.Error().Err(err).Msg("Error calculating token hours used")
 		return false, false, 0, nil
 	}
 
 	budget, err := css.cacheServiceDB.GetTierTokenBudgetDB(sessionInfo.UserID, priceTier)
 	if err != nil {
-		log.Printf("Error checking credit status: %v", err)
+		css.logger.Error().Err(err).Msg("Error checking credit status")
 		return false, false, 0, nil
 	}
 
@@ -420,7 +425,7 @@ func (css *ChatSessionService) CheckCreditStatus(sessionID string) (isRemainingC
 		go func() {
 			ctx := context.Background()
 			if err := css.TerminateSession(ctx, sessionID, ZeroCredit); err != nil {
-				log.Printf("Error terminating session due to zero credit: %v", err)
+				css.logger.Error().Err(err).Msg("Error terminating session due to zero credit")
 			}
 		}()
 

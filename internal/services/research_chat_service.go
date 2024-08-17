@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/generative-ai-go/genai"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 )
 
 type ResearchChatService struct {
@@ -22,6 +23,7 @@ type ResearchChatService struct {
 	cloudStorage       CloudStorageManager
 	cacheExpiration    time.Duration
 	bucketName         string
+	logger             zerolog.Logger
 }
 
 func NewResearchChatService(
@@ -33,6 +35,7 @@ func NewResearchChatService(
 	cacheExpiration time.Duration,
 	cloudStorage CloudStorageManager,
 	bucketName string,
+	logger zerolog.Logger,
 ) *ResearchChatService {
 	return &ResearchChatService{
 		contentAggregation: ca,
@@ -43,92 +46,104 @@ func NewResearchChatService(
 		cacheExpiration:    cacheExpiration,
 		cloudStorage:       cloudStorage,
 		bucketName:         bucketName,
+		logger:             logger,
 	}
 }
 
 func (s *ResearchChatService) StartResearchSession(c *gin.Context, arxivIDs []string, userPDFs []string, priceTier string) (string, string, error) {
-	fmt.Println("DEBUG: Starting research session")
+	s.logger.Info().Msg("Starting research session")
 	user, exists := c.Get("user")
 	if !exists {
-		fmt.Println("DEBUG: User not found in context")
+		s.logger.Error().Msg("User not found in context")
 		return "", "", fmt.Errorf("user not found in context")
 	}
 	userModel, ok := user.(*models.User)
 	if !ok {
-		fmt.Println("DEBUG: Invalid user type in context")
+		s.logger.Error().Msg("Invalid user type in context")
 		return "", "", fmt.Errorf("invalid user type in context")
 	}
 
 	// Check if user has enough credits
 	budget, err := s.cacheServiceDB.GetTierTokenBudgetDB(userModel.ID, priceTier)
 	if err != nil {
-		fmt.Printf("DEBUG: Failed to get user budget: %v\n", err)
+		s.logger.Error().Err(err).Msg("Failed to get user budget")
 		return "", "", fmt.Errorf("failed to get user budget: %w", err)
 	}
 
 	remainingCredit := budget.TokenHoursBought - budget.TokenHoursUsed
 	if remainingCredit <= (999_999.0 / 1_000_000.0 * 11.0 / 60.0) {
-		fmt.Println("DEBUG: Insufficient credits to start a new session")
+		s.logger.Error().Msg("Insufficient credits to start a new session")
 		return "", "", fmt.Errorf("insufficient credits to start a new session")
 	}
 
-	fmt.Printf("DEBUG: Aggregating documents for arXiv IDs: %v and user PDFs: %v\n", arxivIDs, userPDFs)
+	s.logger.Info().Msgf("Aggregating documents for arXiv IDs: %v and user PDFs: %v\n", arxivIDs, userPDFs)
 	// Aggregate content
 	aggregatedContent, err := s.contentAggregation.AggregateDocuments(arxivIDs, userPDFs)
 	if err != nil {
-		fmt.Printf("DEBUG: Failed to aggregate documents: %v\n", err)
+		s.logger.Error().Err(err).Msg("Failed to aggregate documents")
 		return "", "", fmt.Errorf("failed to aggregate documents: %w", err)
 	}
 
 	// Save raw text cache to Google Cloud Storage
 	sessionID := uuid.New().String() // Generate a unique session ID
-	fmt.Printf("DEBUG: Saving raw text cache for session ID: %s\n", sessionID)
+	s.logger.Info().Msgf("Saving raw text cache for session ID: %s", sessionID)
 	err = s.SaveRawTextCache(c.Request.Context(), sessionID, aggregatedContent)
 	if err != nil {
-		fmt.Printf("DEBUG: Failed to save raw text cache: %v\n", err)
+		s.logger.Error().Err(err).Msg("Failed to save raw text cache")
 		return "", "", fmt.Errorf("failed to save raw text cache: %w", err)
 	}
 
-	fmt.Printf("DEBUG: Creating content cache for user ID: %s, session ID: %s, price tier: %s\n", userModel.ID, sessionID, priceTier)
+	s.logger.Info().Msgf("Creating content cache for user ID: %s, session ID: %s, price tier: %s", userModel.ID, sessionID, priceTier)
 	// Create cache
 	cacheName, cacheExpiryTime, err := s.cacheManagement.CreateContentCache(c.Request.Context(), userModel.ID, sessionID, priceTier, aggregatedContent)
 	// Printout cacheCreateTime
-	fmt.Printf("DEBUG: Cache expiry time from CreateContentCache: %v\n", cacheExpiryTime)
+	s.logger.Info().Msgf("Cache expiry time from CreateContentCache: %v", cacheExpiryTime)
 	if err != nil {
-		fmt.Printf("DEBUG: Failed to create content cache: %v\n", err)
+		s.logger.Error().Err(err).Msg("Failed to create content cache")
 		return "", "", fmt.Errorf("failed to create content cache: %w", err)
 	}
 
-	fmt.Printf("DEBUG: Starting chat session for user ID: %s, cache name: %s, session ID: %s\n", userModel.ID, cacheName, sessionID)
+	s.logger.Info().Msgf("Starting chat session for user ID: %s, cache name: %s, session ID: %s", userModel.ID, cacheName, sessionID)
 	// Start chat session
 	err = s.chatSession.StartChatSession(c.Request.Context(), userModel.ID, cacheName, sessionID, cacheExpiryTime)
 	if err != nil {
-		fmt.Printf("DEBUG: Failed to start chat session: %v\n", err)
+		s.logger.Error().Err(err).Msg("Failed to start chat session")
 		// Clean up cache if session start fails
-		fmt.Printf("DEBUG: Cleaning up cache for user ID: %s, session ID: %s, cache name: %s\n", userModel.ID, sessionID, cacheName)
-		_ = s.cacheManagement.DeleteCache(c.Request.Context(), userModel.ID, sessionID, cacheName)
+		s.logger.Info().Msgf("Cleaning up cache for user ID: %s, session ID: %s, cache name: %s", userModel.ID, sessionID, cacheName)
+		if err := s.cacheManagement.DeleteCache(c.Request.Context(), userModel.ID, sessionID, cacheName); err != nil {
+			s.logger.Error().Err(err).Msg("Failed to delete cache during cleanup")
+		}
 
 		// cleanup the storage file
 		fileName := fmt.Sprintf("raw_cache_%s.txt", sessionID)
-		fmt.Printf("DEBUG: Deleting file from storage: %s\n", fileName)
-		_ = s.cloudStorage.DeleteFile(c.Request.Context(), s.bucketName, fileName)
+		s.logger.Info().Msgf("Deleting file from storage: %s", fileName)
+		if err := s.cloudStorage.DeleteFile(c.Request.Context(), s.bucketName, fileName); err != nil {
+			s.logger.Error().Err(err).Msg("Failed to delete file from storage during cleanup")
+		}
 
 		return "", "", fmt.Errorf("failed to start chat session: %w", err)
 	}
 
-	fmt.Printf("DEBUG: Research session started successfully. Session ID: %s, Cache Name: %s\n", sessionID, cacheName)
+	s.logger.Info().Msgf("Research session started successfully. Session ID: %s, Cache Name: %s", sessionID, cacheName)
 	return sessionID, cacheName, nil
 }
 
 func (s *ResearchChatService) SaveRawTextCache(ctx context.Context, sessionID string, content string) error {
 	objectName := fmt.Sprintf("raw_cache_%s.txt", sessionID)
-	return s.cloudStorage.UploadFile(ctx, s.bucketName, objectName, strings.NewReader(content))
+	s.logger.Info().Msgf("Uploading file to storage: %s", objectName)
+	err := s.cloudStorage.UploadFile(ctx, s.bucketName, objectName, strings.NewReader(content))
+	if err != nil {
+		s.logger.Error().Err(err).Msg("Failed to upload file to storage")
+	}
+	return err
 }
 
 func (s *ResearchChatService) GetRawTextCache(ctx context.Context, sessionID string) (string, error) {
 	objectName := fmt.Sprintf("raw_cache_%s.txt", sessionID)
+	s.logger.Info().Msgf("Downloading file from storage: %s", objectName)
 	content, err := s.cloudStorage.DownloadFile(ctx, s.bucketName, objectName)
 	if err != nil {
+		s.logger.Error().Err(err).Msg("Failed to download file from storage")
 		return "", err
 	}
 	return string(content), nil
@@ -138,6 +153,7 @@ func (s *ResearchChatService) SendMessage(ctx context.Context, sessionID, messag
 	// Send message and get response
 	responseIterator, err := s.chatSession.StreamChatMessage(ctx, sessionID, message)
 	if err != nil {
+		s.logger.Error().Err(err).Msg("Failed to send message")
 		return nil, fmt.Errorf("failed to send message: %w", err)
 	}
 
@@ -147,6 +163,7 @@ func (s *ResearchChatService) SendMessage(ctx context.Context, sessionID, messag
 func (s *ResearchChatService) SaveAIResponse(sessionID, response string) error {
 	// Save AI response to history
 	if err := s.chatService.SaveMessageToDB(sessionID, "ai", response); err != nil {
+		s.logger.Error().Err(err).Msg("Failed to save AI response")
 		return fmt.Errorf("failed to save AI response: %w", err)
 	}
 
@@ -157,6 +174,7 @@ func (s *ResearchChatService) EndResearchSession(ctx context.Context, sessionID 
 	// Assumes the only caller of this method is an api endpoint whena user Terminates a chat
 	var reason TerminationReason = UserInitiated
 	if err := s.chatSession.TerminateSession(ctx, sessionID, reason); err != nil {
+		s.logger.Error().Err(err).Msg("Failed to terminate chat session")
 		return fmt.Errorf("failed to terminate chat session: %w", err)
 	}
 	return nil

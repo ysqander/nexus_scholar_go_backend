@@ -13,21 +13,23 @@ import (
 
 	"nexus_scholar_go_backend/internal/auth"
 	"nexus_scholar_go_backend/internal/broker"
+	"nexus_scholar_go_backend/internal/errors"
 	"nexus_scholar_go_backend/internal/models"
 	"nexus_scholar_go_backend/internal/services"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/generative-ai-go/genai"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 	"github.com/stripe/stripe-go/v79"
 	"google.golang.org/api/iterator"
 )
 
-func SetupRoutes(r *gin.Engine, researchChatService *services.ResearchChatService, chatService services.ChatServiceDB, stripeService *services.StripeService, cacheManagementService *services.CacheManagementService, userService *services.UserService, messageBroker *broker.Broker) {
+func SetupRoutes(r *gin.Engine, researchChatService *services.ResearchChatService, chatService services.ChatServiceDB, stripeService *services.StripeService, cacheManagementService *services.CacheManagementService, userService *services.UserService, messageBroker *broker.Broker, log zerolog.Logger) {
 	api := r.Group("/api")
 	{
-		api.GET("/papers/:arxiv_id", auth.AuthMiddleware(userService), getPaper)
-		api.GET("/papers/:arxiv_id/title", auth.AuthMiddleware(userService), getPaperTitle)
+		api.GET("/papers/:arxiv_id", auth.AuthMiddleware(userService), getPaper(log))
+		api.GET("/papers/:arxiv_id/title", auth.AuthMiddleware(userService), getPaperTitle(log))
 		api.GET("/private", auth.AuthMiddleware(userService), privateRoute)
 		api.POST("/create-research-session", auth.AuthMiddleware(userService), createResearchSessionHandler(researchChatService))
 		api.GET("/raw-cache", auth.AuthMiddleware(userService), getRawCacheHandler(researchChatService))
@@ -41,61 +43,73 @@ func SetupRoutes(r *gin.Engine, researchChatService *services.ResearchChatServic
 	}
 }
 
-func getPaper(c *gin.Context) {
-	arxivID := c.Param("arxiv_id")
+func getPaper(log zerolog.Logger) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		arxivID := c.Param("arxiv_id")
+		if arxivID == "" {
+			errors.HandleError(c, errors.New400Error("ArXiv ID is required"))
+			return
+		}
 
-	paperLoader := services.NewPaperLoader()
-	result, err := paperLoader.ProcessPaper(arxivID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+		paperLoader := services.NewPaperLoader(log)
+		result, err := paperLoader.ProcessPaper(arxivID)
+		if err != nil {
+			errors.HandleError(c, errors.LogAndReturn500(fmt.Errorf("failed to process paper: %v", err)))
+			return
+		}
+
+		c.JSON(http.StatusOK, result)
 	}
-
-	c.JSON(http.StatusOK, result)
 }
 
-func getPaperTitle(c *gin.Context) {
-	arxivID := c.Param("arxiv_id")
-	parentArxivID := c.Query("parent_arxiv_id")
+func getPaperTitle(log zerolog.Logger) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		arxivID := c.Param("arxiv_id")
+		if arxivID == "" {
+			errors.HandleError(c, errors.New400Error("ArXiv ID is required"))
+			return
+		}
+		parentArxivID := c.Query("parent_arxiv_id")
 
-	paperLoader := services.NewPaperLoader()
-	metadata, err := paperLoader.GetPaperMetadata(arxivID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+		paperLoader := services.NewPaperLoader(log)
+		metadata, err := paperLoader.GetPaperMetadata(arxivID)
+		if err != nil {
+			errors.HandleError(c, errors.LogAndReturn500(fmt.Errorf("failed to get paper metadata: %v", err)))
+			return
+		}
+
+		// Create a PaperReference
+		paperRef := models.PaperReference{
+			ArxivID:            arxivID,
+			ParentArxivID:      parentArxivID,
+			Type:               "article",
+			Key:                arxivID,
+			Title:              metadata["title"],
+			Author:             metadata["authors"],
+			Year:               metadata["published_date"][:4], // Assuming the date is in YYYY-MM-DD format
+			Journal:            metadata["journal"],            // This might be empty for preprints
+			DOI:                metadata["doi"],                // This might be empty for preprints
+			URL:                metadata["abstract_url"],       // Using the abstract URL as the main URL
+			RawBibEntry:        "",                             // You might want to generate this if needed
+			FormattedText:      fmt.Sprintf("%s. (%s). %s. %s", metadata["authors"], metadata["published_date"][:4], metadata["title"], metadata["journal"]),
+			IsAvailableOnArxiv: true,
+		}
+
+		// If there's a DOI, add it to the formatted text
+		if metadata["doi"] != "" {
+			paperRef.FormattedText += fmt.Sprintf(" DOI: %s", metadata["doi"])
+		}
+
+		// Save the reference
+		if err := services.CreateOrUpdateReference(&paperRef); err != nil {
+			errors.HandleError(c, errors.LogAndReturn500(fmt.Errorf("failed to save reference: %v", err)))
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"title": metadata["title"],
+		})
 	}
-
-	// Create a PaperReference
-	paperRef := models.PaperReference{
-		ArxivID:            arxivID,
-		ParentArxivID:      parentArxivID,
-		Type:               "article",
-		Key:                arxivID,
-		Title:              metadata["title"],
-		Author:             metadata["authors"],
-		Year:               metadata["published_date"][:4], // Assuming the date is in YYYY-MM-DD format
-		Journal:            metadata["journal"],            // This might be empty for preprints
-		DOI:                metadata["doi"],                // This might be empty for preprints
-		URL:                metadata["abstract_url"],       // Using the abstract URL as the main URL
-		RawBibEntry:        "",                             // You might want to generate this if needed
-		FormattedText:      fmt.Sprintf("%s. (%s). %s. %s", metadata["authors"], metadata["published_date"][:4], metadata["title"], metadata["journal"]),
-		IsAvailableOnArxiv: true,
-	}
-
-	// If there's a DOI, add it to the formatted text
-	if metadata["doi"] != "" {
-		paperRef.FormattedText += fmt.Sprintf(" DOI: %s", metadata["doi"])
-	}
-
-	// Save the reference
-	if err := services.CreateOrUpdateReference(&paperRef); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to save reference: %v", err)})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"title": metadata["title"],
-	})
 }
 
 func privateRoute(c *gin.Context) {
@@ -110,7 +124,7 @@ func createResearchSessionHandler(researchChatService *services.ResearchChatServ
 	return func(c *gin.Context) {
 		priceTier := c.PostForm("price_tier")
 		if priceTier != "base" && priceTier != "pro" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid price_tier. Must be 'base' or 'pro'."})
+			errors.HandleError(c, errors.New400Error("Invalid price_tier. Must be 'base' or 'pro'."))
 			return
 		}
 
@@ -118,14 +132,14 @@ func createResearchSessionHandler(researchChatService *services.ResearchChatServ
 		arxivIDsJSON := c.PostForm("arxiv_ids")
 		var arxivIDs []string
 		if err := json.Unmarshal([]byte(arxivIDsJSON), &arxivIDs); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid arXiv IDs format"})
+			errors.HandleError(c, errors.New400Error("Invalid arXiv IDs format"))
 			return
 		}
 
 		// Create a temporary directory to store uploaded files
 		tempDir, err := os.MkdirTemp("", "user_pdfs_")
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create temporary directory"})
+			errors.HandleError(c, errors.LogAndReturn500(fmt.Errorf("failed to create temporary directory: %v", err)))
 			return
 		}
 		defer os.RemoveAll(tempDir) // Clean up the temporary directory when done
@@ -134,23 +148,22 @@ func createResearchSessionHandler(researchChatService *services.ResearchChatServ
 		var pdfPaths []string
 		form, err := c.MultipartForm()
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Failed to parse multipart form: %v", err)})
+			errors.HandleError(c, errors.New400Error("Failed to parse multipart form"))
 			return
 		}
 		files := form.File["pdfs"]
 		for _, fileHeader := range files {
 			filename := filepath.Join(tempDir, fileHeader.Filename)
 			if err := c.SaveUploadedFile(fileHeader, filename); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to save file %s: %v", fileHeader.Filename, err)})
+				errors.HandleError(c, errors.LogAndReturn500(fmt.Errorf("failed to save file %s: %v", fileHeader.Filename, err)))
 				return
-
 			}
 			pdfPaths = append(pdfPaths, filename)
 		}
 
 		sessionID, cachedContentName, err := researchChatService.StartResearchSession(c, arxivIDs, pdfPaths, priceTier)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			errors.HandleError(c, errors.LogAndReturn500(fmt.Errorf("failed to start research session: %v", err)))
 			return
 		}
 
@@ -169,13 +182,13 @@ func sendChatMessageHandler(researchChatService *services.ResearchChatService) g
 		}
 
 		if err := c.ShouldBindJSON(&request); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			errors.HandleError(c, errors.New400Error(err.Error()))
 			return
 		}
 
 		responseIterator, err := researchChatService.SendMessage(c.Request.Context(), request.SessionID, request.Message)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			errors.HandleError(c, errors.LogAndReturn500(fmt.Errorf("failed to send message: %v", err)))
 			return
 		}
 
@@ -213,13 +226,13 @@ func terminateChatSessionHandler(researchChatService *services.ResearchChatServi
 		}
 
 		if err := c.ShouldBindJSON(&request); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			errors.HandleError(c, errors.New400Error(err.Error()))
 			return
 		}
 
 		err := researchChatService.EndResearchSession(c.Request.Context(), request.SessionID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "An unexpected error occurred"})
+			errors.HandleError(c, errors.LogAndReturn500(fmt.Errorf("failed to terminate research session: %v", err)))
 			return
 		}
 
@@ -231,19 +244,19 @@ func getChatHistoryHandler(researchChatService *services.ResearchChatService) gi
 	return func(c *gin.Context) {
 		user, exists := c.Get("user")
 		if !exists {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found in context"})
+			errors.HandleError(c, errors.New401Error())
 			return
 		}
 
 		userModel, ok := user.(*models.User)
 		if !ok {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to cast user to *models.User"})
+			errors.HandleError(c, errors.LogAndReturn500(fmt.Errorf("failed to cast user to *models.User")))
 			return
 		}
 
 		chats, err := researchChatService.GetUserChatHistory(userModel.ID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to retrieve chat history: %v", err)})
+			errors.HandleError(c, errors.LogAndReturn500(fmt.Errorf("failed to retrieve chat history: %v", err)))
 			return
 		}
 
@@ -279,13 +292,13 @@ func getRawCacheHandler(researchChatService *services.ResearchChatService) gin.H
 	return func(c *gin.Context) {
 		sessionID := c.Query("session_id")
 		if sessionID == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "session_id is required"})
+			errors.HandleError(c, errors.New400Error("session_id is required"))
 			return
 		}
 
 		content, err := researchChatService.GetRawTextCache(c.Request.Context(), sessionID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to get raw cache: %v", err)})
+			errors.HandleError(c, errors.LogAndReturn500(fmt.Errorf("failed to get raw cache: %v", err)))
 			return
 		}
 
@@ -301,14 +314,14 @@ func purchaseCacheVolume(stripeService *services.StripeService) gin.HandlerFunc 
 		}
 
 		if err := c.ShouldBindJSON(&request); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			errors.HandleError(c, errors.New400Error(err.Error()))
 			return
 		}
 
 		// Convert TokenHours to float64
 		tokenHours, err := strconv.ParseFloat(request.TokenHours, 64)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid token_hours value"})
+			errors.HandleError(c, errors.New400Error("Invalid token_hours value"))
 			return
 		}
 		priceTier := request.PriceTier
@@ -323,13 +336,13 @@ func purchaseCacheVolume(stripeService *services.StripeService) gin.HandlerFunc 
 		case "pro":
 			priceID = os.Getenv("STRIPE_PRO_PRICE_ID")
 		default:
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid price tier"})
+			errors.HandleError(c, errors.New400Error("Invalid price tier"))
 			return
 		}
 
 		session, err := stripeService.CreateCheckoutSession(userModel.ID.String(), priceID, tokenHours, priceTier)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create checkout session"})
+			errors.HandleError(c, errors.LogAndReturn500(fmt.Errorf("failed to create checkout session: %v", err)))
 			return
 		}
 
@@ -455,33 +468,31 @@ func getCacheUsageHandler(cacheManagementService *services.CacheManagementServic
 	return func(c *gin.Context) {
 		user, exists := c.Get("user")
 		if !exists {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found in context"})
+			errors.HandleError(c, errors.New401Error())
 			return
 		}
 
 		userModel, ok := user.(*models.User)
 		if !ok {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to cast user to *models.User"})
+			errors.HandleError(c, errors.LogAndReturn500(fmt.Errorf("failed to cast user to *models.User")))
 			return
 		}
 
 		baseTokens, proTokens, err := cacheManagementService.GetNetTokensByTier(c.Request.Context(), userModel.ID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to get net tokens: %v", err)})
+			errors.HandleError(c, errors.LogAndReturn500(fmt.Errorf("failed to get net tokens: %v", err)))
 			return
 		}
 
 		// Get historical chats
 		historicalChatMetrics, err := chatService.GetHistoricalChatMetricsByUserID(userModel.ID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to get historical chats: %v", err)})
+			errors.HandleError(c, errors.LogAndReturn500(fmt.Errorf("failed to get historical chats: %v", err)))
 			return
 		}
 
 		// Organize chat history by month and price tier
 		chatHistoryByMonth := make(map[string]map[string][]gin.H)
-
-		fmt.Println("Debug: Starting to process historical chat metrics")
 
 		for _, chat := range historicalChatMetrics {
 			// Use CreatedAt if TerminationTime is zero
@@ -491,7 +502,6 @@ func getCacheUsageHandler(cacheManagementService *services.CacheManagementServic
 			}
 
 			monthKey := chatTime.Format("2006-01")
-			fmt.Printf("Debug: Processing chat - SessionID: %s, Time: %s, MonthKey: %s\n", chat.SessionID, chatTime, monthKey)
 
 			if _, exists := chatHistoryByMonth[monthKey]; !exists {
 				chatHistoryByMonth[monthKey] = make(map[string][]gin.H)
@@ -507,8 +517,6 @@ func getCacheUsageHandler(cacheManagementService *services.CacheManagementServic
 
 			chatHistoryByMonth[monthKey][chat.PriceTier] = append(chatHistoryByMonth[monthKey][chat.PriceTier], chatData)
 		}
-
-		fmt.Printf("Debug: Final chatHistoryByMonth structure: %+v\n", chatHistoryByMonth)
 
 		c.JSON(http.StatusOK, gin.H{
 			"base_net_tokens": baseTokens,

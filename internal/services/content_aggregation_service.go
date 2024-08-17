@@ -9,29 +9,36 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/rs/zerolog"
 )
 
 // ContentAggregationService handles the aggregation of content from various sources
 type ContentAggregationService struct {
 	arxivBaseURL string
+	logger       zerolog.Logger
 }
 
-func NewContentAggregationService(arxivBaseURL string) *ContentAggregationService {
+func NewContentAggregationService(arxivBaseURL string, logger zerolog.Logger) *ContentAggregationService {
 	return &ContentAggregationService{
 		arxivBaseURL: arxivBaseURL,
+		logger:       logger,
 	}
 }
 
 func (s *ContentAggregationService) AggregateDocuments(arxivIDs []string, userPDFs []string) (string, error) {
+	s.logger.Info().Msg("Starting to aggregate documents")
 	var aggregatedContent strings.Builder
 	var summary strings.Builder
 	documentCount := 0
 
 	// Process arXiv papers
 	for _, id := range arxivIDs {
+		s.logger.Info().Msgf("Processing arXiv paper with ID: %s", id)
 		documentCount++
 		content, title, err := s.processArXivPaper(id)
 		if err != nil {
+			s.logger.Error().Err(err).Msgf("Failed to process arXiv paper with ID: %s", id)
 			return "", fmt.Errorf("failed to process arXiv paper %s: %v", id, err)
 		}
 		documentString := fmt.Sprintf("<Document %d>\n<title>Title: %s</title>\n%s\n</Document %d>\n", documentCount, title, content, documentCount)
@@ -44,9 +51,11 @@ func (s *ContentAggregationService) AggregateDocuments(arxivIDs []string, userPD
 		if pdfPath == "" {
 			continue
 		}
+		s.logger.Info().Msgf("Processing user PDF with path: %s", pdfPath)
 		documentCount++
 		content, title, err := s.ProcessUserPDF(pdfPath)
 		if err != nil {
+			s.logger.Error().Err(err).Msgf("Failed to process user PDF with path: %s", pdfPath)
 			return "", fmt.Errorf("failed to process PDF %s: %v", pdfPath, err)
 		}
 		documentString := fmt.Sprintf("<Document %d>\n<title>Title: %s</title>\n%s\n</Document%d>\n", documentCount, title, content, documentCount)
@@ -61,9 +70,11 @@ func (s *ContentAggregationService) AggregateDocuments(arxivIDs []string, userPD
 }
 
 func (s *ContentAggregationService) processArXivPaper(arxivID string) (string, string, error) {
+	s.logger.Info().Msgf("Processing arXiv paper with ID: %s", arxivID)
 	// Fetch metadata from the database
 	paperMetadata, err := GetReferenceByArxivID(arxivID)
 	if err != nil {
+		s.logger.Error().Err(err).Msgf("Failed to fetch metadata for arXiv paper with ID: %s", arxivID)
 		return "", "", fmt.Errorf("failed to fetch metadata from the database: %v", err)
 	}
 
@@ -71,17 +82,20 @@ func (s *ContentAggregationService) processArXivPaper(arxivID string) (string, s
 	pdfURL := fmt.Sprintf("%s%s.pdf", s.arxivBaseURL, arxivID)
 	resp, err := http.Get(pdfURL)
 	if err != nil {
+		s.logger.Error().Err(err).Msgf("Failed to download arXiv paper with ID: %s", arxivID)
 		return "", "", fmt.Errorf("failed to download arXiv paper: %v", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		s.logger.Error().Msgf("Unexpected status code when downloading arXiv paper with ID: %s. Status code: %d", arxivID, resp.StatusCode)
 		return "", "", fmt.Errorf("unexpected status code when downloading arXiv paper: %d", resp.StatusCode)
 	}
 
 	// Create a temporary file to store the PDF
 	tempFile, err := os.CreateTemp("", "arxiv-*.pdf")
 	if err != nil {
+		s.logger.Error().Err(err).Msgf("Failed to create temporary file for arXiv paper with ID: %s", arxivID)
 		return "", "", fmt.Errorf("failed to create temporary file: %v", err)
 	}
 	defer os.Remove(tempFile.Name())
@@ -90,12 +104,14 @@ func (s *ContentAggregationService) processArXivPaper(arxivID string) (string, s
 	// Save the PDF content to the temporary file
 	_, err = io.Copy(tempFile, resp.Body)
 	if err != nil {
+		s.logger.Error().Err(err).Msgf("Failed to save PDF content for arXiv paper with ID: %s", arxivID)
 		return "", "", fmt.Errorf("failed to save PDF content: %v", err)
 	}
 
 	// Process the PDF file
 	content, err := s.ExtractTextFromPDF(tempFile.Name())
 	if err != nil {
+		s.logger.Error().Err(err).Msgf("Failed to extract text from PDF for arXiv paper with ID: %s", arxivID)
 		return "", "", fmt.Errorf("failed to extract text from PDF: %v", err)
 	}
 
@@ -103,56 +119,27 @@ func (s *ContentAggregationService) processArXivPaper(arxivID string) (string, s
 }
 
 func (s *ContentAggregationService) ProcessUserPDF(pdfPath string) (string, string, error) {
-	// Try to extract metadata first
-	// title, err := s.extractPDFMetadata(pdfPath)
-	// if err != nil {
-	// 	// Log the error, but continue processing
-	// 	log.Printf("Warning: Failed to extract PDF metadata: %v", err)
-	// }
+	s.logger.Info().Msgf("Processing user PDF with path: %s", pdfPath)
 
 	// Extract content
 	content, err := s.ExtractTextFromPDF(pdfPath)
 	if err != nil {
+		s.logger.Error().Err(err).Msgf("Failed to extract text from PDF for path: %s", pdfPath)
 		return "", "", fmt.Errorf("failed to extract text from PDF: %v", err)
 	}
 
-	// // If no title was found in metadata, use filename as fallback
-	// if title == "" {
-	// 	title = filepath.Base(pdfPath)
-	// }
 	title := filepath.Base(pdfPath)
 	title = strings.TrimSuffix(title, ".pdf")
 
 	return content, title, nil
 }
 
-// func (s *ContentAggregationService) extractPDFMetadata(pdfPath string) (string, error) {
-// 	// Use the pdfcpu API to extract metadata
-// 	ctx, err := api.ReadContextFile(pdfPath)
-// 	if err != nil {
-// 		return "", fmt.Errorf("failed to read PDF file: %v", err)
-// 	}
-
-// 	// Extract metadata from the context
-// 	if ctx.XRefTable != nil && ctx.XRefTable.Info != nil {
-// 		infoDict, err := ctx.DereferenceDict(*ctx.XRefTable.Info)
-// 		if err != nil {
-// 			return "", fmt.Errorf("failed to dereference Info dictionary: %v", err)
-// 		}
-// 		if title, found := infoDict.Find("Title"); found {
-// 			if titleStr, ok := title.(types.StringLiteral); ok {
-// 				return string(titleStr), nil
-// 			}
-// 		}
-// 	}
-
-// 	return "", nil
-// }
-
 func (s *ContentAggregationService) ExtractTextFromPDF(pdfPath string) (string, error) {
+	s.logger.Info().Msgf("Extracting text from PDF with path: %s", pdfPath)
 	// Check if pdftotext is installed
 	_, err := exec.LookPath("pdftotext")
 	if err != nil {
+		s.logger.Error().Err(err).Msg("pdftotext is not installed")
 		return "", fmt.Errorf("pdftotext is not installed: %v", err)
 	}
 
@@ -170,11 +157,13 @@ func (s *ContentAggregationService) ExtractTextFromPDF(pdfPath string) (string, 
 	cmd.Stdout = &out
 	err = cmd.Run()
 	if err != nil {
+		s.logger.Error().Err(err).Msgf("Failed to run pdftotext for PDF with path: %s", pdfPath)
 		return "", fmt.Errorf("failed to run pdftotext: %v", err)
 	}
 
 	content := out.String()
 	if content == "" {
+		s.logger.Error().Msgf("No text content extracted from PDF with path: %s", pdfPath)
 		return "", fmt.Errorf("no text content extracted from PDF")
 	}
 

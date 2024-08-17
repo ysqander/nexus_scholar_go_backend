@@ -3,9 +3,9 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -14,11 +14,13 @@ import (
 	"nexus_scholar_go_backend/internal/auth"
 	"nexus_scholar_go_backend/internal/broker"
 	"nexus_scholar_go_backend/internal/database"
+	"nexus_scholar_go_backend/internal/models"
 	"nexus_scholar_go_backend/internal/services"
 	"nexus_scholar_go_backend/internal/wsocket"
 
 	"cloud.google.com/go/storage"
 	"github.com/gorilla/websocket"
+	"github.com/rs/zerolog"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -28,57 +30,73 @@ import (
 )
 
 func main() {
-	if err := godotenv.Load(); err != nil {
-		log.Println("No .env file found")
+	// Initialize zerolog
+	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
+	log := zerolog.New(os.Stdout).With().Timestamp().Logger()
+
+	if os.Getenv("GO_ENV") == "production" {
+		zerolog.SetGlobalLevel(zerolog.InfoLevel)
+		gin.SetMode(gin.ReleaseMode)
+	} else {
+		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+		log = log.Output(zerolog.ConsoleWriter{Out: os.Stdout})
 	}
+
+	if err := godotenv.Load(); err != nil {
+		log.Warn().Err(err).Msg("No .env file found")
+	}
+
 	messageBroker := broker.NewBroker()
 	genai_apiKey := os.Getenv("GOOGLE_AI_STUDIO_API_KEY")
 	if genai_apiKey == "" {
-		log.Fatal("GOOGLE_AI_STUDIO_API_KEY is not set in the environment")
+		log.Fatal().Msg("GOOGLE_AI_STUDIO_API_KEY is not set in the environment")
 	}
 
 	ctx := context.Background()
 
 	projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
 	if projectID == "" {
-		log.Fatal("GOOGLE_CLOUD_PROJECT environment variable is not set")
+		log.Fatal().Msg("GOOGLE_CLOUD_PROJECT environment variable is not set")
 	}
 
-	database.InitDB()
+	if err := database.InitDB(); err != nil {
+		log.Fatal().Err(err).Msg("Failed to initialize database")
+	}
 
 	// Initialize external services clients
 	stripePublicKey := os.Getenv("STRIPE_PUBLIC_KEY")
 	stripeSecretKey := os.Getenv("STRIPE_SECRET_KEY")
-	stripeService := services.NewStripeService(stripePublicKey, stripeSecretKey)
+	stripeService := services.NewStripeService(stripePublicKey, stripeSecretKey, log)
 
 	genaiClient, err := genai.NewClient(ctx, option.WithAPIKey(genai_apiKey))
 	if err != nil {
-		log.Fatalf("Failed to create GenAI client: %v", err)
+		log.Fatal().Err(err).Msg("Failed to create GenAI client")
 	}
 	defer genaiClient.Close()
 
-	// Initial paramters for services
+	// Initial parameters for services
 	cfg := config.NewConfig()
 	arxivBaseURL := "https://arxiv.org/pdf/"
 
 	gcsBucketName := os.Getenv("GCS_BUCKET_NAME")
 	if gcsBucketName == "" {
-		log.Fatal("GCS_BUCKET_NAME environment variable is not set")
+		log.Fatal().Msg("GCS_BUCKET_NAME environment variable is not set")
 	}
 
 	// Initialize Internal services
 	chatServiceDB := services.NewChatServiceDB(database.DB)
 	cacheServiceDB := services.NewCacheServiceDB(database.DB)
-	contentAggregationService := services.NewContentAggregationService(arxivBaseURL)
+	contentAggregationService := services.NewContentAggregationService(arxivBaseURL, log)
 	cacheManagementService := services.NewCacheManagementService(
 		genaiClient,
 		contentAggregationService,
 		cfg.CacheExpirationTime,
 		cacheServiceDB,
 		chatServiceDB,
+		log,
 	)
 
-	userService := services.NewUserService(database.DB, cacheManagementService)
+	userService := services.NewUserService(database.DB, cacheManagementService, log)
 
 	chatSessionService := services.NewChatSessionService(
 		genaiClient,
@@ -86,16 +104,17 @@ func main() {
 		cacheServiceDB,
 		cacheManagementService,
 		cfg,
+		log,
 	)
 	// Initialize GCS service
-	gcsService, err := services.NewGCSService(ctx)
+	gcsService, err := services.NewGCSService(ctx, log)
 	if err != nil {
-		log.Fatalf("Failed to create GCS service: %v", err)
+		log.Fatal().Err(err).Msg("Failed to create GCS service")
 	}
 
 	// Check and create bucket if it doesn't exist
 	if err := checkAndCreateBucket(ctx, gcsBucketName, gcsService.Client); err != nil {
-		log.Fatalf("Failed to check/create GCS bucket: %v", err)
+		log.Fatal().Err(err).Msg("Failed to check/create GCS bucket")
 	}
 
 	researchChatService := services.NewResearchChatService(
@@ -107,9 +126,16 @@ func main() {
 		cfg.CacheExpirationTime,
 		gcsService,
 		gcsBucketName,
+		log,
 	)
 
-	r := gin.Default()
+	// Initialize Gin router
+	r := gin.New()
+
+	// Use custom recovery middleware
+	r.Use(customRecoveryMiddleware())
+	r.Use(setSessionID())
+	r.Use(loggingMiddleware(log))
 
 	allowedOrigins := os.Getenv("ALLOWED_ORIGINS")
 	if allowedOrigins == "" {
@@ -136,9 +162,9 @@ func main() {
 	}
 
 	// Create WebSocket handler
-	wsHandler := wsocket.NewHandler(researchChatService, upgrader, cfg.SessionCheckInterval, cfg.SessionMemoryTimeout)
+	wsHandler := wsocket.NewHandler(researchChatService, upgrader, cfg.SessionCheckInterval, cfg.SessionMemoryTimeout, log)
 
-	api.SetupRoutes(r, researchChatService, chatServiceDB, stripeService, cacheManagementService, userService, messageBroker)
+	api.SetupRoutes(r, researchChatService, chatServiceDB, stripeService, cacheManagementService, userService, messageBroker, log)
 	auth.SetupRoutes(r, userService)
 
 	// Add WebSocket route
@@ -152,24 +178,107 @@ func main() {
 		port = "3000"
 	}
 
-	log.Printf("Server starting on port %s", port)
+	log.Info().Msgf("Server starting on port %s", port)
 	if err := r.Run(":" + port); err != nil {
-		log.Fatalf("Failed to start server: %v", err)
+		log.Fatal().Err(err).Msg("Failed to start server")
 	}
 }
 
 func checkAndCreateBucket(ctx context.Context, bucketName string, client *storage.Client) error {
+	log := zerolog.Ctx(ctx)
 	bucket := client.Bucket(bucketName)
 	_, err := bucket.Attrs(ctx)
 	if err == storage.ErrBucketNotExist {
-		log.Printf("Bucket %s does not exist. Creating...", bucketName)
+		log.Info().Msgf("Bucket %s does not exist. Creating...", bucketName)
 		if err := bucket.Create(ctx, os.Getenv("GOOGLE_CLOUD_PROJECT"), nil); err != nil {
-			return fmt.Errorf("failed to create bucket: %v", err)
+			return fmt.Errorf("failed to create bucket: %w", err)
 		}
-		log.Printf("Bucket %s created successfully", bucketName)
+		log.Info().Msgf("Bucket %s created successfully", bucketName)
 	} else if err != nil {
-		return fmt.Errorf("failed to get bucket attributes: %v", err)
+		return fmt.Errorf("failed to get bucket attributes: %w", err)
 	}
 
 	return nil
+}
+
+func customRecoveryMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		defer func() {
+			if err := recover(); err != nil {
+				log := zerolog.Ctx(c.Request.Context())
+				log.Error().
+					Interface("error", err).
+					Str("stack", string(debug.Stack())).
+					Msg("Panic recovered")
+				c.AbortWithStatus(http.StatusInternalServerError)
+			}
+		}()
+		c.Next()
+	}
+}
+
+func loggingMiddleware(log zerolog.Logger) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Process request
+		c.Next()
+
+		// Logging after request is processed
+		userID := "unknown"
+		if user, exists := c.Get("user"); exists {
+			if userModel, ok := user.(*models.User); ok {
+				userID = userModel.ID.String()
+			}
+		}
+
+		sessionID := "n/a"
+		if sid, exists := c.Get("sessionID"); exists {
+			sessionID = sid.(string)
+		}
+
+		// Determine log level based on status code
+		var event *zerolog.Event
+		switch {
+		case c.Writer.Status() >= 500:
+			event = log.Error()
+		case c.Writer.Status() >= 400:
+			event = log.Warn()
+		default:
+			event = log.Info()
+		}
+
+		event.
+			Str("method", c.Request.Method).
+			Str("path", c.Request.URL.Path).
+			Int("status", c.Writer.Status()).
+			Str("client_ip", c.ClientIP()).
+			Str("user_id", userID).
+			Str("session_id", sessionID).
+			Msg("HTTP Request")
+	}
+}
+
+func setSessionID() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Check if session ID is in the request (header, query param, or body)
+		sessionID := c.GetHeader("X-Session-ID")
+		if sessionID == "" {
+			sessionID = c.Query("session_id")
+		}
+		if sessionID == "" {
+			if c.Request.Method == "POST" {
+				var json struct {
+					SessionID string `json:"session_id"`
+				}
+				if c.BindJSON(&json) == nil {
+					sessionID = json.SessionID
+				}
+			}
+		}
+
+		if sessionID != "" {
+			c.Set("sessionID", sessionID)
+		}
+
+		c.Next()
+	}
 }
