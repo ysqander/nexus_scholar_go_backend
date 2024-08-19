@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt"
 	"github.com/gorilla/websocket"
+	"github.com/rs/zerolog"
 )
 
 func SetupRoutes(r *gin.Engine, userService *services.UserService) {
@@ -23,6 +24,12 @@ func SetupRoutes(r *gin.Engine, userService *services.UserService) {
 
 func AuthMiddleware(userService *services.UserService) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		log := zerolog.Ctx(c.Request.Context())
+		log.Debug().Msg("Auth middleware started")
+
+		authHeader := c.GetHeader("Authorization")
+		log.Debug().Msgf("Authorization header present: %v", authHeader != "")
+
 		var token string
 
 		// Extract token. Check if it's a WebSocket upgrade request first.

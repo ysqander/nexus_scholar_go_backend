@@ -1,12 +1,18 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"os"
+	"os/signal"
 	"runtime/debug"
 	"strings"
+	"syscall"
 	"time"
 
 	"nexus_scholar_go_backend/cmd/api/config"
@@ -106,6 +112,7 @@ func main() {
 		cfg,
 		log,
 	)
+
 	// Initialize GCS service
 	gcsService, err := services.NewGCSService(ctx, log)
 	if err != nil {
@@ -134,10 +141,8 @@ func main() {
 
 	// Use custom recovery middleware
 	r.Use(customRecoveryMiddleware())
-	r.Use(setSessionID())
-	r.Use(loggingMiddleware(log))
 
-	allowedOrigins := os.Getenv("ALLOWED_ORIGINS")
+	allowedOrigins := os.Getenv("")
 	if allowedOrigins == "" {
 		allowedOrigins = "http://localhost:5173" // Default to your local frontend
 	}
@@ -152,6 +157,15 @@ func main() {
 		MaxAge:           12 * time.Hour,
 	}))
 
+	// Global OPTIONS handler
+	r.OPTIONS("/*path", func(c *gin.Context) {
+		c.Header("Access-Control-Allow-Origin", c.GetHeader("Origin"))
+		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization")
+		c.Header("Access-Control-Max-Age", "86400") // 24 hours
+		c.Status(http.StatusOK)
+	})
+
 	// WebSocket upgrader
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:  1024,
@@ -163,6 +177,14 @@ func main() {
 
 	// Create WebSocket handler
 	wsHandler := wsocket.NewHandler(researchChatService, upgrader, cfg.SessionCheckInterval, cfg.SessionMemoryTimeout, log)
+
+	r.Use(loggingMiddleware(log))
+	r.Use(setSessionID())
+	r.Use(func(c *gin.Context) {
+		log.Debug().Msgf("Incoming request: %s %s", c.Request.Method, c.Request.URL.Path)
+		log.Debug().Msgf("Headers: %v", c.Request.Header)
+		c.Next()
+	})
 
 	api.SetupRoutes(r, researchChatService, chatServiceDB, stripeService, cacheManagementService, userService, messageBroker, log)
 	auth.SetupRoutes(r, userService)
@@ -178,10 +200,33 @@ func main() {
 		port = "3000"
 	}
 
-	log.Info().Msgf("Server starting on port %s", port)
-	if err := r.Run(":" + port); err != nil {
-		log.Fatal().Err(err).Msg("Failed to start server")
+	address := fmt.Sprintf("[::]:%s", port)
+	log.Info().Msgf("Server starting on %s", address)
+
+	server := &http.Server{
+		Addr:    address,
+		Handler: r,
 	}
+
+	go func() {
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatal().Err(err).Msg("Failed to start server")
+		}
+	}()
+
+	// Wait for interrupt signal to gracefully shutdown the server
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	log.Info().Msg("Shutting down server...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := server.Shutdown(ctx); err != nil {
+		log.Fatal().Err(err).Msg("Server forced to shutdown")
+	}
+
+	log.Info().Msg("Server exiting")
 }
 
 func checkAndCreateBucket(ctx context.Context, bucketName string, client *storage.Client) error {
@@ -259,18 +304,33 @@ func loggingMiddleware(log zerolog.Logger) gin.HandlerFunc {
 
 func setSessionID() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Check if session ID is in the request (header, query param, or body)
+		// Check if session ID is in the request (header or query param)
 		sessionID := c.GetHeader("X-Session-ID")
 		if sessionID == "" {
 			sessionID = c.Query("session_id")
 		}
-		if sessionID == "" {
-			if c.Request.Method == "POST" {
-				var json struct {
+
+		// If still not found and it's a POST request, check the body
+		if sessionID == "" && c.Request.Method == "POST" {
+			bodyBytes, err := c.GetRawData()
+			if err == nil {
+				// Reset the request body so it can be read again by later handlers
+				c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+				// Try to parse as JSON
+				var jsonBody struct {
 					SessionID string `json:"session_id"`
 				}
-				if c.BindJSON(&json) == nil {
-					sessionID = json.SessionID
+				if json.Unmarshal(bodyBytes, &jsonBody) == nil {
+					sessionID = jsonBody.SessionID
+				}
+
+				// If not found in JSON, check if it's in form data
+				if sessionID == "" {
+					form, err := url.ParseQuery(string(bodyBytes))
+					if err == nil {
+						sessionID = form.Get("session_id")
+					}
 				}
 			}
 		}

@@ -12,8 +12,8 @@ type Config struct {
 
 func NewConfig() *Config {
 	return &Config{
-		CacheExpirationTime:  5 * time.Minute,
-		GracePeriod:          2 * time.Minute,
+		CacheExpirationTime:  20 * time.Minute,
+		GracePeriod:          5 * time.Minute,
 		SessionCheckInterval: 30 * time.Second,
 		CacheCleanupDelay:    1 * time.Minute,
 		SessionMemoryTimeout: 10 * time.Minute,

@@ -75,7 +75,7 @@ func (s *UserService) initializeCacheAllocation(ctx context.Context, userID uuid
 	s.logger.Info().Msgf("Initializing cache allocation for user with ID: %s", userID)
 
 	// Initialize with 2 pro token hours
-	err := s.cacheManagementService.UpdateAllowedCacheUsage(ctx, userID, "pro", 2)
+	err := s.cacheManagementService.UpdateAllowedCacheUsage(ctx, userID, "pro", 1)
 	if err != nil {
 		s.logger.Error().Err(err).Msgf("Failed to initialize pro cache usage for user %s", userID)
 		return fmt.Errorf("failed to initialize pro cache usage: %w", err)

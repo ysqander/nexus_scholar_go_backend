@@ -18,7 +18,7 @@ type GCSService struct {
 }
 
 func NewGCSService(ctx context.Context, logger zerolog.Logger) (*GCSService, error) {
-	client, err := initGCSClient(ctx)
+	client, err := initGCSClient(ctx, logger)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to initialize GCS client")
 		return nil, fmt.Errorf("failed to initialize GCS client: %w", err)
@@ -27,9 +27,10 @@ func NewGCSService(ctx context.Context, logger zerolog.Logger) (*GCSService, err
 	return &GCSService{Client: client, logger: logger}, nil
 }
 
-func initGCSClient(ctx context.Context) (*storage.Client, error) {
-	if credJSON := os.Getenv("GOOGLE_CREDENTIALS_JSON"); credJSON != "" {
-		return storage.NewClient(ctx, option.WithCredentialsJSON([]byte(credJSON)))
+func initGCSClient(ctx context.Context, logger zerolog.Logger) (*storage.Client, error) {
+	if GoogleCredJSON := os.Getenv("GOOGLE_CREDENTIALS_JSON"); GoogleCredJSON != "" {
+		logger.Debug().Msgf("Length of GOOGLE_CREDENTIALS_JSON: %d", len(GoogleCredJSON))
+		return storage.NewClient(ctx, option.WithCredentialsJSON([]byte(GoogleCredJSON)))
 	}
 	GOOGLE_APPLICATION_CREDENTIALS := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
 	return storage.NewClient(ctx, option.WithCredentialsFile(GOOGLE_APPLICATION_CREDENTIALS))

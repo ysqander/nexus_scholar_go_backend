@@ -21,6 +21,7 @@ import (
 	"github.com/google/generative-ai-go/genai"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/stripe/stripe-go/v79"
 	"google.golang.org/api/iterator"
 )
@@ -122,6 +123,21 @@ func privateRoute(c *gin.Context) {
 
 func createResearchSessionHandler(researchChatService *services.ResearchChatService) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Log request details
+		log.Info().Msgf("Request Method: %s", c.Request.Method)
+		log.Info().Msgf("Request Headers: %v", c.Request.Header)
+		log.Info().Msgf("Request Content-Type: %s", c.ContentType())
+
+		// Handle OPTIONS request
+		if c.Request.Method == "OPTIONS" {
+			c.Header("Access-Control-Allow-Origin", c.GetHeader("Origin"))
+			c.Header("Access-Control-Allow-Methods", "POST, OPTIONS")
+			c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			c.Header("Access-Control-Max-Age", "86400")
+			c.Status(http.StatusNoContent)
+			return
+		}
+
 		priceTier := c.PostForm("price_tier")
 		if priceTier != "base" && priceTier != "pro" {
 			errors.HandleError(c, errors.New400Error("Invalid price_tier. Must be 'base' or 'pro'."))
