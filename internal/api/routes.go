@@ -504,17 +504,20 @@ func getCacheUsageHandler(cacheManagementService *services.CacheManagementServic
 		}
 
 		// Get historical chats
-		historicalChatMetrics, err := chatService.GetHistoricalChatMetricsByUserID(userModel.ID)
+		historicalChatMetrics, err := chatService.GetHistoricalChatMetricsByUserID(userModel.ID, log)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to get historical chats")
 			errors.HandleError(c, errors.LogAndReturn500(fmt.Errorf("failed to get historical chats: %v", err)))
 			return
 		}
 
-		// Organize chat history by month and price tier
+		log.Info().Msg("Starting to organize chat history by month and price tier")
+
 		chatHistoryByMonth := make(map[string]map[string][]gin.H)
 
 		for _, chat := range historicalChatMetrics {
+			log.Info().Str("session_id", chat.SessionID).Msg("Processing chat history")
+
 			// Use CreatedAt if TerminationTime is zero
 			chatTime := chat.TerminationTime
 			if chatTime.IsZero() {
@@ -538,7 +541,7 @@ func getCacheUsageHandler(cacheManagementService *services.CacheManagementServic
 			chatHistoryByMonth[monthKey][chat.PriceTier] = append(chatHistoryByMonth[monthKey][chat.PriceTier], chatData)
 		}
 
-		log.Info().Msgf("Base tokens: %f, Pro tokens: %f", baseTokens, proTokens)
+		log.Info().Float64("base_tokens", baseTokens).Float64("pro_tokens", proTokens).Msg("Base and Pro tokens retrieved")
 
 		c.JSON(http.StatusOK, gin.H{
 			"base_net_tokens": baseTokens,

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 	"gorm.io/gorm"
 )
 
@@ -18,7 +19,7 @@ type ChatServiceDB interface {
 	DeleteChatBySessionIDFromDB(sessionID string) error
 	GetMessagesByChatIDFromDB(chatID uint) ([]models.Message, error)
 	UpdateChatMetrics(sessionID string, chatDuration float64, tokenCountUsed int32, priceTier string, tokenHoursUsed float64, terminationTime time.Time) error
-	GetHistoricalChatMetricsByUserID(userID uuid.UUID) ([]models.Chat, error)
+	GetHistoricalChatMetricsByUserID(userID uuid.UUID, log zerolog.Logger) ([]models.Chat, error)
 }
 
 // DefaultChatService implements ChatService
@@ -124,10 +125,16 @@ func (s *DefaultChatService) UpdateChatMetrics(sessionID string, chatDuration fl
 }
 
 // Implement the new method in DefaultChatService
-func (s *DefaultChatService) GetHistoricalChatMetricsByUserID(userID uuid.UUID) ([]models.Chat, error) {
+func (s *DefaultChatService) GetHistoricalChatMetricsByUserID(userID uuid.UUID, log zerolog.Logger) ([]models.Chat, error) {
+	log.Info().Str("userID", userID.String()).Msg("Retrieving historical chat metrics")
 	var chats []models.Chat
 	result := s.db.Where("user_id = ?", userID).
 		Select("session_id, token_count_used, token_hours_used, chat_duration, price_tier, termination_time").
 		Find(&chats)
-	return chats, result.Error
+	if result.Error != nil {
+		log.Error().Err(result.Error).Str("userID", userID.String()).Msg("Failed to retrieve historical chat metrics")
+		return nil, result.Error
+	}
+	log.Info().Str("userID", userID.String()).Int("chatCount", len(chats)).Msg("Successfully retrieved historical chat metrics")
+	return chats, nil
 }
