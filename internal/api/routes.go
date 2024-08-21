@@ -553,5 +553,7 @@ func getCacheUsageHandler(cacheManagementService *services.CacheManagementServic
 				"last_chat_time":  historicalChatMetrics[len(historicalChatMetrics)-1].TerminationTime.Format(time.RFC3339),
 			},
 		})
+
+		log.Info().Msg("JSON response sent")
 	}
 }

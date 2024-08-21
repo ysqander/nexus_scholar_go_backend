@@ -188,6 +188,7 @@ func main() {
 			Msg("Incoming request")
 		c.Next()
 	})
+	r.Use(logResponseStatus())
 
 	api.SetupRoutes(r, researchChatService, chatServiceDB, stripeService, cacheManagementService, userService, messageBroker, log)
 	auth.SetupRoutes(r, userService)
@@ -338,10 +339,24 @@ func globalErrorHandler() gin.HandlerFunc {
 				log.Error().
 					Interface("error", err).
 					Str("stack", string(debug.Stack())).
+					Str("path", c.Request.URL.Path).
+					Str("method", c.Request.Method).
 					Msg("Unhandled panic occurred")
 				c.AbortWithStatus(http.StatusInternalServerError)
 			}
 		}()
 		c.Next()
+	}
+}
+
+func logResponseStatus() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Next()
+
+		log.Info().
+			Int("status", c.Writer.Status()).
+			Str("path", c.Request.URL.Path).
+			Str("method", c.Request.Method).
+			Msg("Response status")
 	}
 }
