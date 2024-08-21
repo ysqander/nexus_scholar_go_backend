@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -209,30 +208,38 @@ func main() {
 		Handler: r,
 	}
 
-	listener, err := net.Listen("tcp", address)
-	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to create listener")
-	}
+	// Create a channel to signal server errors
+	serverErrors := make(chan error, 1)
 
+	// Start the server in a goroutine
 	go func() {
-		if err := server.Serve(listener); err != nil && err != http.ErrServerClosed {
-			log.Fatal().Err(err).Msg("Failed to start server")
+		log.Info().Msgf("Starting server on %s", address)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			serverErrors <- err
 		}
 	}()
 
-	// Wait for interrupt signal to gracefully shutdown the server
+	// Wait for interrupt signal or server error
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-	log.Info().Msg("Shutting down server...")
 
+	select {
+	case err := <-serverErrors:
+		log.Fatal().Err(err).Msg("Server error occurred")
+	case <-quit:
+		log.Info().Msg("Shutdown signal received")
+	}
+
+	// Create a timeout context for shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+
+	// Attempt graceful shutdown
 	if err := server.Shutdown(ctx); err != nil {
 		log.Fatal().Err(err).Msg("Server forced to shutdown")
 	}
 
-	log.Info().Msg("Server exiting")
+	log.Info().Msg("Server exited gracefully")
 }
 
 func checkAndCreateBucket(ctx context.Context, bucketName string, client *storage.Client) error {
