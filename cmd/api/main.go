@@ -9,10 +9,8 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/signal"
 	"runtime/debug"
 	"strings"
-	"syscall"
 	"time"
 
 	"nexus_scholar_go_backend/cmd/api/config"
@@ -208,38 +206,10 @@ func main() {
 		Handler: r,
 	}
 
-	// Create a channel to signal server errors
-	serverErrors := make(chan error, 1)
-
-	// Start the server in a goroutine
-	go func() {
-		log.Info().Msgf("Starting server on %s", address)
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			serverErrors <- err
-		}
-	}()
-
-	// Wait for interrupt signal or server error
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-
-	select {
-	case err := <-serverErrors:
+	log.Info().Msgf("Starting server on %s", address)
+	if err := server.ListenAndServe(); err != nil {
 		log.Fatal().Err(err).Msg("Server error occurred")
-	case <-quit:
-		log.Info().Msg("Shutdown signal received")
 	}
-
-	// Create a timeout context for shutdown
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	// Attempt graceful shutdown
-	if err := server.Shutdown(ctx); err != nil {
-		log.Fatal().Err(err).Msg("Server forced to shutdown")
-	}
-
-	log.Info().Msg("Server exited gracefully")
 }
 
 func checkAndCreateBucket(ctx context.Context, bucketName string, client *storage.Client) error {

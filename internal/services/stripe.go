@@ -34,12 +34,6 @@ func (s *StripeService) CreateCheckoutSession(userID string, priceID string, tok
 		return nil, fmt.Errorf("FRONTEND_URL is not set")
 	}
 
-	webhookEndpoint := os.Getenv("STRIPE_WEBHOOK_ENDPOINT")
-	if webhookEndpoint == "" {
-		s.logger.Error().Msg("STRIPE_WEBHOOK_ENDPOINT is not set")
-		return nil, fmt.Errorf("STRIPE_WEBHOOK_ENDPOINT is not set")
-	}
-
 	params := &stripe.CheckoutSessionParams{
 		PaymentMethodTypes: stripe.StringSlice([]string{
 			"card",
