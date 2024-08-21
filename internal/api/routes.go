@@ -38,7 +38,7 @@ func SetupRoutes(r *gin.Engine, researchChatService *services.ResearchChatServic
 		api.POST("/chat/terminate", auth.AuthMiddleware(userService), terminateChatSessionHandler(researchChatService))
 		api.GET("/chat/history", auth.AuthMiddleware(userService), getChatHistoryHandler(researchChatService))
 		api.POST("/purchase-cache-volume", auth.AuthMiddleware(userService), purchaseCacheVolume(stripeService))
-		api.GET("/cache-usage", auth.AuthMiddleware(userService), getCacheUsageHandler(cacheManagementService, chatService))
+		api.GET("/cache-usage", auth.AuthMiddleware(userService), getCacheUsageHandler(cacheManagementService, chatService, log))
 		api.POST("/stripe/webhook", stripeWebhookHandler(stripeService, cacheManagementService, messageBroker))
 		api.POST("/stripe/webhook_clitest", stripeWebhookHandler_clitest(stripeService, cacheManagementService, messageBroker))
 	}
@@ -480,22 +480,25 @@ func stripeWebhookHandler_clitest(stripeService *services.StripeService, cacheMa
 	}
 }
 
-func getCacheUsageHandler(cacheManagementService *services.CacheManagementService, chatService services.ChatServiceDB) gin.HandlerFunc {
+func getCacheUsageHandler(cacheManagementService *services.CacheManagementService, chatService services.ChatServiceDB, log zerolog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user, exists := c.Get("user")
 		if !exists {
+			log.Error().Msg("User not found")
 			errors.HandleError(c, errors.New401Error())
 			return
 		}
 
 		userModel, ok := user.(*models.User)
 		if !ok {
+			log.Error().Msg("Failed to cast user to *models.User")
 			errors.HandleError(c, errors.LogAndReturn500(fmt.Errorf("failed to cast user to *models.User")))
 			return
 		}
 
 		baseTokens, proTokens, err := cacheManagementService.GetNetTokensByTier(c.Request.Context(), userModel.ID)
 		if err != nil {
+			log.Error().Err(err).Msg("Failed to get net tokens")
 			errors.HandleError(c, errors.LogAndReturn500(fmt.Errorf("failed to get net tokens: %v", err)))
 			return
 		}
@@ -503,6 +506,7 @@ func getCacheUsageHandler(cacheManagementService *services.CacheManagementServic
 		// Get historical chats
 		historicalChatMetrics, err := chatService.GetHistoricalChatMetricsByUserID(userModel.ID)
 		if err != nil {
+			log.Error().Err(err).Msg("Failed to get historical chats")
 			errors.HandleError(c, errors.LogAndReturn500(fmt.Errorf("failed to get historical chats: %v", err)))
 			return
 		}
@@ -533,6 +537,8 @@ func getCacheUsageHandler(cacheManagementService *services.CacheManagementServic
 
 			chatHistoryByMonth[monthKey][chat.PriceTier] = append(chatHistoryByMonth[monthKey][chat.PriceTier], chatData)
 		}
+
+		log.Info().Msgf("Base tokens: %f, Pro tokens: %f", baseTokens, proTokens)
 
 		c.JSON(http.StatusOK, gin.H{
 			"base_net_tokens": baseTokens,
