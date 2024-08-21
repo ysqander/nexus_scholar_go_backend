@@ -157,15 +157,6 @@ func main() {
 		MaxAge:           12 * time.Hour,
 	}))
 
-	// Global OPTIONS handler
-	r.OPTIONS("/*path", func(c *gin.Context) {
-		c.Header("Access-Control-Allow-Origin", c.GetHeader("Origin"))
-		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization")
-		c.Header("Access-Control-Max-Age", "86400") // 24 hours
-		c.Status(http.StatusOK)
-	})
-
 	// WebSocket upgrader
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:  1024,

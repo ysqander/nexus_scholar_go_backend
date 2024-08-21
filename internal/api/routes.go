@@ -128,16 +128,6 @@ func createResearchSessionHandler(researchChatService *services.ResearchChatServ
 		log.Info().Msgf("Request Headers: %v", c.Request.Header)
 		log.Info().Msgf("Request Content-Type: %s", c.ContentType())
 
-		// Handle OPTIONS request
-		if c.Request.Method == "OPTIONS" {
-			c.Header("Access-Control-Allow-Origin", c.GetHeader("Origin"))
-			c.Header("Access-Control-Allow-Methods", "POST, OPTIONS")
-			c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
-			c.Header("Access-Control-Max-Age", "86400")
-			c.Status(http.StatusNoContent)
-			return
-		}
-
 		priceTier := c.PostForm("price_tier")
 		if priceTier != "base" && priceTier != "pro" {
 			errors.HandleError(c, errors.New400Error("Invalid price_tier. Must be 'base' or 'pro'."))
