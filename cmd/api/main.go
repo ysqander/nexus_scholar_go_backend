@@ -140,7 +140,7 @@ func main() {
 	// Use custom recovery middleware
 	r.Use(customRecoveryMiddleware())
 
-	allowedOrigins := os.Getenv("")
+	allowedOrigins := os.Getenv("ALLOWED_ORIGINS")
 	if allowedOrigins == "" {
 		allowedOrigins = "http://localhost:5173" // Default to your local frontend
 	}
