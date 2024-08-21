@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -200,7 +201,7 @@ func main() {
 		port = "3000"
 	}
 
-	address := fmt.Sprintf("[::]:%s", port)
+	address := fmt.Sprintf(":%s", port)
 	log.Info().Msgf("Server starting on %s", address)
 
 	server := &http.Server{
@@ -208,8 +209,13 @@ func main() {
 		Handler: r,
 	}
 
+	listener, err := net.Listen("tcp", address)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to create listener")
+	}
+
 	go func() {
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := server.Serve(listener); err != nil && err != http.ErrServerClosed {
 			log.Fatal().Err(err).Msg("Failed to start server")
 		}
 	}()
