@@ -25,6 +25,7 @@ import (
 	"cloud.google.com/go/storage"
 	"github.com/gorilla/websocket"
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -137,6 +138,7 @@ func main() {
 	// Initialize Gin router
 	r := gin.New()
 
+	r.Use(globalErrorHandler())
 	// Use custom recovery middleware
 	r.Use(customRecoveryMiddleware())
 
@@ -179,8 +181,11 @@ func main() {
 	r.Use(loggingMiddleware(log))
 	r.Use(setSessionID())
 	r.Use(func(c *gin.Context) {
-		log.Debug().Msgf("Incoming request: %s %s", c.Request.Method, c.Request.URL.Path)
-		log.Debug().Msgf("Headers: %v", c.Request.Header)
+		log.Info().
+			Str("method", c.Request.Method).
+			Str("path", c.Request.URL.Path).
+			Str("client_ip", c.ClientIP()).
+			Msg("Incoming request")
 		c.Next()
 	})
 
@@ -322,6 +327,21 @@ func setSessionID() gin.HandlerFunc {
 			c.Set("sessionID", sessionID)
 		}
 
+		c.Next()
+	}
+}
+
+func globalErrorHandler() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		defer func() {
+			if err := recover(); err != nil {
+				log.Error().
+					Interface("error", err).
+					Str("stack", string(debug.Stack())).
+					Msg("Unhandled panic occurred")
+				c.AbortWithStatus(http.StatusInternalServerError)
+			}
+		}()
 		c.Next()
 	}
 }
