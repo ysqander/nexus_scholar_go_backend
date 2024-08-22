@@ -538,9 +538,19 @@ func getCacheUsageHandler(cacheManagementService *services.CacheManagementServic
 			"pro_net_tokens":  proTokens,
 			"chat_history":    chatHistoryByMonth,
 			"debug_info": gin.H{
-				"chat_count":      len(historicalChatMetrics),
-				"first_chat_time": historicalChatMetrics[0].TerminationTime.Format(time.RFC3339),
-				"last_chat_time":  historicalChatMetrics[len(historicalChatMetrics)-1].TerminationTime.Format(time.RFC3339),
+				"chat_count": len(historicalChatMetrics),
+				"first_chat_time": func() string {
+					if len(historicalChatMetrics) > 0 {
+						return historicalChatMetrics[0].TerminationTime.Format(time.RFC3339)
+					}
+					return ""
+				}(),
+				"last_chat_time": func() string {
+					if len(historicalChatMetrics) > 0 {
+						return historicalChatMetrics[len(historicalChatMetrics)-1].TerminationTime.Format(time.RFC3339)
+					}
+					return ""
+				}(),
 			},
 		})
 
