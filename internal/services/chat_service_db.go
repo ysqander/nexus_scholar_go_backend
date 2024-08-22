@@ -132,6 +132,10 @@ func (s *DefaultChatService) GetHistoricalChatMetricsByUserID(userID uuid.UUID, 
 		Select("session_id, token_count_used, token_hours_used, chat_duration, price_tier, termination_time").
 		Find(&chats)
 	if result.Error != nil {
+		if result.Error == gorm.ErrRecordNotFound {
+			log.Info().Str("userID", userID.String()).Msg("No historical chat metrics found")
+			return []models.Chat{}, nil // Return an empty slice instead of an error
+		}
 		log.Error().Err(result.Error).Str("userID", userID.String()).Msg("Failed to retrieve historical chat metrics")
 		return nil, result.Error
 	}
