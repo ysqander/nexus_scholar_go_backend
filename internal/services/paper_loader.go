@@ -4,29 +4,26 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"nexus_scholar_go_backend/internal/database"
-	"nexus_scholar_go_backend/internal/errors"
 	"nexus_scholar_go_backend/internal/models"
+	"nexus_scholar_go_backend/internal/utils/bibtexparser"
+	"nexus_scholar_go_backend/internal/utils/errors"
+	"os"
 	"regexp"
 	"strings"
 
 	"encoding/xml"
 
-	"github.com/nickng/bibtex"
 	"github.com/rs/zerolog"
 )
 
 type PaperLoader struct {
 	logger zerolog.Logger
 }
-
-type simpleBibString string
-
-func (s simpleBibString) String() string    { return string(s) }
-func (s simpleBibString) RawString() string { return string(s) }
 
 func NewPaperLoader(logger zerolog.Logger) *PaperLoader {
 	return &PaperLoader{logger: logger}
@@ -80,7 +77,7 @@ func (pl *PaperLoader) ProcessPaper(arxivID string) (map[string]interface{}, err
 		pl.logger.Warn().Err(err).Msgf("Failed to extract bib files for paper with ID: %s, will attempt to use .bbl file", arxivID)
 	}
 
-	var references []bibtex.BibEntry
+	var references []bibtexparser.BibEntry
 	if len(bibFiles) > 0 {
 		references, err = pl.parseBibFiles(bibFiles)
 		if err != nil {
@@ -101,32 +98,28 @@ func (pl *PaperLoader) ProcessPaper(arxivID string) (map[string]interface{}, err
 		}
 	}
 
-	// Convert []bibtex.BibEntry to []*bibtex.BibEntry
-	var refPointers []*bibtex.BibEntry
-	for i := range references {
-		refPointers = append(refPointers, &references[i])
-	}
-
-	formattedReferences := pl.formatReferences(refPointers)
+	pl.logger.Debug().Msgf("First 5 references before formatting: %+v", references[:min(5, len(references))])
+	formattedReferences := pl.formatReferences(references)
+	pl.logger.Debug().Msgf("First 5 formatted references: %+v", formattedReferences[:min(5, len(formattedReferences))])
 
 	// Now create and save references to the database
 	for i, formattedRef := range formattedReferences {
 		dbRef := models.PaperReference{
-			ArxivID:            formattedRef["arxiv_id"].(string),
-			ParentArxivID:      arxivID,
-			Type:               references[i].Type,
-			Key:                references[i].CiteName,
-			Title:              pl.getField(references[i], "title"),
-			Author:             pl.getField(references[i], "author"),
-			Year:               pl.getField(references[i], "year"),
-			Journal:            pl.getField(references[i], "journal"),
-			Volume:             pl.getField(references[i], "volume"),
-			Number:             pl.getField(references[i], "number"),
-			Pages:              pl.getField(references[i], "pages"),
-			Publisher:          pl.getField(references[i], "publisher"),
-			DOI:                pl.getField(references[i], "doi"),
-			URL:                pl.getField(references[i], "url"),
-			RawBibEntry:        references[i].String(),
+			ArxivID:       formattedRef["arxiv_id"].(string),
+			ParentArxivID: arxivID,
+			Type:          references[i].Type,
+			Key:           references[i].CiteName,
+			Title:         references[i].Fields["title"],
+			Author:        references[i].Fields["author"],
+			Year:          references[i].Fields["year"],
+			Journal:       references[i].Fields["journal"],
+			Volume:        references[i].Fields["volume"],
+			Number:        references[i].Fields["number"],
+			Pages:         references[i].Fields["pages"],
+			Publisher:     references[i].Fields["publisher"],
+			DOI:           references[i].Fields["doi"],
+			URL:           references[i].Fields["url"],
+			// RawBibEntry:        bibtexparser.FormatBibEntry(references[i]),
 			FormattedText:      formattedRef["text"].(string),
 			IsAvailableOnArxiv: formattedRef["is_available_on_arxiv"].(bool),
 		}
@@ -192,13 +185,6 @@ func (pl *PaperLoader) ProcessPaper(arxivID string) (map[string]interface{}, err
 	}
 
 	return result, nil
-}
-
-func (pl *PaperLoader) getField(entry bibtex.BibEntry, key string) string {
-	if field, ok := entry.Fields[key]; ok && field != nil {
-		return field.String()
-	}
-	return ""
 }
 
 func (pl *PaperLoader) downloadPaper(arxivID string) ([]byte, error) {
@@ -267,48 +253,22 @@ func (pl *PaperLoader) extractBibFiles(content []byte) ([]string, error) {
 	return bibFiles, nil
 }
 
-func (pl *PaperLoader) parseBibFiles(bibFiles []string) ([]bibtex.BibEntry, error) {
+func (pl *PaperLoader) parseBibFiles(bibFiles []string) ([]bibtexparser.BibEntry, error) {
 	pl.logger.Info().Msg("Starting to parse .bib files")
 
-	var allReferences []bibtex.BibEntry
+	var allReferences []bibtexparser.BibEntry
 	for i, content := range bibFiles {
 		pl.logger.Debug().Msgf("Parsing .bib file %d of %d", i+1, len(bibFiles))
+		pl.logger.Debug().Msgf("Content of .bib file %d: %s", i+1, content[:min(500, len(content))]) // Log the first 500 characters of the content
 
-		// Attempt to parse the file
-		bib, err := pl.safeParse(content)
+		entries, err := bibtexparser.ParseBibTeX(content)
 		if err != nil {
-			pl.logger.Warn().Err(err).Msgf("Failed to parse .bib file %d, attempting to clean and salvage", i+1)
-
-			// Attempt to clean and salvage entries
-			cleanedContent, cleanErr := pl.cleanBibContent(content)
-			if cleanErr != nil {
-				pl.logger.Error().Err(cleanErr).Msgf("Failed to clean .bib file %d", i+1)
-				continue
-			}
-
-			// Try parsing again with cleaned content
-			bib, err = pl.safeParse(cleanedContent)
-			if err != nil {
-				pl.logger.Error().Err(err).Msgf("Failed to parse cleaned .bib file %d", i+1)
-				// If parsing still fails, attempt to salvage entries manually
-				entries, salvageErr := pl.salvageBibEntries(cleanedContent)
-				if salvageErr != nil {
-					pl.logger.Error().Err(salvageErr).Msgf("Failed to salvage entries from .bib file %d", i+1)
-					continue
-				}
-				bib = &bibtex.BibTex{Entries: entries}
-			}
+			pl.logger.Error().Err(err).Msgf("Failed to parse .bib file %d", i+1)
+			return nil, fmt.Errorf("failed to parse .bib file %d: %v", i+1, err)
 		}
 
-		if bib != nil {
-			pl.logger.Debug().Msgf("Successfully parsed .bib file %d. Found %d entries", i+1, len(bib.Entries))
-
-			for _, entry := range bib.Entries {
-				if entry != nil {
-					allReferences = append(allReferences, *entry)
-				}
-			}
-		}
+		pl.logger.Debug().Msgf("Successfully parsed .bib file %d. Found %d entries", i+1, len(entries))
+		allReferences = append(allReferences, entries...)
 	}
 
 	pl.logger.Info().Msgf("Finished parsing all .bib files. Total references found: %d", len(allReferences))
@@ -319,114 +279,6 @@ func (pl *PaperLoader) parseBibFiles(bibFiles []string) ([]bibtex.BibEntry, erro
 	}
 
 	return allReferences, nil
-}
-
-func (pl *PaperLoader) safeParse(content string) (*bibtex.BibTex, error) {
-	var bib *bibtex.BibTex
-	var err error
-
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-				err = fmt.Errorf("panic during parsing: %v", r)
-				pl.logger.Error().Msgf("Panic occurred during parsing: %v", r)
-			}
-		}()
-
-		bib, err = bibtex.Parse(strings.NewReader(content))
-		if err != nil {
-			pl.logger.Error().Err(err).Msg("Error occurred during BibTeX parsing")
-		}
-	}()
-
-	return bib, err
-}
-
-func (pl *PaperLoader) cleanBibContent(content string) (string, error) {
-	lines := strings.Split(content, "\n")
-	var cleanedLines []string
-	for _, line := range lines {
-		// Handle problematic month entries
-		if strings.Contains(line, "month") {
-			monthPattern := `\bmonth\s*=\s*(\w+)`
-			re := regexp.MustCompile(monthPattern)
-			line = re.ReplaceAllStringFunc(line, func(match string) string {
-				parts := re.FindStringSubmatch(match)
-				if len(parts) > 1 {
-					month := strings.ToLower(parts[1])
-					// Convert month names to numbers
-					monthMap := map[string]string{
-						"jan": "1", "feb": "2", "mar": "3", "apr": "4", "may": "5", "jun": "6",
-						"jul": "7", "aug": "8", "sep": "9", "oct": "10", "nov": "11", "dec": "12",
-					}
-					if num, ok := monthMap[month[:3]]; ok {
-						return fmt.Sprintf("month = {%s}", num)
-					}
-					return fmt.Sprintf("month = {%s}", month)
-				}
-				return match
-			})
-		}
-
-		// Handle other potential issues (e.g., unquoted strings)
-		line = strings.ReplaceAll(line, "= {", "= {{")
-		line = strings.ReplaceAll(line, "},", "}},")
-
-		cleanedLines = append(cleanedLines, line)
-	}
-	return strings.Join(cleanedLines, "\n"), nil
-}
-
-func (pl *PaperLoader) salvageBibEntries(content string) ([]*bibtex.BibEntry, error) {
-	var entries []*bibtex.BibEntry
-	lines := strings.Split(content, "\n")
-	var currentEntry *bibtex.BibEntry
-	var currentField string
-	var braceCount int
-
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "@") {
-			// Start of a new entry
-			if currentEntry != nil {
-				entries = append(entries, currentEntry)
-			}
-			currentEntry = &bibtex.BibEntry{Fields: make(map[string]bibtex.BibString)}
-			parts := strings.SplitN(line, "{", 2)
-			if len(parts) > 1 {
-				currentEntry.Type = strings.TrimPrefix(parts[0], "@")
-				currentEntry.CiteName = strings.TrimSuffix(parts[1], ",")
-			}
-			braceCount = 1
-		} else if currentEntry != nil {
-			if strings.Contains(line, "=") && braceCount == 1 {
-				// New field
-				parts := strings.SplitN(line, "=", 2)
-				currentField = strings.TrimSpace(parts[0])
-				value := strings.TrimSpace(parts[1])
-				if strings.HasPrefix(value, "{") {
-					braceCount += strings.Count(value, "{") - strings.Count(value, "}")
-				}
-				currentEntry.Fields[currentField] = simpleBibString(value)
-			} else if line == "}" && braceCount == 1 {
-				// End of entry
-				entries = append(entries, currentEntry)
-				currentEntry = nil
-				currentField = ""
-			} else if currentField != "" {
-				// Continuation of previous field
-				braceCount += strings.Count(line, "{") - strings.Count(line, "}")
-				currentValue := currentEntry.Fields[currentField].String()
-				currentEntry.Fields[currentField] = simpleBibString(currentValue + " " + line)
-			}
-		}
-	}
-
-	if currentEntry != nil {
-		entries = append(entries, currentEntry)
-	}
-
-	return entries, nil
 }
 
 // Methods for parsing .bbl file (second choice - less detailed)
@@ -460,11 +312,11 @@ func (pl *PaperLoader) extractBBLFile(content []byte) (string, error) {
 	return "", fmt.Errorf("no .bbl file found in the archive")
 }
 
-func (pl *PaperLoader) parseBBLFile(content string) ([]bibtex.BibEntry, error) {
-	var entries []bibtex.BibEntry
+func (pl *PaperLoader) parseBBLFile(content string) ([]bibtexparser.BibEntry, error) {
+	var entries []bibtexparser.BibEntry
 	lines := strings.Split(content, "\n")
 
-	var currentEntry bibtex.BibEntry
+	var currentEntry *bibtexparser.BibEntry
 	var authorLines []string
 	var inEntry bool
 	var inAuthor bool
@@ -474,9 +326,9 @@ func (pl *PaperLoader) parseBBLFile(content string) ([]bibtex.BibEntry, error) {
 
 		if strings.HasPrefix(line, "\\bibitem") {
 			if inEntry {
-				entries = append(entries, currentEntry)
+				entries = append(entries, *currentEntry)
 			}
-			currentEntry = bibtex.BibEntry{Fields: make(map[string]bibtex.BibString)}
+			currentEntry = &bibtexparser.BibEntry{Fields: make(map[string]string)}
 			currentEntry.CiteName = strings.Trim(strings.TrimPrefix(line, "\\bibitem"), "{}")
 			inEntry = true
 			inAuthor = true
@@ -487,7 +339,7 @@ func (pl *PaperLoader) parseBBLFile(content string) ([]bibtex.BibEntry, error) {
 		if inEntry {
 			if strings.HasPrefix(line, "\\newblock") {
 				if inAuthor {
-					currentEntry.Fields["author"] = simpleBibString(strings.Join(authorLines, " "))
+					currentEntry.Fields["author"] = strings.Join(authorLines, " ")
 					inAuthor = false
 				}
 
@@ -496,15 +348,15 @@ func (pl *PaperLoader) parseBBLFile(content string) ([]bibtex.BibEntry, error) {
 				if match := regexp.MustCompile(`\\em\s*(.*?)\s*`).FindStringSubmatch(line); len(match) > 1 {
 					emContent := strings.Trim(match[1], "{},")
 					if strings.Contains(emContent, "arXiv") {
-						currentEntry.Fields["journal"] = simpleBibString(emContent)
+						currentEntry.Fields["journal"] = emContent
 						if arxivMatch := regexp.MustCompile(`arXiv:(\d{4}\.\d{4,5})`).FindStringSubmatch(emContent); len(arxivMatch) > 1 {
-							currentEntry.Fields["arxiv_id"] = simpleBibString(arxivMatch[0]) //[0] to get ful lstring arxiv:2345.2093, important for later parsing
+							currentEntry.Fields["arxiv_id"] = arxivMatch[0] //[0] to get ful lstring arxiv:2345.2093, important for later parsing
 						}
 					} else {
-						currentEntry.Fields["journal"] = simpleBibString(emContent)
+						currentEntry.Fields["journal"] = emContent
 					}
 				} else if _, hasTitle := currentEntry.Fields["title"]; !hasTitle {
-					currentEntry.Fields["title"] = simpleBibString(strings.Trim(line, "."))
+					currentEntry.Fields["title"] = strings.Trim(line, ".")
 				}
 			} else if inAuthor {
 				authorLines = append(authorLines, line)
@@ -512,27 +364,27 @@ func (pl *PaperLoader) parseBBLFile(content string) ([]bibtex.BibEntry, error) {
 
 			// Extract other details
 			if year := regexp.MustCompile(`\b(\d{4})\b`).FindString(line); year != "" {
-				currentEntry.Fields["year"] = simpleBibString(year)
+				currentEntry.Fields["year"] = year
 			}
 			if pages := regexp.MustCompile(`pages?\s*(\d+--?\d*)`).FindStringSubmatch(line); len(pages) > 1 {
-				currentEntry.Fields["pages"] = simpleBibString(pages[1])
+				currentEntry.Fields["pages"] = pages[1]
 			}
 			if volNum := regexp.MustCompile(`(\d+)\s*\((\d+)\)`).FindStringSubmatch(line); len(volNum) > 2 {
-				currentEntry.Fields["volume"] = simpleBibString(volNum[1])
-				currentEntry.Fields["number"] = simpleBibString(volNum[2])
+				currentEntry.Fields["volume"] = volNum[1]
+				currentEntry.Fields["number"] = volNum[2]
 			}
 			if publisher := regexp.MustCompile(`([A-Z][a-z]+ (?:Press|Publications|Publishing|University|Inc\.))`).FindString(line); publisher != "" {
-				currentEntry.Fields["publisher"] = simpleBibString(publisher)
+				currentEntry.Fields["publisher"] = publisher
 			}
 			if doi := regexp.MustCompile(`DOI:\s*([\w/.]+)`).FindStringSubmatch(line); len(doi) > 1 {
-				currentEntry.Fields["doi"] = simpleBibString(doi[1])
+				currentEntry.Fields["doi"] = doi[1]
 			}
 			if url := regexp.MustCompile(`\\url\{(.*?)\}`).FindStringSubmatch(line); len(url) > 1 {
-				currentEntry.Fields["url"] = simpleBibString(url[1])
+				currentEntry.Fields["url"] = url[1]
 			}
 			if _, hasArxivID := currentEntry.Fields["arxiv_id"]; !hasArxivID {
 				if arxivID := regexp.MustCompile(`arXiv:(\d{4}\.\d{4,5})`).FindStringSubmatch(line); len(arxivID) > 1 {
-					currentEntry.Fields["arxiv_id"] = simpleBibString(arxivID[0]) // [0] to get ful lstring arxiv:2345.2093, important for later parsing
+					currentEntry.Fields["arxiv_id"] = arxivID[0] // [0] to get ful lstring arxiv:2345.2093, important for later parsing
 				}
 			}
 		}
@@ -540,7 +392,7 @@ func (pl *PaperLoader) parseBBLFile(content string) ([]bibtex.BibEntry, error) {
 		// Check if this is the last line or if the next line starts a new entry
 		if i == len(lines)-1 || strings.HasPrefix(lines[i+1], "\\bibitem") {
 			if inEntry {
-				entries = append(entries, currentEntry)
+				entries = append(entries, *currentEntry)
 				inEntry = false
 			}
 		}
@@ -553,19 +405,35 @@ func (pl *PaperLoader) parseBBLFile(content string) ([]bibtex.BibEntry, error) {
 	return entries, nil
 }
 
-func (pl *PaperLoader) formatReferences(references []*bibtex.BibEntry) []map[string]interface{} {
+func (pl *PaperLoader) formatReferences(references []bibtexparser.BibEntry) []map[string]interface{} {
 	pl.logger.Info().Msg("Formatting references")
+	for i, ref := range references {
+		if i < 5 {
+			pl.logger.Info().Msgf("Reference %d: %+v", i+1, ref)
+		} else {
+			break
+		}
+	}
 
 	var formattedReferences []map[string]interface{}
-	for _, ref := range references {
-		formattedRef := pl.formatReference(ref)
+	for i, ref := range references {
+		formattedRef := pl.formatReference(&ref)
 		detectedArxivID := pl.detectArxivID(formattedRef)
-		formattedReferences = append(formattedReferences, map[string]interface{}{
+		formattedReference := map[string]interface{}{
 			"text":                  formattedRef,
 			"arxiv_id":              detectedArxivID,
 			"is_available_on_arxiv": detectedArxivID != "",
-		})
+		}
+		formattedReferences = append(formattedReferences, formattedReference)
+
+		// Debug logging for a sample of 5 entries
+		if i < 5 {
+			pl.logger.Debug().Msgf("Sample reference %d:", i+1)
+			pl.logger.Debug().Msgf("  Original: %+v", ref)
+			pl.logger.Debug().Msgf("  Formatted: %+v", formattedReference)
+		}
 	}
+	pl.logger.Info().Msgf("Total formatted references: %d", len(formattedReferences))
 	return formattedReferences
 }
 
@@ -584,12 +452,12 @@ func (pl *PaperLoader) formatExistingReferences(references []models.PaperReferen
 	return formattedReferences
 }
 
-func (pl *PaperLoader) formatReference(entry *bibtex.BibEntry) string {
+func (pl *PaperLoader) formatReference(entry *bibtexparser.BibEntry) string {
 	pl.logger.Info().Msg("Formatting reference")
 
 	getField := func(key string, defaultValue string) string {
-		if field, ok := entry.Fields[key]; ok && field != nil {
-			return field.String()
+		if field, ok := entry.Fields[key]; ok {
+			return field
 		}
 		return defaultValue
 	}
@@ -601,9 +469,9 @@ func (pl *PaperLoader) formatReference(entry *bibtex.BibEntry) string {
 	if journal == "" {
 		journal = getField("booktitle", "")
 	}
-	arxivID := getField("arxiv_id", "")
+	arxivID := getField("eprint", "")
 	if arxivID != "" {
-		return fmt.Sprintf("%s. (%s). %s. %s [%s]", authors, year, title, journal, arxivID)
+		return fmt.Sprintf("%s. (%s). %s. %s [arXiv:%s]", authors, year, title, journal, arxivID)
 	}
 
 	return fmt.Sprintf("%s. (%s). %s. %s", authors, year, title, journal)
@@ -707,4 +575,42 @@ func (pl *PaperLoader) GetPaperByArxivID(arxivID string) (*models.Paper, error) 
 		return nil, result.Error
 	}
 	return &paper, nil
+}
+
+// TestBibParsing downloads and parses bib files for a given arXiv ID
+func (pl *PaperLoader) TestBibParsing(arxivID string) error {
+	// Download the paper source
+	sourceContent, err := pl.downloadPaper(arxivID)
+	if err != nil {
+		return fmt.Errorf("failed to download paper: %v", err)
+	}
+
+	// Extract bib files
+	bibFiles, err := pl.extractBibFiles(sourceContent)
+	if err != nil {
+		return fmt.Errorf("failed to extract bib files: %v", err)
+	}
+
+	// Parse bib files
+	references, err := pl.parseBibFiles(bibFiles)
+	if err != nil {
+		return fmt.Errorf("failed to parse bib files: %v", err)
+	}
+
+	// Save output to a file
+	outputFile := fmt.Sprintf("%s_parsed_references.json", arxivID)
+	file, err := os.Create(outputFile)
+	if err != nil {
+		return fmt.Errorf("failed to create output file: %v", err)
+	}
+	defer file.Close()
+
+	encoder := json.NewEncoder(file)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(references); err != nil {
+		return fmt.Errorf("failed to write references to file: %v", err)
+	}
+
+	pl.logger.Info().Msgf("Parsed references saved to %s", outputFile)
+	return nil
 }

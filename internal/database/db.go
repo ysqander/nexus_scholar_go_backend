@@ -2,12 +2,15 @@ package database
 
 import (
 	"fmt"
+	"log"
 	"os"
+	"time"
 
 	"nexus_scholar_go_backend/internal/models"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 var DB *gorm.DB
@@ -21,9 +24,20 @@ func InitDB() error {
 		os.Getenv("DB_NAME"),
 		os.Getenv("DB_PORT"),
 	)
+	newLogger := logger.New(
+		log.New(os.Stdout, "\r\n", log.LstdFlags),
+		logger.Config{
+			SlowThreshold:             time.Second,
+			LogLevel:                  logger.Warn,
+			IgnoreRecordNotFoundError: true,
+			Colorful:                  false,
+		},
+	)
 
 	var err error
-	DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{
+		Logger: newLogger,
+	})
 	if err != nil {
 		return fmt.Errorf("failed to connect to database: %w", err)
 	}

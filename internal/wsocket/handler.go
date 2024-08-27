@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"nexus_scholar_go_backend/internal/broker"
 	"nexus_scholar_go_backend/internal/models"
 	"nexus_scholar_go_backend/internal/services"
+	"nexus_scholar_go_backend/internal/utils/broker"
 
 	"github.com/google/generative-ai-go/genai"
 	"github.com/gorilla/websocket"

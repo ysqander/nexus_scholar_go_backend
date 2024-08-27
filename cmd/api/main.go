@@ -15,11 +15,11 @@ import (
 
 	"nexus_scholar_go_backend/cmd/api/config"
 	"nexus_scholar_go_backend/internal/api"
-	"nexus_scholar_go_backend/internal/auth"
-	"nexus_scholar_go_backend/internal/broker"
 	"nexus_scholar_go_backend/internal/database"
 	"nexus_scholar_go_backend/internal/models"
 	"nexus_scholar_go_backend/internal/services"
+	"nexus_scholar_go_backend/internal/utils/auth"
+	"nexus_scholar_go_backend/internal/utils/broker"
 	"nexus_scholar_go_backend/internal/wsocket"
 
 	"cloud.google.com/go/storage"

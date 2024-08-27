@@ -11,11 +11,11 @@ import (
 	"strconv"
 	"time"
 
-	"nexus_scholar_go_backend/internal/auth"
-	"nexus_scholar_go_backend/internal/broker"
-	"nexus_scholar_go_backend/internal/errors"
 	"nexus_scholar_go_backend/internal/models"
 	"nexus_scholar_go_backend/internal/services"
+	"nexus_scholar_go_backend/internal/utils/auth"
+	"nexus_scholar_go_backend/internal/utils/broker"
+	"nexus_scholar_go_backend/internal/utils/errors"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/generative-ai-go/genai"
@@ -41,6 +41,7 @@ func SetupRoutes(r *gin.Engine, researchChatService *services.ResearchChatServic
 		api.GET("/cache-usage", auth.AuthMiddleware(userService), getCacheUsageHandler(cacheManagementService, chatService, log))
 		api.POST("/stripe/webhook", stripeWebhookHandler(stripeService, cacheManagementService, messageBroker))
 		api.POST("/stripe/webhook_clitest", stripeWebhookHandler_clitest(stripeService, cacheManagementService, messageBroker))
+		api.GET("/test-bib-parsing/:arxiv_id", testBibParsingHandler(log))
 	}
 }
 
@@ -555,5 +556,26 @@ func getCacheUsageHandler(cacheManagementService *services.CacheManagementServic
 		})
 
 		log.Info().Msg("JSON response sent")
+	}
+}
+
+func testBibParsingHandler(log zerolog.Logger) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		arxivID := c.Param("arxiv_id")
+		if arxivID == "" {
+			errors.HandleError(c, errors.New400Error("ArXiv ID is required"))
+			return
+		}
+
+		paperLoader := services.NewPaperLoader(log)
+		err := paperLoader.TestBibParsing(arxivID)
+		if err != nil {
+			errors.HandleError(c, errors.LogAndReturn500(fmt.Errorf("failed to test bib parsing: %v", err)))
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"message": fmt.Sprintf("Bib parsing test completed for ArXiv ID: %s", arxivID),
+		})
 	}
 }

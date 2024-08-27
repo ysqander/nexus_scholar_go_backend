@@ -4,8 +4,8 @@ FROM golang:1.21-bullseye
 # Set the working directory in the container
 WORKDIR /app
 
-# Install poppler-utils
-RUN apt-get update && apt-get install -y poppler-utils
+# Install poppler-utils and bibtool
+RUN apt-get update && apt-get install -y poppler-utils bibtool
 
 # Copy go.mod and go.sum files
 COPY go.mod go.sum ./
