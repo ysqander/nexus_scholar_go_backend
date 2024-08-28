@@ -261,7 +261,7 @@ func (pl *PaperLoader) parseBibFiles(bibFiles []string) ([]bibtexparser.BibEntry
 		pl.logger.Debug().Msgf("Parsing .bib file %d of %d", i+1, len(bibFiles))
 		pl.logger.Debug().Msgf("Content of .bib file %d: %s", i+1, content[:min(500, len(content))]) // Log the first 500 characters of the content
 
-		entries, err := bibtexparser.ParseBibTeX(content)
+		entries, err := bibtexparser.ParseBibTeX(content, pl.logger)
 		if err != nil {
 			pl.logger.Error().Err(err).Msgf("Failed to parse .bib file %d", i+1)
 			return nil, fmt.Errorf("failed to parse .bib file %d: %v", i+1, err)
@@ -598,7 +598,7 @@ func (pl *PaperLoader) TestBibParsing(arxivID string) error {
 	}
 
 	// Save output to a file
-	outputFile := fmt.Sprintf("%s_parsed_references.json", arxivID)
+	outputFile := fmt.Sprintf("TEST_%s_parsed_references.json", arxivID)
 	file, err := os.Create(outputFile)
 	if err != nil {
 		return fmt.Errorf("failed to create output file: %v", err)

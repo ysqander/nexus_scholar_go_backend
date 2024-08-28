@@ -1,0 +1,1885 @@
+[
+  {
+    "Type": "book",
+    "CiteName": "em:86",
+    "Fields": {
+      "address": "\"Reading, Mass.\"",
+      "arxiv": "",
+      "editor": "\"Engelmore, Robert and Morgan, Anthony\"",
+      "publisher": "\"Addison-Wesley\"",
+      "title": "\"Blackboard Systems\"",
+      "year": "1986"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "alpaca-eval",
+    "Fields": {
+      "arxiv": "2404.04475",
+      "author": "Dubois, Yann and Galambosi, Bal\\'azs and Liang, Percy",
+      "journal": "arXiv preprint arXiv:2404.04475",
+      "title": "Length-Controlled AlpacaEval: A Simple Way to Debias",
+      "year": "2024"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "mt-bench",
+    "Fields": {
+      "arxiv": "2306.05685",
+      "author": "Lianmin Zheng and Wei-Lin Chiang and Ying Sheng and Siyuan",
+      "journal": "arXiv preprint arXiv:2306.05685",
+      "title": "Judging LLM-as-a-judge with MT-Bench and Chatbot Arena",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "flask",
+    "Fields": {
+      "arxiv": "2307.10928",
+      "author": "Seonghyeon Ye and Doyoung Kim and Sungdong Kim and",
+      "journal": "arXiv preprint arXiv:2307.10928",
+      "title": "FLASK: Fine-grained Language Model Evaluation based on",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "wang2024rethinking",
+    "Fields": {
+      "arxiv": "2402.18272",
+      "author": "Wang, Qineng and Wang, Zihao and Su, Ying and Tong",
+      "journal": "arXiv preprint arXiv:2402.18272",
+      "title": "Rethinking the Bounds of LLM Reasoning: Are Multi-Agent",
+      "year": "2024"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "moe",
+    "Fields": {
+      "arxiv": "1701.06538",
+      "author": "Shazeer, Noam and Mirhoseini, Azalia and Maziarz",
+      "journal": "arXiv preprint arXiv:1701.06538",
+      "title": "Outrageously large neural networks: The sparsely-gated",
+      "year": "2017"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "cot",
+    "Fields": {
+      "arxiv": "",
+      "author": "Wei, Jason and Wang, Xuezhi and Schuurmans, Dale and",
+      "journal": "Advances in Neural Information Processing Systems",
+      "pages": "24824--24837",
+      "title": "Chain-of-thought prompting elicits reasoning in large",
+      "volume": "35",
+      "year": "2022"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "gpt3",
+    "Fields": {
+      "arxiv": "",
+      "author": "Brown, Tom and Mann, Benjamin and Ryder, Nick and Subbiah",
+      "journal": "Advances in neural information processing systems",
+      "pages": "1877--1901",
+      "title": "Language models are few-shot learners",
+      "volume": "33",
+      "year": "2020"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "wizardlm",
+    "Fields": {
+      "arxiv": "2304.12244",
+      "author": "Xu, Can and Sun, Qingfeng and Zheng, Kai and Geng, Xiubo",
+      "journal": "arXiv preprint arXiv:2304.12244",
+      "title": "Wizardlm: Empowering large language models to follow",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "chen2023frugalgpt",
+    "Fields": {
+      "arxiv": "2305.05176",
+      "author": "Lingjiao Chen and Matei Zaharia and James Zou",
+      "journal": "arXiv preprint arXiv:2305.05176",
+      "title": "FrugalGPT: How to Use Large Language Models While Reducing",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "deepseekcoder",
+    "Fields": {
+      "arxiv": "2401.14196",
+      "author": "Guo, Daya and Zhu, Qihao and Yang, Dejian and Xie, Zhenda",
+      "journal": "arXiv preprint arXiv:2401.14196",
+      "title": "DeepSeek-Coder: When the Large Language Model Meets",
+      "year": "2024"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "codellama",
+    "Fields": {
+      "arxiv": "2308.12950",
+      "author": "Roziere, Baptiste and Gehring, Jonas and Gloeckle, Fabian",
+      "journal": "arXiv preprint arXiv:2308.12950",
+      "title": "Code llama: Open foundation models for code",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "hendrycks2021measuring",
+    "Fields": {
+      "arxiv": "2103.03874",
+      "author": "Dan Hendrycks and Collin Burns and Saurav Kadavath and",
+      "journal": "arXiv preprint arXiv:2103.03874",
+      "title": "Measuring Mathematical Problem Solving With the MATH",
+      "year": "2021"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "huang2024enabling",
+    "Fields": {
+      "arxiv": "2404.12715",
+      "author": "Huang, Yichong and Feng, Xiaocheng and Li, Baohang and",
+      "journal": "arXiv preprint arXiv:2404.12715",
+      "title": "Enabling Ensemble Learning for Heterogeneous Large",
+      "year": "2024"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "rlhf",
+    "Fields": {
+      "arxiv": "",
+      "author": "Ouyang, Long and Wu, Jeffrey and Jiang, Xu and Almeida",
+      "journal": "Advances in neural information processing systems",
+      "pages": "27730--27744",
+      "title": "Training language models to follow instructions with human",
+      "volume": "35",
+      "year": "2022"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "qwen",
+    "Fields": {
+      "arxiv": "2309.16609",
+      "author": "Bai, Jinze and Bai, Shuai and Chu, Yunfei and Cui, Zeyu",
+      "journal": "arXiv preprint arXiv:2309.16609",
+      "title": "Qwen technical report",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "emoprompt",
+    "Fields": {
+      "arxiv": "2307.11760",
+      "author": "Li, Cheng and Wang, Jindong and Zhu, Kaijie and Zhang",
+      "journal": "arXiv preprint arXiv:2307.11760",
+      "title": "Emotionprompt: Leveraging psychology for large language",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "cot-sc",
+    "Fields": {
+      "arxiv": "2203.11171",
+      "author": "Wang, Xuezhi and Wei, Jason and Schuurmans, Dale and Le",
+      "journal": "arXiv preprint arXiv:2203.11171",
+      "title": "Self-consistency improves chain of thought reasoning in",
+      "year": "2022"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "tot",
+    "Fields": {
+      "arxiv": "2305.10601",
+      "author": "Yao, Shunyu and Yu, Dian and Zhao, Jeffrey and Shafran",
+      "journal": "arXiv preprint arXiv:2305.10601",
+      "title": "Tree of thoughts: Deliberate problem solving with large",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "got",
+    "Fields": {
+      "arxiv": "2308.09687",
+      "author": "Besta, Maciej and Blach, Nils and Kubicek, Ales and",
+      "journal": "arXiv preprint arXiv:2308.09687",
+      "title": "Graph of thoughts: Solving elaborate problems with large",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "cr",
+    "Fields": {
+      "arxiv": "2308.04371",
+      "author": "Zhang, Yifan and Yang, Jingqin and Yuan, Yang and Yao",
+      "journal": "arXiv preprint arXiv:2308.04371",
+      "title": "Cumulative reasoning with large language models",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "debate",
+    "Fields": {
+      "arxiv": "2305.14325",
+      "author": "Du, Yilun and Li, Shuang and Torralba, Antonio and",
+      "journal": "arXiv preprint arXiv:2305.14325",
+      "title": "Improving Factuality and Reasoning in Language Models",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "mad",
+    "Fields": {
+      "arxiv": "2305.19118",
+      "author": "Liang, Tian and He, Zhiwei and Jiao, Wenxiang and Wang",
+      "journal": "arXiv preprint arXiv:2305.19118",
+      "title": "Encouraging Divergent Thinking in Large Language Models",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "reconcile",
+    "Fields": {
+      "arxiv": "2309.13007",
+      "author": "Chen, Justin Chih-Yao and Saha, Swarnadeep and Bansal",
+      "journal": "arXiv preprint arXiv:2309.13007",
+      "title": "Reconcile: Round-table conference improves reasoning via",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "misc",
+    "CiteName": "gpt4",
+    "Fields": {
+      "archiveprefix": "arXiv",
+      "arxiv": "",
+      "author": "OpenAI",
+      "eprint": "2303.08774",
+      "primaryclass": "cs.CL",
+      "title": "GPT-4 Technical Report",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "palm2",
+    "Fields": {
+      "arxiv": "2305.10403",
+      "author": "Anil, Rohan and Dai, Andrew M and Firat, Orhan and",
+      "journal": "arXiv preprint arXiv:2305.10403",
+      "title": "Palm 2 technical report",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "llama",
+    "Fields": {
+      "arxiv": "2302.13971",
+      "author": "Touvron, Hugo and Lavril, Thibaut and Izacard, Gautier and",
+      "journal": "arXiv preprint arXiv:2302.13971",
+      "title": "Llama: Open and efficient foundation language models",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "llama2",
+    "Fields": {
+      "arxiv": "2307.09288",
+      "author": "Touvron, Hugo and Martin, Louis and Stone, Kevin and",
+      "journal": "arXiv preprint arXiv:2307.09288",
+      "title": "Llama 2: Open foundation and fine-tuned chat models",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "step-verifier",
+    "Fields": {
+      "arxiv": "2206.02336",
+      "author": "Li, Yifei and Lin, Zeqi and Zhang, Shizhuo and Fu, Qiang",
+      "journal": "arXiv preprint arXiv:2206.02336",
+      "title": "On the advance of making language models better",
+      "year": "2022"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "cot0",
+    "Fields": {
+      "arxiv": "",
+      "author": "Kojima, Takeshi and Gu, Shixiang Shane and Reid, Machel",
+      "journal": "Advances in neural information processing systems",
+      "pages": "22199--22213",
+      "title": "Large language models are zero-shot reasoners",
+      "volume": "35",
+      "year": "2022"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "np",
+    "Fields": {
+      "arxiv": "2306.03872",
+      "author": "Ling, Zhan and Fang, Yunhao and Li, Xuanlin and Huang",
+      "journal": "arXiv preprint arXiv:2306.03872",
+      "title": "Deductive Verification of Chain-of-Thought Reasoning",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "sv",
+    "Fields": {
+      "arxiv": "2212.09561",
+      "author": "Weng, Yixuan and Zhu, Minjun and He, Shizhu and Liu, Kang",
+      "journal": "arXiv preprint arXiv:2212.09561",
+      "title": "Large language models are reasoners with",
+      "year": "2022"
+    }
+  },
+  {
+    "Type": "inproceedings",
+    "CiteName": "reflexion",
+    "Fields": {
+      "arxiv": "",
+      "author": "Shinn, Noah and Cassano, Federico and Gopinath, Ashwin and",
+      "booktitle": "Thirty-seventh Conference on Neural Information Processing",
+      "title": "Reflexion: Language agents with verbal reinforcement",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "sr",
+    "Fields": {
+      "arxiv": "2303.17651",
+      "author": "Madaan, Aman and Tandon, Niket and Gupta, Prakhar and",
+      "journal": "arXiv preprint arXiv:2303.17651",
+      "title": "Self-refine: Iterative refinement with self-feedback",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "sd",
+    "Fields": {
+      "arxiv": "2304.05128",
+      "author": "Chen, Xinyun and Lin, Maxwell and Sch\\\"arli, Nathanael",
+      "journal": "arXiv preprint arXiv:2304.05128",
+      "title": "Teaching large language models to self-debug",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "misc",
+    "CiteName": "chatgpt",
+    "Fields": {
+      "arxiv": "",
+      "author": "OpenAI",
+      "howpublished": "\\url{https://openai.com/blog/chatgpt",
+      "title": "ChatGPT",
+      "year": "2022"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "firstms",
+    "Fields": {
+      "arxiv": "2210.00720",
+      "author": "Fu, Yao and Peng, Hao and Sabharwal, Ashish and Clark",
+      "journal": "arXiv preprint arXiv:2210.00720",
+      "title": "Complexity-based prompting for multi-step reasoning",
+      "year": "2022"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "autop",
+    "Fields": {
+      "arxiv": "2210.03493",
+      "author": "Zhang, Zhuosheng and Zhang, Aston and Li, Mu and Smola",
+      "journal": "arXiv preprint arXiv:2210.03493",
+      "title": "Automatic chain of thought prompting in large language",
+      "year": "2022"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "activep",
+    "Fields": {
+      "arxiv": "2302.12246",
+      "author": "Diao, Shizhe and Wang, Pengcheng and Lin, Yong and Zhang",
+      "journal": "arXiv preprint arXiv:2302.12246",
+      "title": "Active prompting with chain-of-thought for large language",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "pas",
+    "Fields": {
+      "arxiv": "2305.04091",
+      "author": "Wang, Lei and Xu, Wanyu and Lan, Yihuai and Hu, Zhiqiang",
+      "journal": "arXiv preprint arXiv:2305.04091",
+      "title": "Plan-and-solve prompting: Improving zero-shot",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "egot",
+    "Fields": {
+      "arxiv": "2305.16582",
+      "author": "Yao, Yao and Li, Zuchao and Zhao, Hai",
+      "journal": "arXiv preprint arXiv:2305.16582",
+      "title": "Beyond Chain-of-Thought, Effective Graph-of-Thought",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "reread",
+    "Fields": {
+      "arxiv": "2309.06275",
+      "author": "Xu, Xiaohan and Tao, Chongyang and Shen, Tao and Xu, Can",
+      "journal": "arXiv preprint arXiv:2309.06275",
+      "title": "Re-reading improves reasoning in language models",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "decomp",
+    "Fields": {
+      "arxiv": "2210.02406",
+      "author": "Khot, Tushar and Trivedi, Harsh and Finlayson, Matthew and",
+      "journal": "arXiv preprint arXiv:2210.02406",
+      "title": "Decomposed prompting: A modular approach for solving",
+      "year": "2022"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "mes",
+    "Fields": {
+      "arxiv": "2210.03350",
+      "author": "Press, Ofir and Zhang, Muru and Min, Sewon and Schmidt",
+      "journal": "arXiv preprint arXiv:2210.03350",
+      "title": "Measuring and narrowing the compositionality gap in",
+      "year": "2022"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "succ",
+    "Fields": {
+      "arxiv": "2212.04092",
+      "author": "Dua, Dheeru and Gupta, Shivanshu and Singh, Sameer and",
+      "journal": "arXiv preprint arXiv:2212.04092",
+      "title": "Successive prompting for decomposing complex questions",
+      "year": "2022"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "sp",
+    "Fields": {
+      "arxiv": "2305.14497",
+      "author": "Xi, Zhiheng and Jin, Senjie and Zhou, Yuhao and Zheng, Rui",
+      "journal": "arXiv preprint arXiv:2305.14497",
+      "title": "Self-Polish: Enhance Reasoning in Large Language Models",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "rcot",
+    "Fields": {
+      "arxiv": "2305.11499",
+      "author": "Xue, Tianci and Wang, Ziqi and Wang, Zhenhailong and Han",
+      "journal": "arXiv preprint arXiv:2305.11499",
+      "title": "RCOT: Detecting and Rectifying Factual Inconsistency in",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "mindeye",
+    "Fields": {
+      "arxiv": "2210.05359",
+      "author": "Liu, Ruibo and Wei, Jason and Gu, Shixiang Shane and Wu",
+      "journal": "arXiv preprint arXiv:2210.05359",
+      "title": "Mind's Eye: Grounded Language Model Reasoning through",
+      "year": "2022"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "star",
+    "Fields": {
+      "arxiv": "",
+      "author": "Zelikman, Eric and Wu, Yuhuai and Mu, Jesse and Goodman",
+      "journal": "Advances in Neural Information Processing Systems",
+      "pages": "15476--15488",
+      "title": "Star: Bootstrapping reasoning with reasoning",
+      "volume": "35",
+      "year": "2022"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "chameleon",
+    "Fields": {
+      "arxiv": "2304.09842",
+      "author": "Lu, Pan and Peng, Baolin and Cheng, Hao and Galley, Michel",
+      "journal": "arXiv preprint arXiv:2304.09842",
+      "title": "Chameleon: Plug-and-play compositional reasoning with",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "mathprompter",
+    "Fields": {
+      "arxiv": "2303.05398",
+      "author": "Imani, Shima and Du, Liang and Shrivastava, Harsh",
+      "journal": "arXiv preprint arXiv:2303.05398",
+      "title": "Mathprompter: Mathematical reasoning using large language",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "memprompt",
+    "Fields": {
+      "arxiv": "2201.06009",
+      "author": "Madaan, Aman and Tandon, Niket and Clark, Peter and Yang",
+      "journal": "arXiv preprint arXiv:2201.06009",
+      "title": "Memory-assisted prompt editing to improve gpt-3 after",
+      "year": "2022"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "logicsolver",
+    "Fields": {
+      "arxiv": "2205.08232",
+      "author": "Yang, Zhicheng and Qin, Jinghui and Chen, Jiaqi and Lin",
+      "journal": "arXiv preprint arXiv:2205.08232",
+      "title": "Logicsolver: Towards interpretable math word problem",
+      "year": "2022"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "anderson1972more",
+    "Fields": {
+      "arxiv": "",
+      "author": "Anderson, Philip W",
+      "journal": "Science",
+      "number": "4047",
+      "pages": "393--396",
+      "publisher": "American Association for the Advancement of Science",
+      "title": "More Is Different: Broken symmetry and the nature of the",
+      "volume": "177",
+      "year": "1972"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "laffont2000mechanism",
+    "Fields": {
+      "arxiv": "",
+      "author": "Laffont, Jean-Jacques and Martimort, David",
+      "journal": "Econometrica",
+      "number": "2",
+      "pages": "309--342",
+      "publisher": "Wiley Online Library",
+      "title": "Mechanism design with collusion and correlation",
+      "volume": "68",
+      "year": "2000"
+    }
+  },
+  {
+    "Type": "inproceedings",
+    "CiteName": "daskalakis2012symmetries",
+    "Fields": {
+      "arxiv": "",
+      "author": "Daskalakis, Constantinos and Weinberg, Seth Matthew",
+      "booktitle": "Proceedings of the 13th ACM conference on Electronic",
+      "pages": "370--387",
+      "title": "Symmetries and optimal multi-dimensional mechanism",
+      "year": "2012"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "chan2023chateval",
+    "Fields": {
+      "arxiv": "2308.07201",
+      "author": "Chan, Chi-Min and Chen, Weize and Su, Yusheng and Yu",
+      "journal": "arXiv preprint arXiv:2308.07201",
+      "title": "Chateval: Towards better llm-based evaluators through",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "expd",
+    "Fields": {
+      "arxiv": "2310.02124",
+      "author": "Zhang, Jintian and Xu, Xin and Deng, Shumin",
+      "journal": "arXiv preprint arXiv:2310.02124",
+      "title": "Exploring Collaboration Mechanisms for LLM Agents: A",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "folio",
+    "Fields": {
+      "arxiv": "2209.00840",
+      "author": "Han, Simeng and Schoelkopf, Hailey and Zhao, Yilun and Qi",
+      "journal": "arXiv preprint arXiv:2209.00840",
+      "title": "Folio: Natural language reasoning with first-order logic",
+      "year": "2022"
+    }
+  },
+  {
+    "Type": "book",
+    "CiteName": "tapp2021symmetry",
+    "Fields": {
+      "arxiv": "",
+      "author": "Tapp, Kristopher",
+      "publisher": "Springer",
+      "title": "Symmetry",
+      "year": "2021"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "arereasoners",
+    "Fields": {
+      "arxiv": "2306.09841",
+      "author": "Xu, Fangzhi and Lin, Qika and Han, Jiawei and Zhao",
+      "journal": "arXiv preprint arXiv:2306.09841",
+      "title": "Are Large Language Models Really Good Logical Reasoners? A",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "book",
+    "CiteName": "society",
+    "Fields": {
+      "arxiv": "",
+      "author": "Minsky, Marvin",
+      "publisher": "Simon and Schuster",
+      "title": "Society of mind",
+      "year": "1988"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "gemini",
+    "Fields": {
+      "arxiv": "2312.11805",
+      "author": "Team, Gemini and Anil, Rohan and Borgeaud, Sebastian and",
+      "journal": "arXiv preprint arXiv:2312.11805",
+      "title": "Gemini: a family of highly capable multimodal models",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "inproceedings",
+    "CiteName": "ecqa",
+    "Fields": {
+      "arxiv": "",
+      "author": "Aggarwal, Shourya and Mandowara, Divyanshu and Agrawal",
+      "booktitle": "Proceedings of the 59th Annual Meeting of the Association",
+      "pages": "3050--3065",
+      "title": "Explanations for commonsenseqa: New dataset and models",
+      "year": "2021"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "gsm8k",
+    "Fields": {
+      "arxiv": "2110.14168",
+      "author": "Cobbe, Karl and Kosaraju, Vineet and Bavarian, Mohammad",
+      "journal": "arXiv preprint arXiv:2110.14168",
+      "title": "Training verifiers to solve math word problems",
+      "year": "2021"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "rethinking",
+    "Fields": {
+      "arxiv": "2202.12837",
+      "author": "Min, Sewon and Lyu, Xinxi and Holtzman, Ari and Artetxe",
+      "journal": "arXiv preprint arXiv:2202.12837",
+      "title": "Rethinking the role of demonstrations: What makes",
+      "year": "2022"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "opt",
+    "Fields": {
+      "arxiv": "",
+      "author": "Zhang, Susan and Roller, Stephen and Goyal, Naman and",
+      "journal": "arXiv e-prints",
+      "pages": "arXiv--2205",
+      "title": "OPT: Open Pre-trained Transformer Language Models",
+      "year": "2022"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "bloom",
+    "Fields": {
+      "arxiv": "2211.05100",
+      "author": "Scao, Teven Le and Fan, Angela and Akiki, Christopher and",
+      "journal": "arXiv preprint arXiv:2211.05100",
+      "title": "Bloom: A 176b-parameter open-access multilingual language",
+      "year": "2022"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "palm",
+    "Fields": {
+      "arxiv": "2204.02311",
+      "author": "Chowdhery, Aakanksha and Narang, Sharan and Devlin, Jacob",
+      "journal": "arXiv preprint arXiv:2204.02311",
+      "title": "Palm: Scaling language modeling with pathways",
+      "year": "2022"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "agent",
+    "Fields": {
+      "arxiv": "",
+      "author": "\"Weng, Lilian\"",
+      "journal": "\"lilianweng.github.io\"",
+      "month": "\"Jun\"",
+      "title": "\"LLM-powered Autonomous Agents\"",
+      "url": "\"https://lilianweng.github.io/posts/2023-06-23-agent/\"",
+      "year": "\"2023\""
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "wolpert1992241",
+    "Fields": {
+      "arxiv": "",
+      "author": "David H. Wolpert",
+      "doi": "https://doi.org/10.1016/S0893-6080(05)80023-1",
+      "issn": "0893-6080",
+      "journal": "Neural Networks",
+      "keywords": "Generalization and induction, Combining generalizers",
+      "number": "2",
+      "pages": "241-259",
+      "title": "Stacked generalization",
+      "url": "https://www.sciencedirect.com/science/article/pii/S0893608005800231",
+      "volume": "5",
+      "year": "1992"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "bisk_zellers_le",
+    "Fields": {
+      "arxiv": "",
+      "author": "Bisk, Yonatan and Zellers, Rowan and Le bras, Ronan and",
+      "doi": "10.1609/aaai.v34i05.6239",
+      "journal": "Proceedings of the AAAI Conference on Artificial",
+      "month": "Apr.",
+      "number": "05",
+      "pages": "7432-7439",
+      "title": "PIQA: Reasoning about Physical Commonsense in Natural",
+      "url": "https://ojs.aaai.org/index.php/AAAI/article/view/6239",
+      "volume": "34",
+      "year": "2020"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "https://doi.org/10.1002/widm.1249",
+    "Fields": {
+      "arxiv": "",
+      "author": "Sagi, Omer and Rokach, Lior",
+      "doi": "https://doi.org/10.1002/widm.1249",
+      "eprint": "https://wires.onlinelibrary.wiley.com/doi/pdf/10.1002/widm.1249",
+      "journal": "WIREs Data Mining and Knowledge Discovery",
+      "keywords": "boosting, classifier combination, ensemble models",
+      "number": "4",
+      "pages": "e1249",
+      "title": "Ensemble learning: A survey",
+      "url": "https://wires.onlinelibrary.wiley.com/doi/abs/10.1002/widm.1249",
+      "volume": "8",
+      "year": "2018"
+    }
+  },
+  {
+    "Type": "misc",
+    "CiteName": "cobbe2021training",
+    "Fields": {
+      "archiveprefix": "arXiv",
+      "arxiv": "",
+      "author": "Karl Cobbe and Vineet Kosaraju and Mohammad Bavarian and",
+      "eprint": "2110.14168",
+      "primaryclass": "cs.LG",
+      "title": "Training Verifiers to Solve Math Word Problems",
+      "year": "2021"
+    }
+  },
+  {
+    "Type": "inproceedings",
+    "CiteName": "suzgun-etal-2023-challenging",
+    "Fields": {
+      "address": "\"Toronto, Canada\"",
+      "arxiv": "",
+      "author": "Suzgun, Mirac and Scales, Nathan and Sch\\\"arli",
+      "booktitle": "\"Findings of the Association for Computational Linguistics:",
+      "doi": "\"10.18653/v1/2023.findings-acl.824\"",
+      "editor": "\"Rogers, Anna and Boyd-Graber, Jordan and Okazaki, Naoaki\"",
+      "month": "jul",
+      "pages": "\"13003--13051\"",
+      "publisher": "\"Association for Computational Linguistics\"",
+      "title": "\"Challenging {BIG}-Bench Tasks and Whether Chain-of-Thought",
+      "url": "\"https://aclanthology.org/2023.findings-acl.824\"",
+      "year": "\"2023\""
+    }
+  },
+  {
+    "Type": "misc",
+    "CiteName": "clark2018think",
+    "Fields": {
+      "archiveprefix": "arXiv",
+      "arxiv": "",
+      "author": "Peter Clark and Isaac Cowhey and Oren Etzioni and Tushar",
+      "eprint": "1803.05457",
+      "primaryclass": "cs.AI",
+      "title": "Think you have Solved Question Answering? Try ARC, the AI2",
+      "year": "2018"
+    }
+  },
+  {
+    "Type": "inproceedings",
+    "CiteName": "park2019relational",
+    "Fields": {
+      "arxiv": "",
+      "author": "Park, Wonpyo and Kim, Dongju and Lu, Yan and Cho, Minsu",
+      "booktitle": "Proceedings of the IEEE Conference on Computer Vision and",
+      "pages": "3967--3976",
+      "title": "Relational Knowledge Distillation",
+      "year": "2019"
+    }
+  },
+  {
+    "Type": "inproceedings",
+    "CiteName": "he2022feature",
+    "Fields": {
+      "arxiv": "",
+      "author": "Bobby He and Mete Ozay",
+      "booktitle": "International Conference on Learning Representations",
+      "title": "Feature Kernel Distillation",
+      "url": "https://openreview.net/forum?id=tBIQEvApZK5",
+      "year": "2022"
+    }
+  },
+  {
+    "Type": "misc",
+    "CiteName": "du2023improving",
+    "Fields": {
+      "archiveprefix": "arXiv",
+      "arxiv": "",
+      "author": "Yilun Du and Shuang Li and Antonio Torralba and Joshua B.",
+      "eprint": "2305.14325",
+      "primaryclass": "cs.CL",
+      "title": "Improving Factuality and Reasoning in Language Models",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "misc",
+    "CiteName": "shnitzer2024large",
+    "Fields": {
+      "arxiv": "",
+      "author": "Tal Shnitzer and Anthony Ou and M\\'\\irian Silva and Kate",
+      "title": "Large Language Model Routing with Benchmark Datasets",
+      "url": "https://openreview.net/forum?id=LyNsMNNLjY",
+      "year": "2024"
+    }
+  },
+  {
+    "Type": "misc",
+    "CiteName": "lu2023routing",
+    "Fields": {
+      "archiveprefix": "arXiv",
+      "arxiv": "",
+      "author": "Keming Lu and Hongyi Yuan and Runji Lin and Junyang Lin",
+      "eprint": "2311.08692",
+      "primaryclass": "cs.CL",
+      "title": "Routing to the Expert: Efficient Reward-guided Ensemble of",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "inproceedings",
+    "CiteName": "wang2024fusing",
+    "Fields": {
+      "arxiv": "",
+      "author": "Hongyi Wang and Felipe Maia Polo and Yuekai Sun and Souvik",
+      "booktitle": "The Twelfth International Conference on Learning",
+      "title": "Fusing Models with Complementary Expertise",
+      "url": "https://openreview.net/forum?id=PhMrGCMIRL",
+      "year": "2024"
+    }
+  },
+  {
+    "Type": "inproceedings",
+    "CiteName": "jiang-etal-2023-llm",
+    "Fields": {
+      "address": "\"Toronto, Canada\"",
+      "arxiv": "",
+      "author": "\"Jiang, Dongfu and Ren, Xiang and Lin, Bill Yuchen\"",
+      "booktitle": "\"Proceedings of the 61st Annual Meeting of the Association",
+      "doi": "\"10.18653/v1/2023.acl-long.792\"",
+      "editor": "\"Rogers, Anna and Boyd-Graber, Jordan and Okazaki, Naoaki\"",
+      "month": "jul",
+      "pages": "\"14165--14178\"",
+      "publisher": "\"Association for Computational Linguistics\"",
+      "title": "\"{LLM}-Blender: Ensembling Large Language Models with",
+      "url": "\"https://aclanthology.org/2023.acl-long.792\"",
+      "year": "\"2023\""
+    }
+  },
+  {
+    "Type": "inproceedings",
+    "CiteName": "moschella2023relative",
+    "Fields": {
+      "arxiv": "",
+      "author": "Luca Moschella and Valentino Maiorca and Marco Fumero and",
+      "booktitle": "The Eleventh International Conference on Learning",
+      "title": "Relative representations enable zero-shot latent space",
+      "url": "https://openreview.net/forum?id=SrC-nwieGJ",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "misc",
+    "CiteName": "feng2023trends",
+    "Fields": {
+      "archiveprefix": "arXiv",
+      "arxiv": "",
+      "author": "Zhangyin Feng and Weitao Ma and Weijiang Yu and Lei Huang",
+      "eprint": "2311.05876",
+      "primaryclass": "cs.CL",
+      "title": "Trends in Integration of Knowledge and Large Language",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "inproceedings",
+    "CiteName": "10.5555/3618408.3619049",
+    "Fields": {
+      "abstract": "The Internet contains a wealth of knowledge-- from the",
+      "articleno": "641",
+      "arxiv": "",
+      "author": "Kandpal, Nikhil and Deng, Haikang and Roberts, Adam and",
+      "booktitle": "Proceedings of the 40th International Conference on",
+      "location": "Honolulu, Hawaii, USA",
+      "numpages": "12",
+      "publisher": "JMLR.org",
+      "series": "ICML'23",
+      "title": "Large Language Models Struggle to Learn Long-Tail",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "misc",
+    "CiteName": "huang2023factual",
+    "Fields": {
+      "archiveprefix": "arXiv",
+      "arxiv": "",
+      "author": "Yichong Huang and Xiachong Feng and Xiaocheng Feng and",
+      "eprint": "2104.14839",
+      "primaryclass": "cs.CL",
+      "title": "The Factual Inconsistency Problem in Abstractive Text",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "misc",
+    "CiteName": "huang2023survey",
+    "Fields": {
+      "archiveprefix": "arXiv",
+      "arxiv": "",
+      "author": "Lei Huang and Weijiang Yu and Weitao Ma and Weihong Zhong",
+      "eprint": "2311.05232",
+      "primaryclass": "cs.CL",
+      "title": "A Survey on Hallucination in Large Language Models:",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "inproceedings",
+    "CiteName": "yin-etal-2023-large",
+    "Fields": {
+      "address": "\"Toronto, Canada\"",
+      "arxiv": "",
+      "author": "\"Yin, Zhangyue and Sun, Qiushi and Guo, Qipeng and Wu",
+      "booktitle": "\"Findings of the Association for Computational Linguistics:",
+      "doi": "\"10.18653/v1/2023.findings-acl.551\"",
+      "editor": "\"Rogers, Anna and Boyd-Graber, Jordan and Okazaki, Naoaki\"",
+      "month": "jul",
+      "pages": "\"8653--8665\"",
+      "publisher": "\"Association for Computational Linguistics\"",
+      "title": "\"Do Large Language Models Know What They Don{'}t Know?\"",
+      "url": "\"https://aclanthology.org/2023.findings-acl.551\"",
+      "year": "\"2023\""
+    }
+  },
+  {
+    "Type": "misc",
+    "CiteName": "workshop2023bloom",
+    "Fields": {
+      "archiveprefix": "arXiv",
+      "arxiv": "",
+      "author": "BigScience Workshop",
+      "eprint": "2211.05100",
+      "primaryclass": "cs.CL",
+      "title": "BLOOM: A 176B-Parameter Open-Access Multilingual Language",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "misc",
+    "CiteName": "jiang2023mistral",
+    "Fields": {
+      "archiveprefix": "arXiv",
+      "arxiv": "",
+      "author": "Albert Q. Jiang and Alexandre Sablayrolles and Arthur",
+      "eprint": "2310.06825",
+      "primaryclass": "cs.CL",
+      "title": "Mistral 7B",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "misc",
+    "CiteName": "touvron2023llama",
+    "Fields": {
+      "archiveprefix": "arXiv",
+      "arxiv": "",
+      "author": "Hugo Touvron and Louis Martin and Kevin Stone and Peter",
+      "eprint": "2307.09288",
+      "primaryclass": "cs.CL",
+      "title": "Llama 2: Open Foundation and Fine-Tuned Chat Models",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "misc",
+    "CiteName": "openai2023gpt4",
+    "Fields": {
+      "archiveprefix": "arXiv",
+      "arxiv": "",
+      "author": "OpenAI",
+      "eprint": "2303.08774",
+      "primaryclass": "cs.CL",
+      "title": "GPT-4 Technical Report",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "misc",
+    "CiteName": "jiao2023chatgpt",
+    "Fields": {
+      "archiveprefix": "arXiv",
+      "arxiv": "",
+      "author": "Wenxiang Jiao and Wenxuan Wang and Jen-tse Huang and Xing",
+      "eprint": "2301.08745",
+      "primaryclass": "cs.CL",
+      "title": "Is ChatGPT A Good Translator? Yes With GPT-4 As The",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "misc",
+    "CiteName": "he2023exploring",
+    "Fields": {
+      "archiveprefix": "arXiv",
+      "arxiv": "",
+      "author": "Zhiwei He and Tian Liang and Wenxiang Jiao and Zhuosheng",
+      "eprint": "2305.04118",
+      "primaryclass": "cs.CL",
+      "title": "Exploring Human-Like Translation Strategy with Large",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "misc",
+    "CiteName": "chen2023iterative",
+    "Fields": {
+      "archiveprefix": "arXiv",
+      "arxiv": "",
+      "author": "Pinzhen Chen and Zhicheng Guo and Barry Haddow and Kenneth",
+      "eprint": "2306.03856",
+      "primaryclass": "cs.CL",
+      "title": "Iterative Translation Refinement with Large Language",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "misc",
+    "CiteName": "lu2023chainofdictionary",
+    "Fields": {
+      "archiveprefix": "arXiv",
+      "arxiv": "",
+      "author": "Hongyuan Lu and Haoyang Huang and Dongdong Zhang and",
+      "eprint": "2305.06575",
+      "primaryclass": "cs.CL",
+      "title": "Chain-of-Dictionary Prompting Elicits Translation in Large",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "misc",
+    "CiteName": "gao2023design",
+    "Fields": {
+      "archiveprefix": "arXiv",
+      "arxiv": "",
+      "author": "Yuan Gao and Ruili Wang and Feng Hou",
+      "eprint": "2304.02182",
+      "primaryclass": "cs.CL",
+      "title": "How to Design Translation Prompts for ChatGPT: An",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "misc",
+    "CiteName": "zhu2023extrapolating",
+    "Fields": {
+      "archiveprefix": "arXiv",
+      "arxiv": "",
+      "author": "Wenhao Zhu and Yunzhe Lv and Qingxiu Dong and Fei Yuan and",
+      "eprint": "2308.04948",
+      "primaryclass": "cs.CL",
+      "title": "Extrapolating Large Language Models to Non-English by",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "misc",
+    "CiteName": "xu2023paradigm",
+    "Fields": {
+      "archiveprefix": "arXiv",
+      "arxiv": "",
+      "author": "Haoran Xu and Young Jin Kim and Amr Sharaf and Hany Hassan",
+      "eprint": "2309.11674",
+      "primaryclass": "cs.CL",
+      "title": "A Paradigm Shift in Machine Translation: Boosting",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "inproceedings",
+    "CiteName": "alves-etal-2023-steering",
+    "Fields": {
+      "address": "\"Singapore\"",
+      "arxiv": "",
+      "author": "\"Alves, Duarte and Guerreiro, Nuno and Alves, Jo\\~ao and",
+      "booktitle": "\"Findings of the Association for Computational Linguistics:",
+      "doi": "\"10.18653/v1/2023.findings-emnlp.744\"",
+      "editor": "\"Bouamor, Houda and Pino, Juan and Bali, Kalika\"",
+      "month": "dec",
+      "pages": "\"11127--11148\"",
+      "publisher": "\"Association for Computational Linguistics\"",
+      "title": "\"Steering Large Language Models for Machine Translation",
+      "url": "\"https://aclanthology.org/2023.findings-emnlp.744\"",
+      "year": "\"2023\""
+    }
+  },
+  {
+    "Type": "misc",
+    "CiteName": "chen2023improving",
+    "Fields": {
+      "archiveprefix": "arXiv",
+      "arxiv": "",
+      "author": "Yijie Chen and Yijin Liu and Fandong Meng and Yufeng Chen",
+      "eprint": "2308.12674",
+      "primaryclass": "cs.CL",
+      "title": "Improving Translation Faithfulness of Large Language",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "inproceedings",
+    "CiteName": "jiao-etal-2023-parrot",
+    "Fields": {
+      "address": "\"Singapore\"",
+      "arxiv": "",
+      "author": "\"Jiao, Wenxiang and Huang, Jen-tse and Wang, Wenxuan and",
+      "booktitle": "\"Findings of the Association for Computational Linguistics:",
+      "doi": "\"10.18653/v1/2023.findings-emnlp.1001\"",
+      "editor": "\"Bouamor, Houda and Pino, Juan and Bali, Kalika\"",
+      "month": "dec",
+      "pages": "\"15009--15020\"",
+      "publisher": "\"Association for Computational Linguistics\"",
+      "title": "\"{P}arro{T}: Translating during Chat using Large Language",
+      "url": "\"https://aclanthology.org/2023.findings-emnlp.1001\"",
+      "year": "\"2023\""
+    }
+  },
+  {
+    "Type": "misc",
+    "CiteName": "yao2023empowering",
+    "Fields": {
+      "archiveprefix": "arXiv",
+      "arxiv": "",
+      "author": "Binwei Yao and Ming Jiang and Diyi Yang and Junjie Hu",
+      "eprint": "2305.14328",
+      "primaryclass": "cs.CL",
+      "title": "Empowering LLM-based Machine Translation with Cultural",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "inproceedings",
+    "CiteName": "raunak-etal-2023-gpts",
+    "Fields": {
+      "address": "\"Toronto, Canada\"",
+      "arxiv": "",
+      "author": "\"Raunak, Vikas and Menezes, Arul and Post, Matt and Hassan",
+      "booktitle": "\"Proceedings of the 61st Annual Meeting of the Association",
+      "doi": "\"10.18653/v1/2023.acl-short.90\"",
+      "editor": "\"Rogers, Anna and Boyd-Graber, Jordan and Okazaki, Naoaki\"",
+      "month": "jul",
+      "pages": "\"1041--1050\"",
+      "publisher": "\"Association for Computational Linguistics\"",
+      "title": "\"Do {GPT}s Produce Less Literal Translations?\"",
+      "url": "\"https://aclanthology.org/2023.acl-short.90\"",
+      "year": "\"2023\""
+    }
+  },
+  {
+    "Type": "inproceedings",
+    "CiteName": "wang-etal-2023-document-level",
+    "Fields": {
+      "address": "\"Singapore\"",
+      "arxiv": "",
+      "author": "\"Wang, Longyue and Lyu, Chenyang and Ji, Tianbo and Zhang",
+      "booktitle": "\"Proceedings of the 2023 Conference on Empirical Methods in",
+      "doi": "\"10.18653/v1/2023.emnlp-main.1036\"",
+      "editor": "\"Bouamor, Houda and Pino, Juan and Bali, Kalika\"",
+      "month": "dec",
+      "pages": "\"16646--16661\"",
+      "publisher": "\"Association for Computational Linguistics\"",
+      "title": "\"Document-Level Machine Translation with Large Language",
+      "url": "\"https://aclanthology.org/2023.emnlp-main.1036\"",
+      "year": "\"2023\""
+    }
+  },
+  {
+    "Type": "misc",
+    "CiteName": "zhu2023multilingual",
+    "Fields": {
+      "archiveprefix": "arXiv",
+      "arxiv": "",
+      "author": "Wenhao Zhu and Hongyi Liu and Qingxiu Dong and Jingjing Xu",
+      "eprint": "2304.04675",
+      "primaryclass": "cs.CL",
+      "title": "Multilingual Machine Translation with Large Language",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "misc",
+    "CiteName": "hendy2023good",
+    "Fields": {
+      "archiveprefix": "arXiv",
+      "arxiv": "",
+      "author": "Amr Hendy and Mohamed Abdelrehim and Amr Sharaf and Vikas",
+      "eprint": "2302.09210",
+      "primaryclass": "cs.CL",
+      "title": "How Good Are GPT Models at Machine Translation? A",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "inproceedings",
+    "CiteName": "bawden-yvon-2023-investigating",
+    "Fields": {
+      "address": "\"Tampere, Finland\"",
+      "arxiv": "",
+      "author": "\"Bawden, Rachel and Yvon, Fran\\ccois\"",
+      "booktitle": "\"Proceedings of the 24th Annual Conference of the European",
+      "editor": "\"Nurminen, Mary and Brenner, Judith and Koponen, Maarit and",
+      "month": "jun",
+      "pages": "\"157--170\"",
+      "publisher": "\"European Association for Machine Translation\"",
+      "title": "\"Investigating the Translation Performance of a Large",
+      "url": "\"https://aclanthology.org/2023.eamt-1.16\"",
+      "year": "\"2023\""
+    }
+  },
+  {
+    "Type": "inproceedings",
+    "CiteName": "vilar-etal-2023-prompting",
+    "Fields": {
+      "address": "\"Toronto, Canada\"",
+      "arxiv": "",
+      "author": "\"Vilar, David and Freitag, Markus and Cherry, Colin and",
+      "booktitle": "\"Proceedings of the 61st Annual Meeting of the Association",
+      "doi": "\"10.18653/v1/2023.acl-long.859\"",
+      "editor": "\"Rogers, Anna and Boyd-Graber, Jordan and Okazaki, Naoaki\"",
+      "month": "jul",
+      "pages": "\"15406--15427\"",
+      "publisher": "\"Association for Computational Linguistics\"",
+      "title": "\"Prompting {P}a{LM} for Translation: Assessing Strategies",
+      "url": "\"https://aclanthology.org/2023.acl-long.859\"",
+      "year": "\"2023\""
+    }
+  },
+  {
+    "Type": "inproceedings",
+    "CiteName": "10.5555/3618408.3620130",
+    "Fields": {
+      "articleno": "1722",
+      "arxiv": "",
+      "author": "Zhang, Biao and Haddow, Barry and Birch, Alexandra",
+      "booktitle": "Proceedings of the 40th International Conference on",
+      "location": "Honolulu, Hawaii, USA",
+      "numpages": "19",
+      "publisher": "JMLR.org",
+      "series": "ICML'23",
+      "title": "Prompting Large Language Model for Machine Translation: A",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "inproceedings",
+    "CiteName": "peng-etal-2023-towards",
+    "Fields": {
+      "address": "\"Singapore\"",
+      "arxiv": "",
+      "author": "\"Peng, Keqin and Ding, Liang and Zhong, Qihuang and Shen",
+      "booktitle": "\"Findings of the Association for Computational Linguistics:",
+      "doi": "\"10.18653/v1/2023.findings-emnlp.373\"",
+      "editor": "\"Bouamor, Houda and Pino, Juan and Bali, Kalika\"",
+      "month": "dec",
+      "publisher": "\"Association for Computational Linguistics\"",
+      "title": "\"Towards Making the Most of {C}hat{GPT} for Machine",
+      "url": "\"https://aclanthology.org/2023.findings-emnlp.373\"",
+      "year": "\"2023\""
+    }
+  },
+  {
+    "Type": "inproceedings",
+    "CiteName": "10.5555/3618408.3618846",
+    "Fields": {
+      "abstract": "We demonstrate the potential of few-shot translation",
+      "articleno": "438",
+      "arxiv": "",
+      "author": "Garcia, Xavier and Bansal, Yamini and Cherry, Colin and",
+      "booktitle": "Proceedings of the 40th International Conference on",
+      "location": "Honolulu, Hawaii, USA",
+      "numpages": "12",
+      "publisher": "JMLR.org",
+      "series": "ICML'23",
+      "title": "The Unreasonable Effectiveness of Few-Shot Learning for",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "inproceedings",
+    "CiteName": "wei2022chain",
+    "Fields": {
+      "arxiv": "",
+      "author": "Jason Wei and Xuezhi Wang and Dale Schuurmans and Maarten",
+      "booktitle": "Advances in Neural Information Processing Systems",
+      "editor": "Alice H. Oh and Alekh Agarwal and Danielle Belgrave and",
+      "title": "Chain of Thought Prompting Elicits Reasoning in Large",
+      "url": "https://openreview.net/forum?id=_VjQlMeSB_J",
+      "year": "2022"
+    }
+  },
+  {
+    "Type": "misc",
+    "CiteName": "ma2021deltalm",
+    "Fields": {
+      "archiveprefix": "arXiv",
+      "arxiv": "",
+      "author": "Shuming Ma and Li Dong and Shaohan Huang and Dongdong",
+      "eprint": "2106.13736",
+      "primaryclass": "cs.CL",
+      "title": "DeltaLM: Encoder-Decoder Pre-training for Language",
+      "year": "2021"
+    }
+  },
+  {
+    "Type": "inproceedings",
+    "CiteName": "tao-etal-2022-crossqe",
+    "Fields": {
+      "address": "\"Abu Dhabi, United Arab Emirates (Hybrid)\"",
+      "arxiv": "",
+      "author": "\"Tao, Shimin and Chang, Su and Miaomiao, Ma and Yang, Hao",
+      "booktitle": "\"Proceedings of the Seventh Conference on Machine",
+      "editor": "Koehn, Philipp and Barrault, Lo{\\\"\\i}c and Bojar",
+      "month": "dec",
+      "pages": "\"646--652\"",
+      "publisher": "\"Association for Computational Linguistics\"",
+      "title": "\"{C}ross{QE}: {HW}-{TSC} 2022 Submission for the Quality",
+      "url": "\"https://aclanthology.org/2022.wmt-1.61\"",
+      "year": "\"2022\""
+    }
+  },
+  {
+    "Type": "inproceedings",
+    "CiteName": "rei-etal-2023-inside",
+    "Fields": {
+      "address": "\"Toronto, Canada\"",
+      "arxiv": "",
+      "author": "\"Rei, Ricardo and Guerreiro, Nuno M. and Treviso, Marcos",
+      "booktitle": "\"Proceedings of the 61st Annual Meeting of the Association",
+      "doi": "\"10.18653/v1/2023.acl-short.94\"",
+      "editor": "\"Rogers, Anna and Boyd-Graber, Jordan and Okazaki, Naoaki\"",
+      "month": "jul",
+      "publisher": "\"Association for Computational Linguistics\"",
+      "title": "\"The Inside Story: Towards Better Understanding of Machine",
+      "url": "\"https://aclanthology.org/2023.acl-short.94\"",
+      "year": "\"2023\""
+    }
+  },
+  {
+    "Type": "misc",
+    "CiteName": "dong2023survey",
+    "Fields": {
+      "archiveprefix": "arXiv",
+      "arxiv": "",
+      "author": "Qingxiu Dong and Lei Li and Damai Dai and Ce Zheng and",
+      "eprint": "2301.00234",
+      "primaryclass": "cs.CL",
+      "title": "A Survey on In-context Learning",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "inproceedings",
+    "CiteName": "neurips2020_1457c0d6",
+    "Fields": {
+      "arxiv": "",
+      "author": "Brown, Tom and Mann, Benjamin and Ryder, Nick and Subbiah",
+      "booktitle": "Advances in Neural Information Processing Systems",
+      "editor": "H. Larochelle and M. Ranzato and R. Hadsell and M.F.",
+      "pages": "1877--1901",
+      "publisher": "Curran Associates, Inc.",
+      "title": "Language Models are Few-Shot Learners",
+      "url": "https://proceedings.neurips.cc/paper_files/paper/2020/file/1457c0d6bfcb4967418bfb8ac142f64a-Paper.pdf",
+      "volume": "33",
+      "year": "2020"
+    }
+  },
+  {
+    "Type": "inproceedings",
+    "CiteName": "zhang2023automatic",
+    "Fields": {
+      "arxiv": "",
+      "author": "Zhuosheng Zhang and Aston Zhang and Mu Li and Alex Smola",
+      "booktitle": "The Eleventh International Conference on Learning",
+      "title": "Automatic Chain of Thought Prompting in Large Language",
+      "url": "https://openreview.net/forum?id=5NTt8GFjUHkr",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "inproceedings",
+    "CiteName": "lim-etal-2023-predicting",
+    "Fields": {
+      "address": "\"Toronto, Canada\"",
+      "arxiv": "",
+      "author": "\"Lim, Zheng Wei and Cohn, Trevor and Kemp, Charles and",
+      "booktitle": "\"Findings of the Association for Computational Linguistics:",
+      "doi": "\"10.18653/v1/2023.findings-acl.736\"",
+      "editor": "\"Rogers, Anna and Boyd-Graber, Jordan and Okazaki, Naoaki\"",
+      "month": "jul",
+      "publisher": "\"Association for Computational Linguistics\"",
+      "title": "\"Predicting Human Translation Difficulty Using Automatic",
+      "url": "\"https://aclanthology.org/2023.findings-acl.736\"",
+      "year": "\"2023\""
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "sanjunsunmeasuring",
+    "Fields": {
+      "address": "\"Budapest, Hungary\"",
+      "arxiv": "",
+      "author": "\"Sanjun Sun\"",
+      "doi": "\"https://doi.org/10.1556/084.2015.16.1.2\"",
+      "journal": "\"Across Languages and Cultures\"",
+      "number": "\"1\"",
+      "pages": "\"29 - 54\"",
+      "publisher": "\"Akadémiai Kiadó\"",
+      "title": "\"Measuring translation difficulty: Theoretical and",
+      "url": "\"https://akjournals.com/view/journals/084/16/1/article-p29.xml\"",
+      "volume": "\"16\"",
+      "year": "\"2015\""
+    }
+  },
+  {
+    "Type": "misc",
+    "CiteName": "zhao2023survey",
+    "Fields": {
+      "archiveprefix": "arXiv",
+      "arxiv": "",
+      "author": "Wayne Xin Zhao and Kun Zhou and Junyi Li and Tianyi Tang",
+      "eprint": "2303.18223",
+      "primaryclass": "cs.CL",
+      "title": "A Survey of Large Language Models",
+      "year": "2023"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "dabre2020survey",
+    "Fields": {
+      "arxiv": "",
+      "author": "Dabre, Raj and Chu, Chenhui and Kunchukuttan, Anoop",
+      "journal": "ACM Computing Surveys (CSUR)",
+      "number": "5",
+      "pages": "1--38",
+      "publisher": "ACM New York, NY, USA",
+      "title": "A survey of multilingual neural machine translation",
+      "volume": "53",
+      "year": "2020"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "fan2021beyond",
+    "Fields": {
+      "arxiv": "",
+      "author": "Fan, Angela and Bhosale, Shruti and Schwenk, Holger and",
+      "journal": "J. Mach. Learn. Res.",
+      "number": "107",
+      "pages": "1--48",
+      "title": "Beyond English-Centric Multilingual Machine Translation.",
+      "volume": "22",
+      "year": "2021"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "siddhant2022towards",
+    "Fields": {
+      "arxiv": "2201.03110",
+      "author": "Siddhant, Aditya and Bapna, Ankur and Firat, Orhan and",
+      "journal": "arXiv preprint arXiv:2201.03110",
+      "title": "Towards the next 1000 languages in multilingual machine",
+      "year": "2022"
+    }
+  },
+  {
+    "Type": "misc",
+    "CiteName": "https://doi.org/10.48550/arxiv.2207.04672",
+    "Fields": {
+      "arxiv": "",
+      "author": "NLLB Team and Costa-jussà, Marta R. and Cross, James",
+      "copyright": "Creative Commons Attribution Share Alike 4.0",
+      "doi": "10.48550/ARXIV.2207.04672",
+      "keywords": "Computation and Language (cs.CL), Artificial Intelligence",
+      "publisher": "arXiv",
+      "title": "No Language Left Behind: Scaling Human-Centered Machine",
+      "url": "https://arxiv.org/abs/2207.04672",
+      "year": "2022"
+    }
+  },
+  {
+    "Type": "book",
+    "CiteName": "norris1998markov",
+    "Fields": {
+      "arxiv": "",
+      "author": "Norris, James R and Norris, James Robert",
+      "number": "2",
+      "publisher": "Cambridge university press",
+      "title": "Markov chains",
+      "year": "1998"
+    }
+  },
+  {
+    "Type": "inproceedings",
+    "CiteName": "huang-etal-2022-unifying",
+    "Fields": {
+      "arxiv": "",
+      "author": "\"Yichong Huang and Xiaocheng Feng and Xinwei Geng and Bing",
+      "booktitle": "\"Proceedings of the 2022 Conference on Empirical Methods in",
+      "month": "nov",
+      "publisher": "\"Association for Computational Linguistics\"",
+      "title": "\"Unifying the Convergences in Multilingual Neural Machine",
+      "url": "\"https://preview.aclanthology.org/emnlp-22-ingestion/2022.emnlp-main.458/\"",
+      "year": "\"2022\""
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "arivazhagan-etal-2019-massively",
+    "Fields": {
+      "arxiv": "",
+      "author": "Naveen Arivazhagan and Ankur Bapna and Orhan Firat and",
+      "eprint": "1907.05019",
+      "eprinttype": "arXiv",
+      "journal": "CoRR",
+      "title": "Massively Multilingual Neural Machine Translation in the",
+      "url": "http://arxiv.org/abs/1907.05019",
+      "volume": "abs/1907.05019",
+      "year": "2019"
+    }
+  },
+  {
+    "Type": "inproceedings",
+    "CiteName": "zhang2018deep",
+    "Fields": {
+      "arxiv": "",
+      "author": "Zhang, Ying and Xiang, Tao and Hospedales, Timothy M and",
+      "booktitle": "Proceedings of the IEEE conference on computer vision and",
+      "pages": "4320--4328",
+      "title": "Deep mutual learning",
+      "year": "2018"
+    }
+  },
+  {
+    "Type": "inproceedings",
+    "CiteName": "guo2020online",
+    "Fields": {
+      "arxiv": "",
+      "author": "Guo, Qiushan and Wang, Xinjiang and Wu, Yichao and Yu",
+      "booktitle": "Proceedings of the IEEE/CVF Conference on Computer Vision",
+      "pages": "11020--11029",
+      "title": "Online knowledge distillation via collaborative learning",
+      "year": "2020"
+    }
+  },
+  {
+    "Type": "inproceedings",
+    "CiteName": "bahdanau-etal-2015-neural",
+    "Fields": {
+      "arxiv": "",
+      "author": "Dzmitry Bahdanau and Kyunghyun Cho and Yoshua Bengio",
+      "booktitle": "ICLR",
+      "title": "Neural Machine Translation by Jointly Learning to Align",
+      "year": "2015"
+    }
+  },
+  {
+    "Type": "inproceedings",
+    "CiteName": "vaswani-etal-2017-attention",
+    "Fields": {
+      "arxiv": "",
+      "author": "Ashish Vaswani and Noam Shazeer and Niki Parmar and Jakob",
+      "booktitle": "NeurIPS",
+      "title": "Attention is All you Need",
+      "year": "2017"
+    }
+  },
+  {
+    "Type": "inproceedings",
+    "CiteName": "sutskever-etal-2014-sequence",
+    "Fields": {
+      "arxiv": "",
+      "author": "Ilya Sutskever and Oriol Vinyals and Quoc V. Le",
+      "booktitle": "NeurIPS",
+      "title": "Sequence to Sequence Learning with Neural Networks",
+      "year": "2014"
+    }
+  },
+  {
+    "Type": "misc",
+    "CiteName": "https://doi.org/10.48550/arxiv.2012.09816",
+    "Fields": {
+      "arxiv": "",
+      "author": "Allen-Zhu, Zeyuan and Li, Yuanzhi",
+      "copyright": "arXiv.org perpetual, non-exclusive license",
+      "doi": "10.48550/ARXIV.2012.09816",
+      "keywords": "Machine Learning (cs.LG), Neural and Evolutionary",
+      "publisher": "arXiv",
+      "title": "Towards Understanding Ensemble, Knowledge Distillation and",
+      "url": "https://arxiv.org/abs/2012.09816",
+      "year": "2020"
+    }
+  },
+  {
+    "Type": "inproceedings",
+    "CiteName": "he2021feature",
+    "Fields": {
+      "arxiv": "",
+      "author": "He, Bobby and Ozay, Mete",
+      "booktitle": "International Conference on Learning Representations",
+      "title": "Feature Kernel Distillation",
+      "year": "2021"
+    }
+  },
+  {
+    "Type": "inproceedings",
+    "CiteName": "tan-etal-2018-multilingual",
+    "Fields": {
+      "arxiv": "",
+      "author": "Xu Tan and Yi Ren and Di He and Tao Qin and Tie-Yan Liu",
+      "booktitle": "International Conference on Learning Representations",
+      "title": "Multilingual Neural Machine Translation with Knowledge",
+      "url": "https://openreview.net/forum?id=S1gUsoR9YX",
+      "year": "2019"
+    }
+  },
+  {
+    "Type": "misc",
+    "CiteName": "hinton2015distilling",
+    "Fields": {
+      "archiveprefix": "arXiv",
+      "arxiv": "",
+      "author": "Geoffrey Hinton and Oriol Vinyals and Jeff Dean",
+      "eprint": "1503.02531",
+      "primaryclass": "stat.ML",
+      "title": "Distilling the Knowledge in a Neural Network",
+      "year": "2015"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "bellman1957markovian",
+    "Fields": {
+      "arxiv": "",
+      "author": "Bellman, Richard",
+      "journal": "Journal of mathematics and mechanics",
+      "pages": "679--684",
+      "publisher": "JSTOR",
+      "title": "A Markovian decision process",
+      "year": "1957"
+    }
+  },
+  {
+    "Type": "inproceedings",
+    "CiteName": "dblp:journals/corr/kingmab14",
+    "Fields": {
+      "arxiv": "",
+      "author": "Diederik P. Kingma and Jimmy Ba",
+      "booktitle": "ICLR",
+      "editor": "Yoshua Bengio and Yann LeCun",
+      "title": "Adam: {A} Method for Stochastic Optimization",
+      "year": "2015"
+    }
+  },
+  {
+    "Type": "inproceedings",
+    "CiteName": "szegedy2016rethinking",
+    "Fields": {
+      "arxiv": "",
+      "author": "Szegedy, Christian and Vanhoucke, Vincent and Ioffe",
+      "booktitle": "CVPR",
+      "title": "Rethinking the inception architecture for computer",
+      "year": "2016"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "jmlr:v15:srivastava14a",
+    "Fields": {
+      "arxiv": "",
+      "author": "Nitish Srivastava and Geoffrey Hinton and Alex Krizhevsky",
+      "journal": "JMLR",
+      "title": "Dropout: A Simple Way to Prevent Neural Networks from",
+      "year": "2014"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "mixtral",
+    "Fields": {
+      "arxiv": "",
+      "author": "Albert Q. Jiang and Alexandre Sablayrolles and Antoine",
+      "bibsource": "dblp computer science bibliography, https://dblp.org",
+      "biburl": "https://dblp.org/rec/journals/corr/abs-2401-04088.bib",
+      "doi": "10.48550/ARXIV.2401.04088",
+      "eprint": "2401.04088",
+      "eprinttype": "arXiv",
+      "journal": "CoRR",
+      "timestamp": "Wed, 24 Jan 2024 16:19:32 +0100",
+      "title": "Mixtral of Experts",
+      "url": "https://doi.org/10.48550/arXiv.2401.04088",
+      "volume": "abs/2401.04088",
+      "year": "2024"
+    }
+  },
+  {
+    "Type": "article",
+    "CiteName": "dbrx",
+    "Fields": {
+      "arxiv": "",
+      "author": "The Mosaic Research Team",
+      "title": "Introducing DBRX: A New State-of-the-Art Open LLM",
+      "url": "https://www.databricks.com/blog/introducing-dbrx-new-state-art-open-llm",
+      "year": "2024"
+    }
+  },
+  {
+    "Type": "inproceedings",
+    "CiteName": "bleu",
+    "Fields": {
+      "arxiv": "",
+      "author": "Kishore Papineni and Salim Roukos and Todd Ward and",
+      "bibsource": "dblp computer science bibliography, https://dblp.org",
+      "biburl": "https://dblp.org/rec/conf/acl/PapineniRWZ02.bib",
+      "booktitle": "Proceedings of the 40th Annual Meeting of the Association",
+      "doi": "10.3115/1073083.1073135",
+      "pages": "311--318",
+      "publisher": "ACL",
+      "timestamp": "Fri, 06 Aug 2021 00:40:58 +0200",
+      "title": "Bleu: a Method for Automatic Evaluation of Machine",
+      "url": "https://aclanthology.org/P02-1040/",
+      "year": "2002"
+    }
+  },
+  {
+    "Type": "misc",
+    "CiteName": "rapidfuzzpythonlevenshtein",
+    "Fields": {
+      "arxiv": "",
+      "author": "RapidFuzz",
+      "howpublished": "\\url{https://github.com/rapidfuzz/python-Levenshtein",
+      "journal": "GitHub repository",
+      "publisher": "GitHub",
+      "title": "python-Levenshtein by RapidFuzz",
+      "year": "2023"
+    }
+  }
+]

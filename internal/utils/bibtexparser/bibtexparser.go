@@ -1,12 +1,14 @@
 package bibtexparser
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
+
+	"github.com/rs/zerolog"
 )
 
 type BibEntry struct {
@@ -15,84 +17,208 @@ type BibEntry struct {
 	Fields   map[string]string
 }
 
-func ParseBibTeX(content string) ([]BibEntry, error) {
+func ParseBibTeX(content string, logger zerolog.Logger) ([]BibEntry, error) {
 	// Write content to a temporary file
 	tmpFile, err := os.CreateTemp("", "bibtex_*.bib")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temporary file: %v", err)
 	}
 	defer os.Remove(tmpFile.Name())
+
+	logger.Debug().Str("file", tmpFile.Name()).Msg("Created temporary file")
+
 	if _, err := tmpFile.WriteString(content); err != nil {
 		return nil, fmt.Errorf("failed to write to temporary file: %v", err)
 	}
 	tmpFile.Close()
 
+	logger.Debug().Msg("Wrote content to temporary file")
+
 	// Run bibtool command with custom formatting
-	cmd := exec.Command("bibtool",
+	formattedCmd := exec.Command("bibtool",
 		"-r", "-", // Read resource from stdin
-		"-f", "{%T}\t{%s(key)}\t{%s(type)}\t{%s(title)}\t{%N}\t{%s(year)}\t{%s(journal)}\t{%s(volume)}\t{%s(number)}\t{%s(pages)}\t{%s(publisher)}\t{%s(doi)}\t{%s(url)}\t{%0n}\t{%s(arxiv)}\n",
+		"-f", "{%T}\t{%K}\t{%s(type)}\t{%s(title)}\t{%N}\t{%s(year)}\t{%s(journal)}\t{%s(volume)}\t{%s(number)}\t{%s(pages)}\t{%s(publisher)}\t{%s(doi)}\t{%s(url)}\t{%0n}\t{%s(arxiv)}\n",
 		tmpFile.Name())
 
+	logger.Debug().Strs("args", formattedCmd.Args).Msg("Prepared bibtool command")
+
 	// Provide resource configuration via stdin
-	cmd.Stdin = strings.NewReader(`
-		print.line.length = 1000000
-		print.newline = "\n"
-		print.deleted.prefix = ""
-		print.deleted.postfix = ""
-		print.use.tab = "on"
-		print.align.key = 0
-		new.format.type = "{%s}"
-		new.entry.type = ""
-		resource.type = "{%s}"
-		fmt.et.al = ""
-		fmt.name.name = "{%1n(author)}"
-		fmt.title.title = "{%t(title)}"
-		fmt.journal = "{%j}"
-	`)
+	formattedCmd.Stdin = strings.NewReader(`
+    print.line.length = 1000000
+    print.deleted.prefix = ""
+    print.deleted.postfix = ""
+    print.use.tab = "on"
+    print.align.key = 0
+    fmt.et.al = ""
+`)
 
 	var out bytes.Buffer
-	cmd.Stdout = &out
-	if err := cmd.Run(); err != nil {
+	var stderr bytes.Buffer
+	formattedCmd.Stdout = &out
+	formattedCmd.Stderr = &stderr
+
+	if err := formattedCmd.Run(); err != nil {
+		logger.Error().Str("stderr", stderr.String()).Err(err).Msg("bibtool command failed")
 		return nil, fmt.Errorf("bibtool command failed: %v", err)
 	}
 
-	return parseBibtoolOutput(out.String())
+	logger.Debug().Msg("bibtool command executed successfully")
+
+	// Log a partial chunk of the raw output
+	formattedOutput := out.String()
+	logPartialOutput(formattedOutput, logger, "Formatted bibtool output")
+
+	// Second call to bibtool without formatting
+	rawCmd := exec.Command("bibtool", "-r", "-", tmpFile.Name())
+	rawCmd.Stdin = strings.NewReader(`
+    print.line.length = 1000000
+    print.deleted.prefix = ""
+    print.deleted.postfix = ""
+    print.use.tab = "on"
+    print.align.key = 0
+    fmt.et.al = ""
+`)
+
+	var rawOut bytes.Buffer
+	var rawStderr bytes.Buffer
+	rawCmd.Stdout = &rawOut
+	rawCmd.Stderr = &rawStderr
+
+	if err := rawCmd.Run(); err != nil {
+		logger.Error().Str("stderr", rawStderr.String()).Err(err).Msg("raw bibtool command failed")
+		return nil, fmt.Errorf("raw bibtool command failed: %v", err)
+	}
+
+	rawOutput := rawOut.String()
+	logPartialOutput(rawOutput, logger, "Raw bibtool output")
+
+	return parseBibtoolOutput(formattedOutput, rawOutput, logger)
 }
 
-func parseBibtoolOutput(output string) ([]BibEntry, error) {
+func parseBibtoolOutput(formattedOutput, rawOutput string, logger zerolog.Logger) ([]BibEntry, error) {
+	// Extract citation keys from raw output
+	citeKeys := extractCiteKeys(rawOutput, logger)
+
 	var references []BibEntry
-	scanner := bufio.NewScanner(strings.NewReader(output))
-	for scanner.Scan() {
-		fields := strings.Split(scanner.Text(), "\t")
-		if len(fields) < 15 {
-			continue // Skip incomplete entries
-		}
+	entryPattern := regexp.MustCompile(`(?m)^\n@(\w+)\{([^,]*),\n((?:.|\n)*?)\n\}\n`)
 
-		ref := BibEntry{
-			Type:     fields[0],
-			CiteName: fields[1],
-			Fields: map[string]string{
-				"title":     fields[3],
-				"author":    fields[4],
-				"year":      fields[5],
-				"journal":   fields[6],
-				"volume":    fields[7],
-				"number":    fields[8],
-				"pages":     fields[9],
-				"publisher": fields[10],
-				"doi":       fields[11],
-				"url":       fields[12],
-				"raw":       fields[13],
-				"arxiv":     fields[14],
-			},
-		}
+	matches := entryPattern.FindAllStringSubmatch(formattedOutput, -1)
 
-		references = append(references, ref)
+	for i, match := range matches {
+		if i < len(citeKeys) {
+			entryType := strings.ToLower(match[1])
+			citeName := citeKeys[i]
+			entryContent := match[3]
+
+			entry := parseEntry(entryType, citeName, entryContent, logger)
+			if entry != nil {
+				references = append(references, *entry)
+
+				// Log the first 5 post-parsing entries
+				if i < 5 {
+					logger.Debug().
+						Str("entryType", entry.Type).
+						Str("citeName", entry.CiteName).
+						Int("fieldCount", len(entry.Fields)).
+						Msg(fmt.Sprintf("Parsed entry %d", i+1))
+				}
+			}
+		} else {
+			logger.Warn().Msg("More entries than cite keys")
+			break
+		}
 	}
 
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("error reading bibtool output: %v", err)
+	if len(matches) != len(citeKeys) {
+		logger.Error().
+			Int("citeKeyCount", len(citeKeys)).
+			Int("entryCount", len(matches)).
+			Msg("Mismatch between cite keys and entries")
+		return nil, fmt.Errorf("mismatch between cite keys (%d) and entries (%d)", len(citeKeys), len(matches))
 	}
 
+	logger.Info().Int("count", len(references)).Msg("Parsed references")
 	return references, nil
+}
+
+func extractCiteKeys(rawOutput string, logger zerolog.Logger) []string {
+	var citeKeys []string
+	pattern := regexp.MustCompile(`@(\w+)\s*{\s*([^,\s]+),`)
+
+	matches := pattern.FindAllStringSubmatch(rawOutput, -1)
+	for _, match := range matches {
+		if len(match) == 3 {
+			citeName := match[2]
+			citeKeys = append(citeKeys, citeName)
+		}
+	}
+
+	logger.Debug().Int("citeKeyCount", len(citeKeys)).Msg("Extracted cite keys")
+	return citeKeys
+}
+
+func parseEntry(entryType, citeName, entryContent string, logger zerolog.Logger) *BibEntry {
+	entry := &BibEntry{
+		Type:     entryType,
+		CiteName: citeName,
+		Fields:   make(map[string]string),
+	}
+
+	lines := strings.Split(entryContent, "\n")
+	for _, line := range lines {
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) == 2 {
+			key := strings.TrimSpace(parts[0])
+			value := strings.Trim(strings.TrimSpace(parts[1]), "{},")
+			entry.Fields[key] = value
+		}
+	}
+
+	// Extract arXiv ID
+	entry.Fields["arxiv"] = extractArXivID(entry.Fields)
+
+	// Clean up author field
+	if author, ok := entry.Fields["author"]; ok {
+		entry.Fields["author"] = cleanAuthorField(author)
+	}
+
+	logger.Debug().
+		Str("type", entry.Type).
+		Str("citeName", entry.CiteName).
+		Int("fieldCount", len(entry.Fields)).
+		Msg("Parsed entry")
+
+	return entry
+}
+
+func extractArXivID(fields map[string]string) string {
+	arXivPattern := regexp.MustCompile(`arXiv:(\d{4}\.\d{4,5}|[a-zA-Z\-]+/\d{7})`)
+
+	// Check common fields for arXiv ID
+	for _, field := range []string{"journal", "title", "url", "doi", "arxiv"} {
+		if value, ok := fields[field]; ok {
+			if matches := arXivPattern.FindStringSubmatch(value); matches != nil {
+				return matches[1]
+			}
+		}
+	}
+
+	return ""
+}
+
+func cleanAuthorField(author string) string {
+	// Remove any remaining curly braces and trim spaces
+	author = strings.ReplaceAll(author, "{", "")
+	author = strings.ReplaceAll(author, "}", "")
+	return strings.TrimSpace(author)
+}
+
+// Update logPartialOutput to include a message parameter
+func logPartialOutput(output string, logger zerolog.Logger, message string) {
+	const maxChars = 1500
+	if len(output) > maxChars {
+		logger.Debug().Str("partial_output", output[:maxChars]+"...").Msg(message)
+	} else {
+		logger.Debug().Str("output", output).Msg(message)
+	}
 }
