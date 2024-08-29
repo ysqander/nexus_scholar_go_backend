@@ -41,7 +41,7 @@ func SetupRoutes(r *gin.Engine, researchChatService *services.ResearchChatServic
 		api.GET("/cache-usage", auth.AuthMiddleware(userService), getCacheUsageHandler(cacheManagementService, chatService, log))
 		api.POST("/stripe/webhook", stripeWebhookHandler(stripeService, cacheManagementService, messageBroker))
 		api.POST("/stripe/webhook_clitest", stripeWebhookHandler_clitest(stripeService, cacheManagementService, messageBroker))
-		api.GET("/test-bib-parsing/:arxiv_id", testBibParsingHandler(log))
+		// api.GET("/test-bib-parsing/:arxiv_id", testBibParsingHandler(log))
 	}
 }
 
