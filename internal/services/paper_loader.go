@@ -105,21 +105,21 @@ func (pl *PaperLoader) ProcessPaper(arxivID string) (map[string]interface{}, err
 	// Now create and save references to the database
 	for i, formattedRef := range formattedReferences {
 		dbRef := models.PaperReference{
-			ArxivID:       formattedRef["arxiv_id"].(string),
-			ParentArxivID: arxivID,
-			Type:          references[i].Type,
-			Key:           references[i].CiteName,
-			Title:         references[i].Fields["title"],
-			Author:        references[i].Fields["author"],
-			Year:          references[i].Fields["year"],
-			Journal:       references[i].Fields["journal"],
-			Volume:        references[i].Fields["volume"],
-			Number:        references[i].Fields["number"],
-			Pages:         references[i].Fields["pages"],
-			Publisher:     references[i].Fields["publisher"],
-			DOI:           references[i].Fields["doi"],
-			URL:           references[i].Fields["url"],
-			// RawBibEntry:        bibtexparser.FormatBibEntry(references[i]),
+			ArxivID:            formattedRef["arxiv_id"].(string),
+			ParentArxivID:      arxivID,
+			Type:               references[i].Type,
+			Key:                references[i].CiteName,
+			Title:              references[i].Fields["title"],
+			Author:             references[i].Fields["author"],
+			Year:               references[i].Fields["year"],
+			Journal:            references[i].Fields["journal"],
+			Volume:             references[i].Fields["volume"],
+			Number:             references[i].Fields["number"],
+			Pages:              references[i].Fields["pages"],
+			Publisher:          references[i].Fields["publisher"],
+			DOI:                references[i].Fields["doi"],
+			URL:                references[i].Fields["url"],
+			RawBibEntry:        references[i].RawEntry,
 			FormattedText:      formattedRef["text"].(string),
 			IsAvailableOnArxiv: formattedRef["is_available_on_arxiv"].(bool),
 		}
@@ -406,25 +406,31 @@ func (pl *PaperLoader) parseBBLFile(content string) ([]bibtexparser.BibEntry, er
 }
 
 func (pl *PaperLoader) formatReferences(references []bibtexparser.BibEntry) []map[string]interface{} {
-	pl.logger.Info().Msg("Formatting references")
-	for i, ref := range references {
-		if i < 5 {
-			pl.logger.Info().Msgf("Reference %d: %+v", i+1, ref)
-		} else {
-			break
-		}
-	}
+	pl.logger.Info().Msg("Formatting references and removing duplicates")
 
-	var formattedReferences []map[string]interface{}
+	// Create a map to store unique references
+	uniqueReferences := make(map[string]map[string]interface{})
+
 	for i, ref := range references {
 		formattedRef := pl.formatReference(&ref)
 		detectedArxivID := pl.detectArxivID(formattedRef)
+
 		formattedReference := map[string]interface{}{
 			"text":                  formattedRef,
 			"arxiv_id":              detectedArxivID,
 			"is_available_on_arxiv": detectedArxivID != "",
 		}
-		formattedReferences = append(formattedReferences, formattedReference)
+
+		// If the arxiv_id is not empty, use it as the key; otherwise, use the formatted text
+		key := detectedArxivID
+		if key == "" {
+			key = formattedRef
+		}
+
+		// Only add the reference if it's not already in the map
+		if _, exists := uniqueReferences[key]; !exists {
+			uniqueReferences[key] = formattedReference
+		}
 
 		// Debug logging for a sample of 5 entries
 		if i < 5 {
@@ -433,7 +439,14 @@ func (pl *PaperLoader) formatReferences(references []bibtexparser.BibEntry) []ma
 			pl.logger.Debug().Msgf("  Formatted: %+v", formattedReference)
 		}
 	}
-	pl.logger.Info().Msgf("Total formatted references: %d", len(formattedReferences))
+
+	// Convert the map back to a slice
+	var formattedReferences []map[string]interface{}
+	for _, ref := range uniqueReferences {
+		formattedReferences = append(formattedReferences, ref)
+	}
+
+	pl.logger.Info().Msgf("Total unique formatted references: %d", len(formattedReferences))
 	return formattedReferences
 }
 
@@ -469,7 +482,10 @@ func (pl *PaperLoader) formatReference(entry *bibtexparser.BibEntry) string {
 	if journal == "" {
 		journal = getField("booktitle", "")
 	}
-	arxivID := getField("eprint", "")
+	arxivID := getField("arxiv_id", "")
+	if arxivID == "" {
+		arxivID = getField("eprint", "")
+	}
 	if arxivID != "" {
 		return fmt.Sprintf("%s. (%s). %s. %s [arXiv:%s]", authors, year, title, journal, arxivID)
 	}
@@ -480,7 +496,7 @@ func (pl *PaperLoader) formatReference(entry *bibtexparser.BibEntry) string {
 func (pl *PaperLoader) detectArxivID(reference string) string {
 	pl.logger.Info().Msg("Detecting ArxivID")
 
-	arxivPattern := `(?i)(?:arxiv:|https?://arxiv.org/abs/)(\d{4}\.\d{4,5})`
+	arxivPattern := `(?i)(?:arxiv:|https?://arxiv.org/abs/|arXiv:)(\d{4}\.\d{4,5})`
 	re := regexp.MustCompile(arxivPattern)
 	match := re.FindStringSubmatch(reference)
 	if len(match) > 1 {

@@ -15,6 +15,7 @@ type BibEntry struct {
 	Type     string
 	CiteName string
 	Fields   map[string]string
+	RawEntry string
 }
 
 func ParseBibTeX(content string, logger zerolog.Logger) ([]BibEntry, error) {
@@ -103,14 +104,16 @@ func parseBibtoolOutput(formattedOutput, rawOutput string, logger zerolog.Logger
 	entryPattern := regexp.MustCompile(`(?m)^\n@(\w+)\{([^,]*),\n((?:.|\n)*?)\n\}\n`)
 
 	matches := entryPattern.FindAllStringSubmatch(formattedOutput, -1)
+	rawMatches := entryPattern.FindAllStringSubmatch(rawOutput, -1)
 
 	for i, match := range matches {
 		if i < len(citeKeys) {
 			entryType := strings.ToLower(match[1])
 			citeName := citeKeys[i]
 			entryContent := match[3]
+			rawEntry := rawMatches[i][0]
 
-			entry := parseEntry(entryType, citeName, entryContent, logger)
+			entry := parseEntry(entryType, citeName, entryContent, rawEntry, logger)
 			if entry != nil {
 				references = append(references, *entry)
 
@@ -157,11 +160,12 @@ func extractCiteKeys(rawOutput string, logger zerolog.Logger) []string {
 	return citeKeys
 }
 
-func parseEntry(entryType, citeName, entryContent string, logger zerolog.Logger) *BibEntry {
+func parseEntry(entryType, citeName, entryContent, rawEntry string, logger zerolog.Logger) *BibEntry {
 	entry := &BibEntry{
 		Type:     entryType,
 		CiteName: citeName,
 		Fields:   make(map[string]string),
+		RawEntry: rawEntry,
 	}
 
 	lines := strings.Split(entryContent, "\n")
