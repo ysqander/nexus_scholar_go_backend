@@ -113,6 +113,15 @@ func parseBibtoolOutput(formattedOutput, rawOutput string, logger zerolog.Logger
 			entryContent := match[3]
 			rawEntry := rawMatches[i][0]
 
+			// Debug log the first five entryContent
+			if i < 5 {
+				logger.Debug().
+					Str("entryType", entryType).
+					Str("citeName", citeName).
+					Str("entryContent", entryContent).
+					Msgf("Entry content %d", i+1)
+			}
+
 			entry := parseEntry(entryType, citeName, entryContent, rawEntry, logger)
 			if entry != nil {
 				references = append(references, *entry)
@@ -168,14 +177,39 @@ func parseEntry(entryType, citeName, entryContent, rawEntry string, logger zerol
 		RawEntry: rawEntry,
 	}
 
-	lines := strings.Split(entryContent, "\n")
-	for _, line := range lines {
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) == 2 {
-			key := strings.TrimSpace(parts[0])
-			value := strings.Trim(strings.TrimSpace(parts[1]), "{},")
-			entry.Fields[key] = value
+	// Split the content by field, not by line
+	fields := strings.Split(entryContent, ",\n")
+
+	var currentKey string
+	var currentValue strings.Builder
+
+	for _, field := range fields {
+		if strings.Contains(field, "=") {
+			// If we have a previous field, add it to the entry
+			if currentKey != "" {
+				entry.Fields[currentKey] = strings.TrimSpace(currentValue.String())
+				currentValue.Reset()
+			}
+
+			// Start a new field
+			parts := strings.SplitN(field, "=", 2)
+			currentKey = strings.TrimSpace(parts[0])
+			currentValue.WriteString(strings.TrimSpace(parts[1]))
+		} else {
+			// Continue the previous field
+			currentValue.WriteString(" ")
+			currentValue.WriteString(strings.TrimSpace(field))
 		}
+	}
+
+	// Add the last field
+	if currentKey != "" {
+		entry.Fields[currentKey] = strings.TrimSpace(currentValue.String())
+	}
+
+	// Clean up field values
+	for key, value := range entry.Fields {
+		entry.Fields[key] = cleanFieldValue(value)
 	}
 
 	// Extract arXiv ID
@@ -193,6 +227,17 @@ func parseEntry(entryType, citeName, entryContent, rawEntry string, logger zerol
 		Msg("Parsed entry")
 
 	return entry
+}
+
+func cleanFieldValue(value string) string {
+	// Remove surrounding braces and quotes
+	value = strings.Trim(value, "{}\"")
+	// Replace newlines and tabs with spaces
+	value = strings.ReplaceAll(value, "\n", " ")
+	value = strings.ReplaceAll(value, "\t", " ")
+	// Collapse multiple spaces into one
+	value = regexp.MustCompile(`\s+`).ReplaceAllString(value, " ")
+	return strings.TrimSpace(value)
 }
 
 func extractArXivID(fields map[string]string) string {

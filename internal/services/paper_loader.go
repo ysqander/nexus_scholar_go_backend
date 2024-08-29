@@ -267,6 +267,18 @@ func (pl *PaperLoader) parseBibFiles(bibFiles []string) ([]bibtexparser.BibEntry
 			return nil, fmt.Errorf("failed to parse .bib file %d: %v", i+1, err)
 		}
 
+		// Process multi-line fields
+		for i := range entries {
+			for key, value := range entries[i].Fields {
+				// Preserve newlines in the title field
+				if key == "title" {
+					entries[i].Fields[key] = strings.TrimSpace(value)
+				} else {
+					entries[i].Fields[key] = strings.TrimSpace(strings.Replace(value, "\n", " ", -1))
+				}
+			}
+		}
+
 		pl.logger.Debug().Msgf("Successfully parsed .bib file %d. Found %d entries", i+1, len(entries))
 		allReferences = append(allReferences, entries...)
 	}
@@ -320,6 +332,8 @@ func (pl *PaperLoader) parseBBLFile(content string) ([]bibtexparser.BibEntry, er
 	var authorLines []string
 	var inEntry bool
 	var inAuthor bool
+	var titleLines []string
+	var inTitle bool
 
 	for i, line := range lines {
 		line = strings.TrimSpace(line)
@@ -333,6 +347,8 @@ func (pl *PaperLoader) parseBBLFile(content string) ([]bibtexparser.BibEntry, er
 			inEntry = true
 			inAuthor = true
 			authorLines = []string{}
+			inTitle = false
+			titleLines = []string{}
 			continue
 		}
 
@@ -341,6 +357,10 @@ func (pl *PaperLoader) parseBBLFile(content string) ([]bibtexparser.BibEntry, er
 				if inAuthor {
 					currentEntry.Fields["author"] = strings.Join(authorLines, " ")
 					inAuthor = false
+					inTitle = true
+				} else if inTitle {
+					currentEntry.Fields["title"] = strings.Trim(strings.Join(titleLines, " "), ".")
+					inTitle = false
 				}
 
 				line = strings.TrimPrefix(line, "\\newblock")
@@ -355,11 +375,13 @@ func (pl *PaperLoader) parseBBLFile(content string) ([]bibtexparser.BibEntry, er
 					} else {
 						currentEntry.Fields["journal"] = emContent
 					}
-				} else if _, hasTitle := currentEntry.Fields["title"]; !hasTitle {
-					currentEntry.Fields["title"] = strings.Trim(line, ".")
+				} else if inTitle {
+					titleLines = append(titleLines, strings.Trim(line, "."))
 				}
 			} else if inAuthor {
 				authorLines = append(authorLines, line)
+			} else if inTitle {
+				titleLines = append(titleLines, line)
 			}
 
 			// Extract other details
@@ -412,7 +434,9 @@ func (pl *PaperLoader) formatReferences(references []bibtexparser.BibEntry) []ma
 	uniqueReferences := make(map[string]map[string]interface{})
 
 	for i, ref := range references {
+
 		formattedRef := pl.formatReference(&ref)
+
 		detectedArxivID := pl.detectArxivID(formattedRef)
 
 		formattedReference := map[string]interface{}{
@@ -470,7 +494,8 @@ func (pl *PaperLoader) formatReference(entry *bibtexparser.BibEntry) string {
 
 	getField := func(key string, defaultValue string) string {
 		if field, ok := entry.Fields[key]; ok {
-			return field
+			// Remove any surrounding braces and trim spaces
+			return strings.Trim(strings.TrimSpace(field), "{}")
 		}
 		return defaultValue
 	}
@@ -486,8 +511,13 @@ func (pl *PaperLoader) formatReference(entry *bibtexparser.BibEntry) string {
 	if arxivID == "" {
 		arxivID = getField("eprint", "")
 	}
+
 	if arxivID != "" {
-		return fmt.Sprintf("%s. (%s). %s. %s [arXiv:%s]", authors, year, title, journal, arxivID)
+		// Check if arxivID already starts with "arXiv:" prefix
+		if !strings.HasPrefix(strings.ToLower(arxivID), "arxiv:") {
+			arxivID = "arXiv:" + arxivID
+		}
+		return fmt.Sprintf("%s. (%s). %s. %s [%s]", authors, year, title, journal, arxivID)
 	}
 
 	return fmt.Sprintf("%s. (%s). %s. %s", authors, year, title, journal)
